@@ -42,27 +42,34 @@ export const RESOURCE_TYPES = {
   apps: [
     'microsoft.powerapps/apps',
     'microsoft.powerapps/canvasapps',
+    'microsoft.powerapps/modeldrivenapps',
+    'microsoft.powerapps/codeapps',
   ],
   flows: [
     'microsoft.flow/flows',
     'microsoft.powerapps/flows',
+    'microsoft.powerautomate/cloudflows',
+    'microsoft.powerautomate/agentflows',
     'microsoft.logic/workflows',
   ],
   agents: [
     'microsoft.powerva/bots',
+    'microsoft.powerva/agents',
     'microsoft.copilotstudio/agents',
+    'microsoft.copilotstudio/bots',
     'microsoft.powerapps/agents',
+    'microsoft.powervirtualagents/bots',
   ],
 } as const
 
 export function getResourceCategory(type: string): ResourceTab {
   const lower = type.toLowerCase()
-  if (RESOURCE_TYPES.apps.some(t => lower.includes(t) || t.includes(lower))) return 'apps'
-  if (RESOURCE_TYPES.flows.some(t => lower.includes(t) || t.includes(lower))) return 'flows'
-  if (RESOURCE_TYPES.agents.some(t => lower.includes(t) || t.includes(lower))) return 'agents'
-  if (lower.includes('app')) return 'apps'
-  if (lower.includes('flow') || lower.includes('logic')) return 'flows'
+  if (RESOURCE_TYPES.agents.some(t => lower === t || lower.includes(t) || t.includes(lower))) return 'agents'
+  if (RESOURCE_TYPES.flows.some(t => lower === t || lower.includes(t) || t.includes(lower))) return 'flows'
+  if (RESOURCE_TYPES.apps.some(t => lower === t || lower.includes(t) || t.includes(lower))) return 'apps'
   if (lower.includes('bot') || lower.includes('agent') || lower.includes('copilot')) return 'agents'
+  if (lower.includes('flow') || lower.includes('agentflow') || lower.includes('logic')) return 'flows'
+  if (lower.includes('app')) return 'apps'
   return 'all'
 }
 
@@ -141,6 +148,11 @@ export function getOwnerFromProperties(item: ResourceItem): string {
     p['owner'],
     p['createdBy'],
     p['lastModifiedBy'],
+    p['author'],
+    p['createdByUser'],
+    p['modifiedBy'],
+    p['modifiedByUser'],
+    p['publishedBy'],
     p['ownerEmail'],
     p['ownerDisplayName'],
     p['ownerObjectId'],

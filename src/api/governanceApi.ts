@@ -1,5 +1,5 @@
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
-import { msalInstance, bapScopes } from '../auth/msalConfig'
+import { msalInstance, bapScopes, powerPlatformScopes } from '../auth/msalConfig'
 
 // Singleton promise so concurrent callers share one popup instead of racing.
 let _inFlight: Promise<string> | null = null
@@ -20,6 +20,89 @@ async function getBapToken(): Promise<string> {
     }
   })().finally(() => { _inFlight = null })
   return _inFlight
+}
+
+let _ppInFlight: Promise<string> | null = null
+
+async function getPowerPlatformToken(): Promise<string> {
+  if (_ppInFlight) return _ppInFlight
+  const account = msalInstance.getAllAccounts()[0]
+  _ppInFlight = (async () => {
+    try {
+      const result = await msalInstance.acquireTokenSilent({ scopes: powerPlatformScopes, account })
+      return result.accessToken
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        const result = await msalInstance.acquireTokenPopup({ scopes: powerPlatformScopes, account })
+        return result.accessToken
+      }
+      throw e
+    }
+  })().finally(() => { _ppInFlight = null })
+  return _ppInFlight
+}
+
+export interface CapacityEntry {
+  capacityType: 'Database' | 'File' | 'Log'
+  actualConsumption: number
+  ratedConsumption: number
+  capacityUnit: string
+  updatedOn: string
+}
+
+export interface EnvironmentCapacity {
+  id: string
+  name: string
+  location: string
+  displayName: string
+  environmentType: string
+  capacity: CapacityEntry[]
+  addons: Array<{ addonType: string; quantity: number }>
+}
+
+export interface BillingPolicy {
+  id: string
+  name: string
+  type: string
+  properties: {
+    billingInstrument?: { id: string; resourceId: string }
+    environments?: Array<{ id: string; name: string }>
+    provisioningState?: string
+  }
+}
+
+export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
+  const token = await getPowerPlatformToken()
+  const res = await fetch(
+    'https://api.powerplatform.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2020-10-01&$expand=properties.capacity,properties.addons',
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error(`Environment capacity fetch failed: ${res.status}`)
+  const json = await res.json()
+  const raw: Record<string, unknown>[] = json.value ?? []
+  return raw.map(e => {
+    const props = (e['properties'] as Record<string, unknown>) ?? {}
+    return {
+      id: e['id'] as string ?? '',
+      name: e['name'] as string ?? '',
+      location: e['location'] as string ?? '',
+      displayName: (props['displayName'] as string) ?? (e['name'] as string) ?? '',
+      environmentType: (props['environmentType'] as string) ?? '',
+      capacity: (props['capacity'] as CapacityEntry[]) ?? [],
+      addons: (props['addons'] as EnvironmentCapacity['addons']) ?? [],
+    }
+  })
+}
+
+export async function fetchBillingPolicies(): Promise<BillingPolicy[]> {
+  const token = await getPowerPlatformToken()
+  const res = await fetch(
+    'https://api.powerplatform.com/licensing/billingPolicies?api-version=2022-03-01-preview',
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error(`Billing policies fetch failed: ${res.status}`)
+  const json = await res.json()
+  return json.value ?? []
 }
 
 export interface DLPPolicy {

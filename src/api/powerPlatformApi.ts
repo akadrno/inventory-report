@@ -4,7 +4,7 @@ import type { ResourceItem, ResourceQueryResponse } from '../types'
 import type { DebugEntry } from '../context/DebugContext'
 
 const API_BASE = 'https://api.powerplatform.com'
-const API_VERSION = '2022-03-01-preview'
+const API_VERSION = '2024-10-01'
 const API_URL = `${API_BASE}/resourcequery/resources/query?api-version=${API_VERSION}`
 
 // KQLOM clause types — discriminated by $type
@@ -27,11 +27,30 @@ interface OrderByClause {
 
 type KustoClause = WhereClause | ProjectClause | OrderByClause
 
+// Explicit resource types per the 2024-10-01 API. Legacy names included for any
+// resources created before the namespace rename.
 const DEFAULT_CLAUSES: WhereClause[] = [
-  { $type: 'where', FieldName: 'type', Operator: 'contains', Values: ["'.'"] },
-  { $type: 'where', FieldName: 'type', Operator: '!contains', Values: ["'settings'"] },
-  { $type: 'where', FieldName: 'type', Operator: '!contains', Values: ["'environments'"] },
-  { $type: 'where', FieldName: 'type', Operator: '!contains', Values: ["'environmentgroups'"] },
+  {
+    $type: 'where',
+    FieldName: 'type',
+    Operator: 'in~',
+    Values: [
+      // Current canonical types (api-version 2024-10-01)
+      "'microsoft.powerapps/canvasapps'",
+      "'microsoft.powerapps/modeldrivenapps'",
+      "'microsoft.powerapps/codeapps'",
+      "'microsoft.powerautomate/cloudflows'",
+      "'microsoft.powerautomate/agentflows'",
+      "'microsoft.copilotstudio/agents'",
+      // Legacy type names from earlier API versions
+      "'microsoft.powerapps/apps'",
+      "'microsoft.flow/flows'",
+      "'microsoft.powerapps/flows'",
+      "'microsoft.powerva/bots'",
+      "'microsoft.powervirtualagents/bots'",
+      "'microsoft.logic/workflows'",
+    ],
+  },
 ]
 
 const GROUPS_CLAUSES: WhereClause[] = [
@@ -39,9 +58,16 @@ const GROUPS_CLAUSES: WhereClause[] = [
 ]
 
 const ENVIRONMENTS_CLAUSES: WhereClause[] = [
-  { $type: 'where', FieldName: 'type', Operator: 'contains', Values: ["'environments'"] },
-  { $type: 'where', FieldName: 'type', Operator: '!contains', Values: ["'environmentgroups'"] },
-  { $type: 'where', FieldName: 'type', Operator: '!contains', Values: ["'settings'"] },
+  {
+    $type: 'where',
+    FieldName: 'type',
+    Operator: 'in~',
+    Values: [
+      "'microsoft.powerplatform/environments'",
+      // Fallback for older API versions
+      "'microsoft.businessapplicationplatform/environments'",
+    ],
+  },
 ]
 
 async function getAccessToken(msalInstance: IPublicClientApplication): Promise<string> {

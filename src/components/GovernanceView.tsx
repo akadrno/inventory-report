@@ -25,11 +25,13 @@ import {
   ChevronRightRegular,
   ChevronDownRegular,
   ArrowLeftRegular,
+  DatabaseRegular,
+  TagRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
-import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
-import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
+import { useDLPPolicies, useTenantSettings, useEnvironmentCapacity, useBillingPolicies } from '../hooks/useGovernance'
+import type { DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy } from '../hooks/useGovernance'
 
 interface GovernanceViewProps {
   allResources: ResourceItem[]
@@ -611,6 +613,169 @@ export function TenantSettingsSection({ settings }: { settings: TenantSettings }
   )
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatMB(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  if (mb < 1) return '<1 MB'
+  return `${Math.round(mb)} MB`
+}
+
+// ── Capacity Section ─────────────────────────────────────────────────────────
+
+function CapacitySection({ capacityData }: { capacityData: EnvironmentCapacity[] }) {
+  const classes = useClasses()
+
+  const sorted = useMemo(() => {
+    return capacityData
+      .map(env => {
+        const db = env.capacity.find(c => c.capacityType === 'Database')?.actualConsumption ?? 0
+        const file = env.capacity.find(c => c.capacityType === 'File')?.actualConsumption ?? 0
+        const log = env.capacity.find(c => c.capacityType === 'Log')?.actualConsumption ?? 0
+        const total = db + file + log
+        return { ...env, db, file, log, total }
+      })
+      .filter(e => e.total > 0)
+      .sort((a, b) => b.total - a.total)
+  }, [capacityData])
+
+  const maxTotal = sorted[0]?.total ?? 1
+
+  if (sorted.length === 0) {
+    return (
+      <div className={classes.sectionBody}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No Dataverse storage consumption found across visible environments.</Caption1>
+      </div>
+    )
+  }
+
+  return (
+    <div className={classes.sectionBody}>
+      <Caption1 style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalXS }}>
+        Dataverse storage consumption across {sorted.length} environment{sorted.length !== 1 ? 's' : ''}
+      </Caption1>
+      {sorted.map(env => (
+        <div key={env.id} style={{ marginBottom: tokens.spacingVerticalM }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS, minWidth: 0 }}>
+              <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {env.displayName}
+              </Text>
+              {env.environmentType && (
+                <Badge appearance="tint" color="subtle" size="small">{env.environmentType}</Badge>
+              )}
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground2, flexShrink: 0, marginLeft: tokens.spacingHorizontalS }}>
+              {formatMB(env.total)}
+            </Text>
+          </div>
+          <div style={{ height: '6px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: '3px', overflow: 'hidden', marginBottom: '4px' }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.min(100, (env.total / maxTotal) * 100)}%`,
+              backgroundColor: tokens.colorBrandBackground,
+              borderRadius: '3px',
+            }} />
+          </div>
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalM }}>
+            {env.db > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>DB: {formatMB(env.db)}</Caption1>}
+            {env.file > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>File: {formatMB(env.file)}</Caption1>}
+            {env.log > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Log: {formatMB(env.log)}</Caption1>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Billing Policies Section ─────────────────────────────────────────────────
+
+function BillingPoliciesSection({
+  policies,
+  allEnvironments,
+}: {
+  policies: BillingPolicy[]
+  allEnvironments: ResourceItem[]
+}) {
+  const classes = useClasses()
+
+  const coveredIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of policies) {
+      for (const env of p.properties.environments ?? []) {
+        if (env.id) ids.add(env.id)
+        if (env.name) ids.add(env.name)
+      }
+    }
+    return ids
+  }, [policies])
+
+  const uncovered = useMemo(
+    () => allEnvironments.filter(e => !coveredIds.has(e.id) && !coveredIds.has(e.name)),
+    [allEnvironments, coveredIds],
+  )
+
+  if (policies.length === 0) {
+    return (
+      <div className={classes.sectionBody}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+          No pay-as-you-go billing policies configured. Environments are using standard included licenses only.
+        </Caption1>
+      </div>
+    )
+  }
+
+  return (
+    <div className={classes.sectionBody}>
+      <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', marginBottom: tokens.spacingVerticalXS }}>
+        <Badge appearance="tint" color="informative" size="small">
+          {policies.length} polic{policies.length !== 1 ? 'ies' : 'y'}
+        </Badge>
+        {uncovered.length > 0 && (
+          <Badge appearance="tint" color="warning" size="small">
+            {uncovered.length} env{uncovered.length !== 1 ? 's' : ''} not linked
+          </Badge>
+        )}
+      </div>
+      {policies.map(policy => (
+        <div key={policy.id} className={classes.insightRow}>
+          <TagRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text size={200} weight="semibold" style={{ display: 'block' }}>{policy.name}</Text>
+            <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, marginTop: '2px', flexWrap: 'wrap' }}>
+              <Badge appearance="tint" color="subtle" size="small">
+                {policy.properties.environments?.length ?? 0} environment{(policy.properties.environments?.length ?? 0) !== 1 ? 's' : ''} linked
+              </Badge>
+              {policy.properties.provisioningState && (
+                <Badge
+                  appearance="tint"
+                  color={policy.properties.provisioningState === 'Succeeded' ? 'success' : 'warning'}
+                  size="small"
+                >
+                  {policy.properties.provisioningState}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      {uncovered.length > 0 && (
+        <div style={{ marginTop: tokens.spacingVerticalS }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
+            Not linked to any billing policy
+          </Caption1>
+          {uncovered.map(env => (
+            <div key={env.id} className={classes.insightRow}>
+              <GlobeRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, marginTop: '2px' }} />
+              <Text size={200}>{getDisplayName(env)}</Text>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Collapsible section wrapper ──────────────────────────────────────────────
 
 function CollapsibleSection({
@@ -660,6 +825,8 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
   const classes = useClasses()
   const dlpQuery = useDLPPolicies()
   const settingsQuery = useTenantSettings()
+  const capacityQuery = useEnvironmentCapacity()
+  const billingQuery = useBillingPolicies()
   const [drillDown, setDrillDown] = useState<InsightKey | null>(null)
   const [selectedPolicy, setSelectedPolicy] = useState<DLPPolicy | null>(null)
 
@@ -793,6 +960,40 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
           </div>
         ) : settingsQuery.data ? (
           <TenantSettingsSection settings={settingsQuery.data} />
+        ) : null}
+      </CollapsibleSection>
+
+      {/* Capacity & Storage */}
+      <CollapsibleSection
+        icon={<DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+        title="Capacity & Storage"
+        loading={capacityQuery.isLoading}
+      >
+        {capacityQuery.isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : capacityQuery.isLoading ? (
+          <div className={classes.sectionBody}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading capacity data…</Caption1>
+          </div>
+        ) : capacityQuery.data ? (
+          <CapacitySection capacityData={capacityQuery.data} />
+        ) : null}
+      </CollapsibleSection>
+
+      {/* Billing Policies */}
+      <CollapsibleSection
+        icon={<TagRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+        title="Billing Policies"
+        loading={billingQuery.isLoading}
+      >
+        {billingQuery.isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : billingQuery.isLoading ? (
+          <div className={classes.sectionBody}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading billing policies…</Caption1>
+          </div>
+        ) : billingQuery.data ? (
+          <BillingPoliciesSection policies={billingQuery.data} allEnvironments={allEnvironments} />
         ) : null}
       </CollapsibleSection>
 

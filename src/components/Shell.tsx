@@ -4,15 +4,11 @@ import {
   HomeRegular,
   TableSimpleRegular,
   ShieldRegular,
-  AppGenericRegular,
-  FlowRegular,
-  BotRegular,
   GlobeRegular,
   FolderOpenRegular,
   PersonRegular,
   SearchRegular,
   SignOutRegular,
-  SquareMultipleRegular,
   SettingsRegular,
   ErrorCircleRegular,
   WarningRegular,
@@ -25,6 +21,7 @@ import {
   ChevronRightRegular,
   ChevronLeftRegular,
 } from '@fluentui/react-icons'
+import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useMsal } from '@azure/msal-react'
 import { useResources } from '../hooks/useResources'
 import { useEnvironmentGroups } from '../hooks/useEnvironmentGroups'
@@ -36,6 +33,8 @@ import { GroupsView } from './GroupsView'
 import { UsersView } from './UsersView'
 import { EnvironmentsView } from './EnvironmentsView'
 import { ReportView, RecsTab, buildRecs } from './ReportView'
+import { MakerAnalyticsView } from './MakerAnalyticsView'
+import { RiskAssessmentView } from './RiskAssessmentView'
 import { ErrorBanner } from './ErrorBanner'
 import { DebugPanel } from './DebugPanel'
 import { useDebug } from '../context/DebugContext'
@@ -68,7 +67,7 @@ const STROKE1 = '#edebe9'
 
 type RailSection = 'home' | 'inventory' | 'governance'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
-type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations'
+type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -253,11 +252,7 @@ function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: s
 
   return (
     <header className={classes.header}>
-      <div className={classes.headerLeft}>
-        <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: ACTIVE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <SquareMultipleRegular style={{ color: '#fff', fontSize: 16 }} />
-        </div>
-      </div>
+      <div className={classes.headerLeft} />
       <div className={classes.headerCenter}>
         <div style={{ width: '100%', maxWidth: '468px', height: '32px', backgroundColor: ACTIVE_BG, border: `1px solid #d1d1d1`, borderRadius: '4px', display: 'flex', alignItems: 'center', padding: '0 8px', gap: '6px', opacity: 0.7 }}>
           <SearchRegular style={{ color: MUTED, fontSize: 16, flexShrink: 0 }} />
@@ -594,9 +589,13 @@ export function Shell() {
           <div className={classes.contentHeader}>
             <div>
               <Text className={classes.pageTitle}>{label}</Text>
-              {!isLoadingResources && (
+              {showTable && (
                 <Caption1 className={classes.pageSub}>
-                  {showTable ? `${filtered.length} resource${filtered.length !== 1 ? 's' : ''}` : ''}
+                  {isLoadingResources
+                    ? 'Loading…'
+                    : resources.hasNextPage || resources.isFetchingNextPage
+                      ? `${filtered.length} loaded, fetching more…`
+                      : `${filtered.length} resource${filtered.length !== 1 ? 's' : ''}`}
                 </Caption1>
               )}
             </div>
@@ -621,14 +620,6 @@ export function Shell() {
 
           {resources.error && <ErrorBanner error={resources.error} onRetry={() => resources.refetch()} />}
 
-          {showTable && resources.hasNextPage && (
-            <div style={{ textAlign: 'center' }}>
-              <Button appearance="transparent" size="small" disabled={resources.isFetchingNextPage} onClick={() => resources.fetchNextPage()}>
-                {resources.isFetchingNextPage ? 'Loading more…' : `Load more (${allResources.length} loaded)`}
-              </Button>
-            </div>
-          )}
-
           {invView === 'groups'
             ? <GroupsView groups={allGroups} environments={allEnvironments} allResources={allResources} ownerNames={ownerNames} isLoading={isLoadingGroups} />
             : invView === 'users'
@@ -642,7 +633,7 @@ export function Shell() {
     }
 
     if (rail === 'governance') {
-      const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', recommendations: 'Recommendations' }
+      const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
       return (
         <>
           <div className={classes.contentHeader}>
@@ -659,6 +650,12 @@ export function Shell() {
           {govView === 'tenant-settings' && <GovTenantSettingsPage />}
           {govView === 'dlp' && <GovDLPPage allEnvironments={allEnvironments} />}
           {govView === 'recommendations' && <RecsTab allEnvironments={allEnvironments} />}
+          {govView === 'maker-analytics' && (
+            <MakerAnalyticsView allResources={allResources} allEnvironments={allEnvironments} ownerNames={ownerNames} />
+          )}
+          {govView === 'risk-assessments' && (
+            <RiskAssessmentView allResources={allResources} allEnvironments={allEnvironments} ownerNames={ownerNames} currentUser={account?.username ?? ''} />
+          )}
         </>
       )
     }
@@ -695,9 +692,9 @@ export function Shell() {
               </button>
             )}
             <NavItem icon={<GridRegular />} label="All Resources" active={invView === 'all'} onClick={() => setInvView('all')} collapsed={!panelOpen} />
-            <NavItem icon={<AppGenericRegular />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
-            <NavItem icon={<FlowRegular />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
-            <NavItem icon={<BotRegular />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
+            <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
+            <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
+            <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
             <NavItem icon={<GlobeRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
             <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />
@@ -722,6 +719,8 @@ export function Shell() {
             <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />
             <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
+            <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
+            <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />
           </div>
         )}
 

@@ -13,6 +13,11 @@ const SYSTEM_PREFIX = '00000000-0000-0000'
 
 export { SYSTEM_PREFIX }
 
+export function isSystemResource(r: ResourceItem): boolean {
+  const owner = getOwnerFromProperties(r)
+  return owner.startsWith(SYSTEM_PREFIX)
+}
+
 function extractOwnerIds(resources: ResourceItem[]): string[] {
   const ids = new Set<string>()
   for (const r of resources) {

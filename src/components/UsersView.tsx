@@ -7,13 +7,16 @@ import {
   ChevronUpRegular,
   ChevronDownRegular,
   ArrowSortRegular,
+  GlobeRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
-import { getDisplayName, getOwnerFromProperties, getResourceCategory, getEnvironmentIdFromPath } from '../types'
+import { getDisplayName, getOwnerFromProperties, getResourceCategory, getEnvironmentIdFromPath, getIsManagedEnvironment } from '../types'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
+import { useEnvironmentCapacity } from '../hooks/useGovernance'
+import type { EnvironmentCapacity } from '../hooks/useGovernance'
 
 interface UsersViewProps {
   resources: ResourceItem[]
@@ -135,6 +138,116 @@ function ResourceIcon({ type }: { type: string }) {
   return null
 }
 
+function formatMB(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  if (mb < 1) return '<1 MB'
+  return `${Math.round(mb)} MB`
+}
+
+// ── User environment footprint ───────────────────────────────────────────────
+
+function UserEnvironmentFootprint({
+  user,
+  allEnvironments,
+  capacityData,
+}: {
+  user: UserEntry
+  allEnvironments: ResourceItem[]
+  capacityData: EnvironmentCapacity[] | undefined
+}) {
+  const classes = useClasses()
+
+  const rows = useMemo(() => {
+    const envIdCounts = new Map<string, number>()
+    for (const r of user.resources) {
+      const envId = getEnvironmentIdFromPath(r.id) ?? r.environmentId ?? ''
+      if (envId) envIdCounts.set(envId, (envIdCounts.get(envId) ?? 0) + 1)
+    }
+    return [...envIdCounts.entries()]
+      .map(([envId, count]) => {
+        const envItem = allEnvironments.find(e => e.name === envId)
+        const cap = capacityData?.find(c => c.name === envId)
+        const db = cap?.capacity.find(c => c.capacityType === 'Database')?.actualConsumption ?? 0
+        const file = cap?.capacity.find(c => c.capacityType === 'File')?.actualConsumption ?? 0
+        const log = cap?.capacity.find(c => c.capacityType === 'Log')?.actualConsumption ?? 0
+        const totalStorage = db + file + log
+        return { envId, count, envItem, totalStorage, db, file, log }
+      })
+      .sort((a, b) => b.count - a.count)
+  }, [user.resources, allEnvironments, capacityData])
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className={classes.tableWrapper}>
+      <div style={{ padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`, borderBottom: `1px solid ${tokens.colorNeutralStroke2}`, backgroundColor: tokens.colorNeutralBackground3, display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+        <GlobeRegular fontSize={14} style={{ color: tokens.colorBrandForeground2 }} />
+        <Text size={200} weight="semibold">Environment Footprint</Text>
+        <Badge appearance="tint" color="subtle" size="small">{rows.length} environment{rows.length !== 1 ? 's' : ''}</Badge>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table className={classes.table}>
+          <thead className={classes.thead}>
+            <tr>
+              <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Environment</div></th>
+              <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Status</div></th>
+              <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Resources</div></th>
+              <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Dataverse Storage</div></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ envId, count, envItem, totalStorage, db, file, log }) => {
+              const isManaged = envItem ? getIsManagedEnvironment(envItem) : undefined
+              const displayName = envItem ? getDisplayName(envItem) : envId
+              const envType = envItem?.environmentType
+              return (
+                <tr key={envId} style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
+                  <td className={classes.td}>
+                    <div>
+                      <Text size={200} weight="semibold">{displayName}</Text>
+                      {envType && (
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>{envType}</Caption1>
+                      )}
+                    </div>
+                  </td>
+                  <td className={classes.td}>
+                    {isManaged === undefined ? (
+                      <Badge appearance="tint" color="subtle" size="small">Unknown</Badge>
+                    ) : isManaged ? (
+                      <Badge appearance="tint" color="success" size="small">Managed</Badge>
+                    ) : (
+                      <Badge appearance="tint" color="warning" size="small">Unmanaged</Badge>
+                    )}
+                  </td>
+                  <td className={classes.td}>
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>{count}</Text>
+                  </td>
+                  <td className={classes.td}>
+                    {totalStorage > 0 ? (
+                      <div>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>{formatMB(totalStorage)}</Text>
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>
+                          {[
+                            db > 0 && `DB: ${formatMB(db)}`,
+                            file > 0 && `File: ${formatMB(file)}`,
+                            log > 0 && `Log: ${formatMB(log)}`,
+                          ].filter(Boolean).join(' · ')}
+                        </Caption1>
+                      </div>
+                    ) : (
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>—</Caption1>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── User resource table ──────────────────────────────────────────────────────
 
 type ResSortField = 'name' | 'type' | 'environment'
@@ -151,6 +264,7 @@ function UserResourcesView({
   const [sort, setSort] = useState<{ field: ResSortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const classes = useClasses()
+  const capacityQuery = useEnvironmentCapacity()
 
   const envMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -196,6 +310,12 @@ function UserResourcesView({
           {user.resources.length} resource{user.resources.length !== 1 ? 's' : ''}
         </Badge>
       </div>
+
+      <UserEnvironmentFootprint
+        user={user}
+        allEnvironments={allEnvironments}
+        capacityData={capacityQuery.data}
+      />
 
       <div className={classes.tableWrapper}>
         <div style={{ overflowX: 'auto' }}>
