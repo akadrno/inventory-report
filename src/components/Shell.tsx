@@ -26,7 +26,7 @@ import { useMsal } from '@azure/msal-react'
 import { useResources } from '../hooks/useResources'
 import { useEnvironmentGroups } from '../hooks/useEnvironmentGroups'
 import { useEnvironments } from '../hooks/useEnvironments'
-import { useOwnerNames } from '../hooks/useOwnerNames'
+import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
 import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
 import { ResourceTable } from './ResourceTable'
 import { GroupsView } from './GroupsView'
@@ -529,6 +529,7 @@ export function Shell() {
   const [govView, setGovView] = useState<GovView>('overview')
   const [search, setSearch] = useState('')
   const [panelOpen, setPanelOpen] = useState(true)
+  const [hideSystemInv, setHideSystemInv] = useState(true)
 
   const resources = useResources()
   const groups = useEnvironmentGroups()
@@ -549,6 +550,7 @@ export function Shell() {
 
   const filtered = useMemo(() => {
     let items = allResources
+    if (hideSystemInv) items = items.filter(r => !isSystemResource(r))
     if (invView !== 'all' && invView !== 'environments' && invView !== 'groups' && invView !== 'users') {
       items = items.filter(r => getResourceCategory(r.type) === invView)
     }
@@ -561,7 +563,7 @@ export function Shell() {
       )
     }
     return items
-  }, [allResources, invView, search])
+  }, [allResources, invView, search, hideSystemInv])
 
   const classes = useClasses()
 
@@ -608,6 +610,15 @@ export function Shell() {
                   onChange={(_, d) => setSearch(d.value)}
                   style={{ width: '220px' }}
                 />
+              )}
+              {showTable && (
+                <Button
+                  size="small"
+                  appearance={hideSystemInv ? 'primary' : 'subtle'}
+                  onClick={() => setHideSystemInv(h => !h)}
+                >
+                  {hideSystemInv ? 'System hidden' : 'Show system'}
+                </Button>
               )}
               <Button
                 appearance="subtle"
