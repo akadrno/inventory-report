@@ -25,6 +25,7 @@ jobs:
           app_location: "/"
           api_location: ""
           output_location: "dist"
+          skip_deploy_on_missing_secrets: true
         env:
           VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
           VITE_TENANT_ID: ${{ secrets.VITE_TENANT_ID }}
