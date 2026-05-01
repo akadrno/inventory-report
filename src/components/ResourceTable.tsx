@@ -1,0 +1,390 @@
+import { useState, useMemo } from 'react'
+import { makeStyles, tokens, Text, Caption1, Button } from '@fluentui/react-components'
+import {
+  ChevronUpRegular,
+  ChevronDownRegular,
+  ArrowSortRegular,
+  OpenRegular,
+} from '@fluentui/react-icons'
+import type { ResourceItem } from '../types'
+import { getResourceCategory, getOwnerFromProperties, getDisplayName, getEnvironmentName } from '../types'
+import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
+import { ResourceTypeBadge } from './ResourceTypeBadge'
+import { EnvironmentBadge } from './EnvironmentBadge'
+import { ResourceDetailModal } from './ResourceDetailModal'
+import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
+
+export { getResourceCategory }
+
+interface ResourceTableProps {
+  resources: ResourceItem[]
+  isLoading: boolean
+  ownerNames?: Map<string, string>
+  allEnvironments?: ResourceItem[]
+}
+
+type SortField = 'name' | 'type' | 'environment' | 'owner' | 'region'
+type SortDir = 'asc' | 'desc'
+
+const useClasses = makeStyles({
+  wrapper: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusLarge,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    overflow: 'hidden',
+    boxShadow: tokens.shadow4,
+  },
+  scrollX: {
+    overflowX: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: tokens.fontSizeBase200,
+  },
+  thead: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  th: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    textAlign: 'left',
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+    ':hover': { color: tokens.colorNeutralForeground1 },
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+  },
+  thAction: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+    width: '40px',
+  },
+  thInner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  tr: {
+    cursor: 'pointer',
+    ':hover': { backgroundColor: tokens.colorBrandBackground2 },
+    ':last-child td': { borderBottom: 'none' },
+  },
+  td: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+  },
+  nameCell: {
+    maxWidth: '240px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  nameCellText: {
+    minWidth: 0,
+  },
+  ownerCell: {
+    maxWidth: '200px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: tokens.colorNeutralForeground2,
+  },
+  regionCell: {
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'capitalize',
+  },
+  skeleton: {
+    height: '16px',
+    width: '75%',
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusMedium,
+    animationName: {
+      '0%, 100%': { opacity: 1 },
+      '50%': { opacity: 0.4 },
+    },
+    animationDuration: '1.5s',
+    animationIterationCount: 'infinite',
+  },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  paginationBtns: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalXS,
+  },
+  emptyCell: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: `calc(${tokens.spacingVerticalXXL} * 2)`,
+    paddingBottom: `calc(${tokens.spacingVerticalXXL} * 2)`,
+    textAlign: 'center',
+    color: tokens.colorNeutralForeground3,
+  },
+})
+
+const HEADERS: { key: SortField; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'type', label: 'Type' },
+  { key: 'environment', label: 'Environment' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'region', label: 'Region' },
+]
+
+const PAGE_SIZE = 25
+
+function SortIcon({ field, sort }: { field: SortField; sort: { field: SortField; dir: SortDir } }) {
+  if (sort.field !== field) return <ArrowSortRegular fontSize={14} style={{ opacity: 0.4 }} />
+  return sort.dir === 'asc'
+    ? <ChevronUpRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
+    : <ChevronDownRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
+}
+
+function SkeletonRow() {
+  const classes = useClasses()
+  return (
+    <tr>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <td key={i} className={classes.td}>
+          <div className={classes.skeleton} />
+        </td>
+      ))}
+    </tr>
+  )
+}
+
+function resolveOwner(raw: string, ownerNames?: Map<string, string>): string {
+  if (raw === '—') return raw
+  if (raw.startsWith(SYSTEM_PREFIX)) return 'System'
+  return GUID_RE.test(raw) ? (ownerNames?.get(raw) ?? raw) : raw
+}
+
+const ENV_IN_PATH_RE = /\/environments\/([^/]+)/i
+
+function extractEnvIdFromPath(id: string): string | undefined {
+  return ENV_IN_PATH_RE.exec(id)?.[1]
+}
+
+function envMapLookup(key: string, envMap: Map<string, string>): string | undefined {
+  return envMap.get(key) ?? envMap.get(key.toLowerCase())
+}
+
+function resolveEnvironmentName(item: ResourceItem, envMap: Map<string, string>): string {
+  // 1. Explicit top-level field
+  if (item.environmentId) {
+    const r = envMapLookup(item.environmentId, envMap)
+    if (r) return r
+  }
+  // 2. Extract environment GUID from the resource's own id path
+  //    e.g. /providers/Microsoft.PowerPlatform/environments/{envId}/apps/{appId}
+  const envIdFromPath = extractEnvIdFromPath(item.id)
+  if (envIdFromPath) {
+    const r = envMapLookup(envIdFromPath, envMap)
+    if (r) return r
+    // If envMap is empty (still loading) fall through to show the raw GUID
+    if (envMap.size === 0) return envIdFromPath
+  }
+  // 3. Properties-based candidates (may already be a display name)
+  const raw = getEnvironmentName(item)
+  if (raw) {
+    const r = envMapLookup(raw, envMap)
+    if (r) return r
+    return raw
+  }
+  return envIdFromPath ?? item.environmentId ?? '—'
+}
+
+function ResourceIcon({ type }: { type: string }) {
+  const category = getResourceCategory(type)
+  if (category === 'apps') return <PowerAppsIcon fontSize={16} />
+  if (category === 'flows') return <PowerAutomateIcon fontSize={16} />
+  if (category === 'agents') return <CopilotStudioIcon fontSize={16} />
+  return null
+}
+
+export function ResourceTable({ resources, isLoading, ownerNames, allEnvironments }: ResourceTableProps) {
+  const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
+  const [page, setPage] = useState(1)
+  const [selected, setSelected] = useState<ResourceItem | null>(null)
+  const classes = useClasses()
+
+  const envMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const env of allEnvironments ?? []) {
+      const displayName = getDisplayName(env)
+      // Index by every plausible key format
+      m.set(env.id, displayName)
+      m.set(env.name, displayName)
+      // Last segment of the id path (e.g. "Default-abc" from "/providers/.../Default-abc")
+      const seg = env.id.split('/').pop()
+      if (seg) m.set(seg, displayName)
+      // Case-insensitive variants
+      m.set(env.id.toLowerCase(), displayName)
+      m.set(env.name.toLowerCase(), displayName)
+      if (seg) m.set(seg.toLowerCase(), displayName)
+    }
+    return m
+  }, [allEnvironments])
+
+  const isSystem = (r: ResourceItem) => {
+    const raw = getOwnerFromProperties(r)
+    return raw.startsWith(SYSTEM_PREFIX)
+  }
+
+  const sorted = [...resources].sort((a, b) => {
+    // System-owned resources always sink to the bottom regardless of sort direction.
+    const aSystem = isSystem(a)
+    const bSystem = isSystem(b)
+    if (aSystem !== bSystem) return aSystem ? 1 : -1
+
+    let av = '', bv = ''
+    if (sort.field === 'name') { av = getDisplayName(a); bv = getDisplayName(b) }
+    else if (sort.field === 'type') { av = a.type; bv = b.type }
+    else if (sort.field === 'environment') { av = resolveEnvironmentName(a, envMap); bv = resolveEnvironmentName(b, envMap) }
+    else if (sort.field === 'owner') {
+      av = resolveOwner(getOwnerFromProperties(a), ownerNames)
+      bv = resolveOwner(getOwnerFromProperties(b), ownerNames)
+    }
+    else if (sort.field === 'region') { av = a.environmentRegion ?? a.location ?? ''; bv = b.environmentRegion ?? b.location ?? '' }
+    const cmp = av.localeCompare(bv)
+    return sort.dir === 'asc' ? cmp : -cmp
+  })
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pageItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  const handleSort = (field: SortField) => {
+    setSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
+    setPage(1)
+  }
+
+  return (
+    <>
+      <div className={classes.wrapper}>
+        <div className={classes.scrollX}>
+          <table className={classes.table}>
+            <thead className={classes.thead}>
+              <tr>
+                {HEADERS.map(h => (
+                  <th key={h.key} className={classes.th} onClick={() => handleSort(h.key)}>
+                    <div className={classes.thInner}>
+                      {h.label}
+                      <SortIcon field={h.key} sort={sort} />
+                    </div>
+                  </th>
+                ))}
+                <th className={classes.thAction} />
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading
+                ? Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
+                : pageItems.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={6} className={classes.emptyCell}>
+                        <Caption1>No resources found</Caption1>
+                      </td>
+                    </tr>
+                  )
+                  : pageItems.map(item => {
+                    const displayName = getDisplayName(item)
+                    const envName = resolveEnvironmentName(item, envMap)
+                    const rawOwner = getOwnerFromProperties(item)
+                    const owner = resolveOwner(rawOwner, ownerNames)
+                    const region = item.environmentRegion ?? item.location ?? '—'
+                    return (
+                      <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
+                        <td className={classes.td}>
+                          <div className={classes.nameCell}>
+                            <ResourceIcon type={item.type} />
+                            <div className={classes.nameCellText}>
+                              <Text weight="semibold" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayName}>
+                                {displayName}
+                              </Text>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={classes.td}>
+                          <ResourceTypeBadge type={item.type} kind={item.kind} />
+                        </td>
+                        <td className={classes.td}>
+                          <EnvironmentBadge name={envName} type={item.environmentType} />
+                        </td>
+                        <td className={classes.td}>
+                          <Text className={classes.ownerCell} title={owner}>{owner}</Text>
+                        </td>
+                        <td className={classes.td}>
+                          <Text className={classes.regionCell}>{region}</Text>
+                        </td>
+                        <td className={classes.td} style={{ textAlign: 'right' }}>
+                          <OpenRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3 }} />
+                        </td>
+                      </tr>
+                    )
+                  })
+              }
+            </tbody>
+          </table>
+        </div>
+
+        {!isLoading && sorted.length > PAGE_SIZE && (
+          <div className={classes.pagination}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sorted.length)} of {sorted.length}
+            </Caption1>
+            <div className={classes.paginationBtns}>
+              <Button
+                appearance="secondary"
+                size="small"
+                disabled={currentPage === 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <Button
+                appearance="secondary"
+                size="small"
+                disabled={currentPage === totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <ResourceDetailModal resource={selected} onClose={() => setSelected(null)} />
+      )}
+    </>
+  )
+}
