@@ -122,5 +122,5 @@ For full manual instructions, see the docs folder:
 
 - [App Registration & Admin Consent](../docs/02-app-registration.md)
 - [Azure Static Web Apps](../docs/03-azure-static-web-apps.md)
-- [GitHub CI/CD Deployment](../docs/04-github-deployment.md)
-- [Local Development](../docs/05-local-development.md)
+- [User Guide](../docs/04-user-guide.md)
+- [API Reference](../docs/05-api-reference.md)

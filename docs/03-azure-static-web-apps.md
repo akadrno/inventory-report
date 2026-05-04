@@ -144,4 +144,4 @@ npx swa deploy ./dist \
 
 ---
 
-Next: [GitHub CI/CD Deployment](04-github-deployment.md)
+Next: [User Guide](04-user-guide.md)

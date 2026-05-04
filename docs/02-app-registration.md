@@ -114,4 +114,4 @@ You'll use these in `.env.local` (local dev) or as GitHub secrets (CI/CD).
 
 ---
 
-Next: [Azure Static Web Apps](03-azure-static-web-apps.md) or [Local Development](05-local-development.md)
+Next: [Azure Static Web Apps](03-azure-static-web-apps.md)

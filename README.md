@@ -35,10 +35,8 @@ All data is fetched live from the Power Platform and Microsoft Graph APIs using 
 | [Prerequisites](docs/01-prerequisites.md) | What you need before you start |
 | [App Registration & Admin Consent](docs/02-app-registration.md) | Create the Azure AD app and grant consent |
 | [Azure Static Web Apps](docs/03-azure-static-web-apps.md) | Host the app in Azure |
-| [GitHub CI/CD Deployment](docs/04-github-deployment.md) | Automated build and deploy via GitHub Actions |
-| [Local Development](docs/05-local-development.md) | Run the app on your own machine |
-| [User Guide](docs/06-user-guide.md) | How to use the dashboard |
-| [API Reference](docs/07-api-reference.md) | All APIs called, with links to official docs |
+| [User Guide](docs/04-user-guide.md) | How to use the dashboard |
+| [API Reference](docs/05-api-reference.md) | All APIs called, with links to official docs |
 
 ## Quick start (summary)
 
@@ -62,7 +60,7 @@ All data is fetched live from the Power Platform and Microsoft Graph APIs using 
 - [Business Application Platform (BAP) API](https://learn.microsoft.com/power-platform/admin/programmability-extensibility-overview) — DLP policies, tenant settings
 - [Microsoft Graph API](https://learn.microsoft.com/graph/overview) — user display name resolution
 
-See [API Reference](docs/07-api-reference.md) for full details.
+See [API Reference](docs/05-api-reference.md) for full details.
 
 ## License
 
