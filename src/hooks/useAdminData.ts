@@ -69,6 +69,19 @@ export function useAdminData() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['assessments'] }),
   })
 
+  const saveManyMutation = useMutation<void, Error, ResourceAssessment[]>({
+    mutationFn: async (items) => {
+      if (tableStorageConfigured) {
+        await Promise.all(items.map(upsertAssessment))
+      } else {
+        const next = { ...lsLoad() }
+        for (const a of items) next[a.resourceId] = a
+        lsSave(next)
+      }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['assessments'] }),
+  })
+
   const removeMutation = useMutation({
     mutationFn: async (resourceId: string) => {
       if (tableStorageConfigured) {
@@ -125,6 +138,8 @@ export function useAdminData() {
     isLoading,
     error: error as Error | null,
     save: saveMutation.mutate,
+    saveMany: saveManyMutation.mutateAsync,
+    isSavingMany: saveManyMutation.isPending,
     remove: removeMutation.mutate,
     exportData,
     importData,

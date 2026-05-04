@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { makeStyles, tokens, Text, Caption1, Button, Badge, Card } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Button, Badge, Card, Select } from '@fluentui/react-components'
 import {
   ArrowLeftRegular,
   FolderOpenRegular,
@@ -586,6 +586,9 @@ function GroupCard({ group, envCount, onClick }: { group: ResourceItem; envCount
 
 export function GroupsView({ groups, environments, allResources, ownerNames, isLoading }: GroupsViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<ResourceItem | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [hideEmpty, setHideEmpty] = useState(false)
+  const [minEnvs, setMinEnvs] = useState(0)
   const classes = useClasses()
 
   const envsForSelected = useMemo(
@@ -597,6 +600,17 @@ export function GroupsView({ groups, environments, allResources, ownerNames, isL
     () => new Map(groups.map(g => [g.id, getEnvsForGroup(g, environments).length])),
     [groups, environments],
   )
+
+  const filteredGroups = useMemo(() => {
+    let result = [...groups]
+    if (hideEmpty) result = result.filter(g => (envCountByGroup.get(g.id) ?? 0) > 0)
+    if (minEnvs > 0) result = result.filter(g => (envCountByGroup.get(g.id) ?? 0) >= minEnvs)
+    result.sort((a, b) => {
+      const cmp = getDisplayName(a).localeCompare(getDisplayName(b))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return result
+  }, [groups, envCountByGroup, hideEmpty, minEnvs, sortDir])
 
   if (selectedGroup) {
     return (
@@ -637,15 +651,60 @@ export function GroupsView({ groups, environments, allResources, ownerNames, isL
   }
 
   return (
-    <div className={classes.grid}>
-      {groups.map(group => (
-        <GroupCard
-          key={group.id}
-          group={group}
-          envCount={envCountByGroup.get(group.id) ?? 0}
-          onClick={() => setSelectedGroup(group)}
-        />
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <Button
+          size="small"
+          appearance="subtle"
+          icon={sortDir === 'asc' ? <ChevronUpRegular fontSize={14} /> : <ChevronDownRegular fontSize={14} />}
+          onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+        >
+          {sortDir === 'asc' ? 'A → Z' : 'Z → A'}
+        </Button>
+        <Button
+          size="small"
+          appearance={hideEmpty ? 'primary' : 'subtle'}
+          onClick={() => setHideEmpty(h => !h)}
+        >
+          {hideEmpty ? 'Empty groups hidden' : 'Hide empty groups'}
+        </Button>
+        <Select
+          size="small"
+          value={String(minEnvs)}
+          onChange={(_, d) => setMinEnvs(Number(d.value))}
+        >
+          <option value="0">Any size</option>
+          <option value="2">2+ environments</option>
+          <option value="5">5+ environments</option>
+          <option value="10">10+ environments</option>
+          <option value="20">20+ environments</option>
+        </Select>
+        <div style={{ flex: 1 }} />
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+          {filteredGroups.length} of {groups.length} group{groups.length !== 1 ? 's' : ''}
+        </Caption1>
+      </div>
+
+      {filteredGroups.length === 0 ? (
+        <div className={classes.emptyState}>
+          <FolderOpenRegular fontSize={40} style={{ opacity: 0.3, marginBottom: tokens.spacingVerticalM }} />
+          <Text weight="semibold" style={{ display: 'block' }}>No groups match the current filters</Text>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: tokens.spacingVerticalXS }}>
+            Try adjusting the size filter or showing empty groups.
+          </Caption1>
+        </div>
+      ) : (
+        <div className={classes.grid}>
+          {filteredGroups.map(group => (
+            <GroupCard
+              key={group.id}
+              group={group}
+              envCount={envCountByGroup.get(group.id) ?? 0}
+              onClick={() => setSelectedGroup(group)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

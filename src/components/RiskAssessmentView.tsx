@@ -17,6 +17,7 @@ import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory } from '../types'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useAdminData, type ResourceAssessment, type RiskLevel, type ComplianceStatus } from '../hooks/useAdminData'
+import { generateDemoAssessments } from '../utils/seedDemoAssessments'
 import { GUID_RE, SYSTEM_PREFIX, isSystemResource } from '../hooks/useOwnerNames'
 import { fetchAppPermissions, type AppPermission } from '../api/sharingApi'
 
@@ -362,7 +363,7 @@ function AssessmentDialog({
 
 export function RiskAssessmentView({ allResources, ownerNames, currentUser }: RiskAssessmentViewProps) {
   const classes = useClasses()
-  const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, exportData, importData } = useAdminData()
+  const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, saveMany, isSavingMany, exportData, importData } = useAdminData()
   const [editTarget, setEditTarget] = useState<ResourceItem | null>(null)
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
@@ -498,6 +499,19 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
         <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
         <Button size="small" appearance="subtle" onClick={() => importRef.current?.click()}>Import JSON</Button>
         <Button size="small" appearance="subtle" onClick={exportData}>Export JSON</Button>
+        {import.meta.env.DEV && (
+          <Button
+            size="small"
+            appearance="subtle"
+            disabled={isSavingMany || allResources.length === 0}
+            onClick={async () => {
+              const items = generateDemoAssessments(allResources, currentUser)
+              await saveMany(items)
+            }}
+          >
+            {isSavingMany ? 'Seeding…' : 'Seed Demo Data'}
+          </Button>
+        )}
       </div>
 
       {/* Resource table */}
