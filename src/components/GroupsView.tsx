@@ -587,7 +587,7 @@ function GroupCard({ group, envCount, onClick }: { group: ResourceItem; envCount
 export function GroupsView({ groups, environments, allResources, ownerNames, isLoading }: GroupsViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<ResourceItem | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [hideEmpty, setHideEmpty] = useState(false)
+  const [hideEmpty, setHideEmpty] = useState(true)
   const [minEnvs, setMinEnvs] = useState(0)
   const classes = useClasses()
 
