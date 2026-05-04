@@ -45,7 +45,7 @@ In the App Registration, go to **API permissions** → **Add a permission**.
 3. Select **Delegated permissions** and add available permissions (typically listed under `user_impersonation`).
 4. Click **Add permissions**.
 
-> The BAP API is used for DLP policy and tenant settings reads. If this API is not found, try the Application ID `00000007-0000-0000-c000-000000000000`.
+> The BAP API is used for DLP policy and tenant settings reads.
 
 ### Microsoft Graph
 
