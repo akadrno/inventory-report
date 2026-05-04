@@ -232,31 +232,25 @@ function buildAssessments(resources, admins) {
   const pool = shuffle(resources.filter(r => !isSystem(r)))
   if (!pool.length) return []
 
-  const UNASSESSED = Math.min(40, Math.floor(pool.length * 0.3))
+  const UNASSESSED = 30
   const toAssess = pool.slice(0, pool.length - UNASSESSED)
 
   const n = toAssess.length
-  const nC = Math.min(CRITICAL.length, Math.max(2, Math.round(n * 0.03)))
-  const nH = Math.min(HIGH.length,     Math.max(4, Math.round(n * 0.06)))
-  const nM = Math.min(MEDIUM.length,   Math.max(6, Math.round(n * 0.12)))
-  const nL = Math.max(8, Math.round(n * 0.20))
+  // All assessed resources get a real risk level — no 'None'
+  const nC = Math.min(10, n)
+  const nH = Math.min(30, Math.max(0, n - nC))
+  const nM = Math.min(50, Math.max(0, n - nC - nH))
+  // Everything remaining is Low
+  const ALL_LOW = [...LOW, ...AGENT_LOW_NOTES]
 
   const pick = (arr, i) => arr[i % arr.length]
   const slots = []
   for (let i = 0; i < nC; i++) slots.push({ risk: 'Critical', note: pick(CRITICAL, i) })
   for (let i = 0; i < nH; i++) slots.push({ risk: 'High',     note: pick(HIGH, i) })
   for (let i = 0; i < nM; i++) slots.push({ risk: 'Medium',   note: pick(MEDIUM, i) })
-  for (let i = 0; i < nL; i++) slots.push({ risk: 'Low',      note: pick(LOW, i) })
-  while (slots.length < n) slots.push({ risk: 'None', note: { riskNotes: '', notes: 'Reviewed — no risks identified.' } })
+  while (slots.length < n)     slots.push({ risk: 'Low',      note: pick(ALL_LOW, slots.length) })
 
   const shuffled = shuffle(slots)
-
-  // Ensure every assessed agent has a named risk level (not None)
-  for (let i = 0; i < n; i++) {
-    if (shuffled[i].risk === 'None' && isAgent(toAssess[i])) {
-      shuffled[i] = { risk: 'Low', note: pick(AGENT_LOW_NOTES, i) }
-    }
-  }
 
   const now = Date.now()
 
