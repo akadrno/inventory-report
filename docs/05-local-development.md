@@ -14,7 +14,7 @@ Run the application on your own machine for development or testing purposes.
 ## Step 1 — Clone the repository
 
 ```bash
-git clone https://github.com/akadrno/inventory-report.git
+git clone https://github.com/<your-org>/inventory-report.git
 cd inventory-report
 ```
 

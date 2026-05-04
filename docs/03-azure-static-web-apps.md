@@ -72,7 +72,7 @@ Watch the progress under **Actions** in your GitHub repository. A successful run
 
 ### Step 4 — Update the App Registration redirect URI
 
-Once you know the hosted URL (e.g., `https://gray-cliff-01da1af0f.7.azurestaticapps.net`):
+Once you know the hosted URL (e.g., `https://<yourhost>.azurestaticapps.net`):
 
 1. Return to your App Registration in Azure AD → **Authentication**.
 2. Add the SWA URL as a **Single-page application** redirect URI.
