@@ -193,6 +193,7 @@ function AssessmentDialog({
   })
   const [sharing, setSharing] = useState<AppPermission[] | null>(null)
   const [loadingSharing, setLoadingSharing] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
   const isApp = getResourceCategory(resource.type) === 'apps'
   const ownerRaw = getOwnerFromProperties(resource)
@@ -210,6 +211,13 @@ function AssessmentDialog({
   }, [resource.name])
 
   const handleSave = () => {
+    setSubmitAttempted(true)
+    if (
+      form.riskLevel === 'None' ||
+      form.complianceStatus === 'Not Reviewed' ||
+      !form.riskNotes.trim() ||
+      !form.notes.trim()
+    ) return
     onSave({
       resourceId: resource.id,
       riskLevel: form.riskLevel,
@@ -240,7 +248,7 @@ function AssessmentDialog({
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Level</Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Level <span style={{ color: '#c50f1f' }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {RISK_LEVELS.map(level => {
                   const active = form.riskLevel === level
@@ -263,10 +271,13 @@ function AssessmentDialog({
                   )
                 })}
               </div>
+              {submitAttempted && form.riskLevel === 'None' && (
+                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Select a risk level</Caption1>
+              )}
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Compliance Status</Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Compliance Status <span style={{ color: '#c50f1f' }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {COMPLIANCE_STATUSES.map(status => {
                   const active = form.complianceStatus === status
@@ -289,10 +300,13 @@ function AssessmentDialog({
                   )
                 })}
               </div>
+              {submitAttempted && form.complianceStatus === 'Not Reviewed' && (
+                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Select a compliance status</Caption1>
+              )}
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes</Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
               <Textarea
                 value={form.riskNotes}
                 onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
@@ -300,10 +314,13 @@ function AssessmentDialog({
                 resize="vertical"
                 rows={3}
               />
+              {submitAttempted && !form.riskNotes.trim() && (
+                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Risk notes are required</Caption1>
+              )}
             </div>
 
             <div className={classes.formField} style={{ marginBottom: isApp ? '14px' : 0 }}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes</Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
               <Textarea
                 value={form.notes}
                 onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
@@ -311,6 +328,9 @@ function AssessmentDialog({
                 resize="vertical"
                 rows={3}
               />
+              {submitAttempted && !form.notes.trim() && (
+                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Admin notes are required</Caption1>
+              )}
             </div>
 
             {isApp && (

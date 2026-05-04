@@ -204,6 +204,19 @@ function isSystem(r) {
   ].filter(Boolean).some(v => String(v).startsWith(SYSTEM_PREFIX))
 }
 
+function isAgent(r) {
+  const t = (r.type ?? '').toLowerCase()
+  return t.includes('bot') || t.includes('agent') || t.includes('copilotstudio')
+}
+
+const AGENT_LOW_NOTES = [
+  { riskNotes: 'Agent topic coverage limited. Known support scenarios not fully reflected in current topic structure.', notes: 'Expansion planned per product roadmap.' },
+  { riskNotes: 'Agent has no escalation path configured. End users may reach dead ends for unsupported queries.', notes: 'Review escalation design with business owner.' },
+  { riskNotes: 'Agent description and metadata incomplete. Purpose and target audience not documented.', notes: 'Owner asked to update agent metadata.' },
+  { riskNotes: 'Agent not in a managed environment — missing governance guardrails and DLP enforcement.', notes: 'Migration to managed environment recommended.' },
+  { riskNotes: 'Agent not modified in over 60 days with no documented review. May not reflect current business requirements.', notes: 'Schedule periodic review with bot owner.' },
+]
+
 function sr(seed) { const x = Math.sin(seed + 1) * 10000; return x - Math.floor(x) }
 
 function shuffle(arr) {
@@ -237,6 +250,14 @@ function buildAssessments(resources, admins) {
   while (slots.length < n) slots.push({ risk: 'None', note: { riskNotes: '', notes: 'Reviewed — no risks identified.' } })
 
   const shuffled = shuffle(slots)
+
+  // Ensure every assessed agent has a named risk level (not None)
+  for (let i = 0; i < n; i++) {
+    if (shuffled[i].risk === 'None' && isAgent(toAssess[i])) {
+      shuffled[i] = { risk: 'Low', note: pick(AGENT_LOW_NOTES, i) }
+    }
+  }
+
   const now = Date.now()
 
   return toAssess.map((r, idx) => {
