@@ -3,6 +3,8 @@ import {
   makeStyles, Text, Caption1, Badge, Button, Input, Spinner,
   Dialog, DialogSurface, DialogTitle, DialogBody,
   DialogActions, DialogContent, Textarea,
+  OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody, DrawerFooter,
+  Divider,
 } from '@fluentui/react-components'
 import {
   ShieldRegular,
@@ -12,6 +14,9 @@ import {
   SearchRegular,
   PersonRegular,
   InfoRegular,
+  DismissRegular,
+  CalendarRegular,
+  NoteRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory } from '../types'
@@ -160,6 +165,122 @@ function ResourceTypeIcon({ type }: { type: string }) {
   if (cat === 'flows') return <PowerAutomateIcon fontSize={14} />
   if (cat === 'agents') return <CopilotStudioIcon fontSize={14} />
   return null
+}
+
+function AssessmentSidePanel({
+  resource,
+  assessment,
+  ownerNames,
+  onClose,
+  onEdit,
+}: {
+  resource: ResourceItem
+  assessment: ResourceAssessment | undefined
+  ownerNames: Map<string, string>
+  onClose: () => void
+  onEdit: () => void
+}) {
+  const ownerRaw = getOwnerFromProperties(resource)
+  const owner = resolveOwner(ownerRaw, ownerNames)
+
+  return (
+    <OverlayDrawer open position="end" size="medium" onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DrawerHeader style={{ borderBottom: '1px solid #edebe9', paddingBottom: '12px' }}>
+        <DrawerHeaderTitle
+          action={
+            <Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />
+          }
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span style={{ flexShrink: 0 }}><ResourceTypeIcon type={resource.type} /></span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '16px', fontWeight: 600 }}>
+              {getDisplayName(resource)}
+            </span>
+          </div>
+        </DrawerHeaderTitle>
+        <Caption1 style={{ color: '#737373', marginTop: '4px', paddingLeft: '4px' }}>
+          {resource.type.split('/').pop()}
+          {owner !== '—' ? ` · ${owner}` : ''}
+        </Caption1>
+      </DrawerHeader>
+
+      <DrawerBody style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Badges row */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div>
+            <Caption1 style={{ color: '#737373', display: 'block', marginBottom: '4px', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Risk Level</Caption1>
+            <RiskBadge level={assessment?.riskLevel ?? 'None'} />
+          </div>
+          <div style={{ width: '1px', backgroundColor: '#edebe9', margin: '0 4px' }} />
+          <div>
+            <Caption1 style={{ color: '#737373', display: 'block', marginBottom: '4px', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Compliance</Caption1>
+            <ComplianceBadge status={assessment?.complianceStatus ?? 'Not Reviewed'} />
+          </div>
+        </div>
+
+        <Divider />
+
+        {assessment ? (
+          <>
+            {assessment.riskNotes && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <ShieldRegular fontSize={14} style={{ color: '#605e5c' }} />
+                  <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes</Text>
+                </div>
+                <Text style={{ fontSize: '13px', color: '#323130', lineHeight: '20px', whiteSpace: 'pre-wrap' }}>{assessment.riskNotes}</Text>
+              </div>
+            )}
+
+            {assessment.notes && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <NoteRegular fontSize={14} style={{ color: '#605e5c' }} />
+                  <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes</Text>
+                </div>
+                <Text style={{ fontSize: '13px', color: '#323130', lineHeight: '20px', whiteSpace: 'pre-wrap' }}>{assessment.notes}</Text>
+              </div>
+            )}
+
+            <Divider />
+
+            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+              {assessment.lastUpdated && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <CalendarRegular fontSize={14} style={{ color: '#605e5c' }} />
+                    <Caption1 style={{ fontWeight: 600, color: '#605e5c', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Last Reviewed</Caption1>
+                  </div>
+                  <Text style={{ fontSize: '13px', color: '#323130' }}>{new Date(assessment.lastUpdated).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+                </div>
+              )}
+              {assessment.updatedBy && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <PersonRegular fontSize={14} style={{ color: '#605e5c' }} />
+                    <Caption1 style={{ fontWeight: 600, color: '#605e5c', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Reviewed By</Caption1>
+                  </div>
+                  <Text style={{ fontSize: '13px', color: '#323130' }}>{assessment.updatedBy}</Text>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 0', color: '#737373' }}>
+            <ShieldRegular fontSize={32} />
+            <Text style={{ fontSize: '13px', color: '#737373' }}>No assessment recorded for this resource.</Text>
+          </div>
+        )}
+      </DrawerBody>
+
+      <DrawerFooter style={{ borderTop: '1px solid #edebe9', padding: '12px 20px', display: 'flex', gap: '8px' }}>
+        <Button appearance="primary" onClick={onEdit}>
+          {assessment ? 'Edit Assessment' : 'Add Assessment'}
+        </Button>
+        <Button appearance="secondary" onClick={onClose}>Close</Button>
+      </DrawerFooter>
+    </OverlayDrawer>
+  )
 }
 
 interface EditForm {
@@ -385,6 +506,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
   const classes = useClasses()
   const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, saveMany, isSavingMany, exportData, importData } = useAdminData()
   const [editTarget, setEditTarget] = useState<ResourceItem | null>(null)
+  const [selectedForPanel, setSelectedForPanel] = useState<ResourceItem | null>(null)
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
   const [typeFilter, setTypeFilter] = useState<'all' | 'apps' | 'flows' | 'agents'>('all')
@@ -466,6 +588,19 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
           ownerNames={ownerNames}
           onSave={save}
           onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {selectedForPanel && (
+        <AssessmentSidePanel
+          resource={selectedForPanel}
+          assessment={assessments[selectedForPanel.id]}
+          ownerNames={ownerNames}
+          onClose={() => setSelectedForPanel(null)}
+          onEdit={() => {
+            setEditTarget(selectedForPanel)
+            setSelectedForPanel(null)
+          }}
         />
       )}
 
@@ -573,9 +708,17 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ flexShrink: 0 }}><ResourceTypeIcon type={r.type} /></span>
                           <div style={{ minWidth: 0 }}>
-                            <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <button
+                              onClick={() => setSelectedForPanel(r)}
+                              style={{
+                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                display: 'block', width: '100%', textAlign: 'left',
+                                fontSize: '13px', fontWeight: 600, color: '#0078d4',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                            >
                               {getDisplayName(r)}
-                            </Text>
+                            </button>
                             <Caption1 style={{ color: '#737373' }}>{r.type.split('/').pop()}</Caption1>
                           </div>
                         </div>
