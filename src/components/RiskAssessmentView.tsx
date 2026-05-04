@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
 import {
-  makeStyles, Text, Caption1, Badge, Button, Input,
+  makeStyles, Text, Caption1, Badge, Button, Input, Spinner,
   Dialog, DialogSurface, DialogTitle, DialogBody,
   DialogActions, DialogContent, Textarea,
 } from '@fluentui/react-components'
@@ -362,7 +362,7 @@ function AssessmentDialog({
 
 export function RiskAssessmentView({ allResources, ownerNames, currentUser }: RiskAssessmentViewProps) {
   const classes = useClasses()
-  const { data: assessments, save, exportData, importData } = useAdminData()
+  const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, exportData, importData } = useAdminData()
   const [editTarget, setEditTarget] = useState<ResourceItem | null>(null)
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
@@ -412,6 +412,19 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     reader.onload = ev => { importData(ev.target?.result as string) }
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  if (assessmentsLoading) {
+    return <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px' }}><Spinner size="small" /><Caption1 style={{ color: '#737373' }}>Loading assessments…</Caption1></div>
+  }
+
+  if (assessmentsError) {
+    return (
+      <div style={{ padding: '16px', backgroundColor: '#fde7e9', border: '1px solid #c50f1f', borderRadius: '4px' }}>
+        <Text style={{ fontSize: '13px', fontWeight: 600, color: '#c50f1f' }}>Failed to load assessments from Azure Table Storage</Text>
+        <Caption1 style={{ display: 'block', color: '#605e5c', marginTop: '4px' }}>{assessmentsError.message}</Caption1>
+      </div>
+    )
   }
 
   const summaryItems: Array<{ key: RiskFilter; color: string; label: string; icon: React.ReactNode; count: number }> = [
