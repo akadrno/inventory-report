@@ -1,10 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
 import {
-  makeStyles, Text, Caption1, Badge, Button, Input, Spinner,
-  Dialog, DialogSurface, DialogTitle, DialogBody,
-  DialogActions, DialogContent, Textarea,
+  makeStyles, Text, Caption1, Badge, Button, Input, Spinner, Textarea,
   OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody, DrawerFooter,
-  Divider,
 } from '@fluentui/react-components'
 import {
   ShieldRegular,
@@ -15,8 +12,6 @@ import {
   PersonRegular,
   InfoRegular,
   DismissRegular,
-  CalendarRegular,
-  NoteRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory } from '../types'
@@ -167,122 +162,6 @@ function ResourceTypeIcon({ type }: { type: string }) {
   return null
 }
 
-function AssessmentSidePanel({
-  resource,
-  assessment,
-  ownerNames,
-  onClose,
-  onEdit,
-}: {
-  resource: ResourceItem
-  assessment: ResourceAssessment | undefined
-  ownerNames: Map<string, string>
-  onClose: () => void
-  onEdit: () => void
-}) {
-  const ownerRaw = getOwnerFromProperties(resource)
-  const owner = resolveOwner(ownerRaw, ownerNames)
-
-  return (
-    <OverlayDrawer open position="end" size="medium" onOpenChange={(_, d) => { if (!d.open) onClose() }}>
-      <DrawerHeader style={{ borderBottom: '1px solid #edebe9', paddingBottom: '12px' }}>
-        <DrawerHeaderTitle
-          action={
-            <Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />
-          }
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span style={{ flexShrink: 0 }}><ResourceTypeIcon type={resource.type} /></span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '16px', fontWeight: 600 }}>
-              {getDisplayName(resource)}
-            </span>
-          </div>
-        </DrawerHeaderTitle>
-        <Caption1 style={{ color: '#737373', marginTop: '4px', paddingLeft: '4px' }}>
-          {resource.type.split('/').pop()}
-          {owner !== '—' ? ` · ${owner}` : ''}
-        </Caption1>
-      </DrawerHeader>
-
-      <DrawerBody style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Badges row */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <div>
-            <Caption1 style={{ color: '#737373', display: 'block', marginBottom: '4px', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Risk Level</Caption1>
-            <RiskBadge level={assessment?.riskLevel ?? 'None'} />
-          </div>
-          <div style={{ width: '1px', backgroundColor: '#edebe9', margin: '0 4px' }} />
-          <div>
-            <Caption1 style={{ color: '#737373', display: 'block', marginBottom: '4px', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Compliance</Caption1>
-            <ComplianceBadge status={assessment?.complianceStatus ?? 'Not Reviewed'} />
-          </div>
-        </div>
-
-        <Divider />
-
-        {assessment ? (
-          <>
-            {assessment.riskNotes && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <ShieldRegular fontSize={14} style={{ color: '#605e5c' }} />
-                  <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes</Text>
-                </div>
-                <Text style={{ fontSize: '13px', color: '#323130', lineHeight: '20px', whiteSpace: 'pre-wrap' }}>{assessment.riskNotes}</Text>
-              </div>
-            )}
-
-            {assessment.notes && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <NoteRegular fontSize={14} style={{ color: '#605e5c' }} />
-                  <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes</Text>
-                </div>
-                <Text style={{ fontSize: '13px', color: '#323130', lineHeight: '20px', whiteSpace: 'pre-wrap' }}>{assessment.notes}</Text>
-              </div>
-            )}
-
-            <Divider />
-
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              {assessment.lastUpdated && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <CalendarRegular fontSize={14} style={{ color: '#605e5c' }} />
-                    <Caption1 style={{ fontWeight: 600, color: '#605e5c', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Last Reviewed</Caption1>
-                  </div>
-                  <Text style={{ fontSize: '13px', color: '#323130' }}>{new Date(assessment.lastUpdated).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
-                </div>
-              )}
-              {assessment.updatedBy && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <PersonRegular fontSize={14} style={{ color: '#605e5c' }} />
-                    <Caption1 style={{ fontWeight: 600, color: '#605e5c', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Reviewed By</Caption1>
-                  </div>
-                  <Text style={{ fontSize: '13px', color: '#323130' }}>{assessment.updatedBy}</Text>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 0', color: '#737373' }}>
-            <ShieldRegular fontSize={32} />
-            <Text style={{ fontSize: '13px', color: '#737373' }}>No assessment recorded for this resource.</Text>
-          </div>
-        )}
-      </DrawerBody>
-
-      <DrawerFooter style={{ borderTop: '1px solid #edebe9', padding: '12px 20px', display: 'flex', gap: '8px' }}>
-        <Button appearance="primary" onClick={onEdit}>
-          {assessment ? 'Edit Assessment' : 'Add Assessment'}
-        </Button>
-        <Button appearance="secondary" onClick={onClose}>Close</Button>
-      </DrawerFooter>
-    </OverlayDrawer>
-  )
-}
-
 interface EditForm {
   riskLevel: RiskLevel
   complianceStatus: ComplianceStatus
@@ -290,34 +169,41 @@ interface EditForm {
   notes: string
 }
 
-function AssessmentDialog({
+function AssessmentSidePanel({
   resource,
-  existing,
+  assessment,
+  mode,
   currentUser,
   ownerNames,
   onSave,
   onClose,
+  onEditMode,
+  onCancelEdit,
 }: {
   resource: ResourceItem
-  existing: ResourceAssessment | undefined
+  assessment: ResourceAssessment | undefined
+  mode: 'view' | 'edit'
   currentUser: string
   ownerNames: Map<string, string>
   onSave: (a: ResourceAssessment) => void
   onClose: () => void
+  onEditMode: () => void
+  onCancelEdit: () => void
 }) {
   const classes = useClasses()
+  const ownerRaw = getOwnerFromProperties(resource)
+  const owner = resolveOwner(ownerRaw, ownerNames)
+  const isApp = getResourceCategory(resource.type) === 'apps'
+
   const [form, setForm] = useState<EditForm>({
-    riskLevel: existing?.riskLevel ?? 'None',
-    complianceStatus: existing?.complianceStatus ?? 'Not Reviewed',
-    riskNotes: existing?.riskNotes ?? '',
-    notes: existing?.notes ?? '',
+    riskLevel: assessment?.riskLevel ?? 'None',
+    complianceStatus: assessment?.complianceStatus ?? 'Not Reviewed',
+    riskNotes: assessment?.riskNotes ?? '',
+    notes: assessment?.notes ?? '',
   })
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const [sharing, setSharing] = useState<AppPermission[] | null>(null)
   const [loadingSharing, setLoadingSharing] = useState(false)
-  const [submitAttempted, setSubmitAttempted] = useState(false)
-
-  const isApp = getResourceCategory(resource.type) === 'apps'
-  const ownerRaw = getOwnerFromProperties(resource)
 
   const loadSharing = useCallback(async () => {
     setLoadingSharing(true)
@@ -348,26 +234,85 @@ function AssessmentDialog({
       lastUpdated: new Date().toISOString(),
       updatedBy: currentUser,
     })
-    onClose()
+  }
+
+  const lbl: React.CSSProperties = {
+    fontSize: '10px', fontWeight: 600, color: '#737373',
+    textTransform: 'uppercase', letterSpacing: '0.5px',
+    display: 'block', marginBottom: '3px',
   }
 
   return (
-    <Dialog open onOpenChange={(_, d) => { if (!d.open) onClose() }}>
-      <DialogSurface style={{ maxWidth: '560px', width: '100%' }}>
-        <DialogBody>
-          <DialogTitle>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ResourceTypeIcon type={resource.type} />
-              <span style={{ fontSize: '16px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {getDisplayName(resource)}
-              </span>
-            </div>
-          </DialogTitle>
-          <DialogContent>
-            <div style={{ fontSize: '12px', color: '#737373', marginBottom: '16px' }}>
-              {resource.type.split('/').pop()} · {resolveOwner(ownerRaw, ownerNames)}
-            </div>
+    <OverlayDrawer open position="end" size="medium" onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DrawerHeader style={{ borderBottom: '1px solid #edebe9', paddingBottom: '10px' }}>
+        <DrawerHeaderTitle
+          action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span style={{ flexShrink: 0 }}><ResourceTypeIcon type={resource.type} /></span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '15px', fontWeight: 600 }}>
+              {getDisplayName(resource)}
+            </span>
+          </div>
+        </DrawerHeaderTitle>
+        <Caption1 style={{ color: '#737373', marginTop: '2px', paddingLeft: '2px' }}>
+          {resource.type.split('/').pop()}{owner !== '—' ? ` · ${owner}` : ''}
+        </Caption1>
+      </DrawerHeader>
 
+      <DrawerBody style={{ padding: '14px 16px', overflowY: 'auto' }}>
+        {mode === 'view' ? (
+          assessment ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <span style={lbl}>Risk Level</span>
+                  <RiskBadge level={assessment.riskLevel} />
+                </div>
+                <div>
+                  <span style={lbl}>Compliance</span>
+                  <ComplianceBadge status={assessment.complianceStatus} />
+                </div>
+                {assessment.lastUpdated && (
+                  <div>
+                    <span style={lbl}>Last Reviewed</span>
+                    <Text style={{ fontSize: '12px', color: '#323130' }}>
+                      {new Date(assessment.lastUpdated).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </Text>
+                  </div>
+                )}
+                {assessment.updatedBy && (
+                  <div>
+                    <span style={lbl}>Reviewed By</span>
+                    <Text style={{ fontSize: '12px', color: '#323130' }}>{assessment.updatedBy}</Text>
+                  </div>
+                )}
+              </div>
+              {(assessment.riskNotes || assessment.notes) && (
+                <div style={{ borderTop: '1px solid #edebe9', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {assessment.riskNotes && (
+                    <div>
+                      <span style={lbl}>Risk Notes</span>
+                      <Text style={{ fontSize: '12px', color: '#323130', lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.riskNotes}</Text>
+                    </div>
+                  )}
+                  {assessment.notes && (
+                    <div>
+                      <span style={lbl}>Admin Notes</span>
+                      <Text style={{ fontSize: '12px', color: '#323130', lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.notes}</Text>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 0' }}>
+              <ShieldRegular fontSize={28} style={{ color: '#737373' }} />
+              <Text style={{ fontSize: '13px', color: '#737373' }}>No assessment recorded for this resource.</Text>
+            </div>
+          )
+        ) : (
+          <div>
             <div className={classes.formField}>
               <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Level <span style={{ color: '#c50f1f' }}>*</span></Text>
               <div className={classes.toggleGroup}>
@@ -375,20 +320,13 @@ function AssessmentDialog({
                   const active = form.riskLevel === level
                   const c = RISK_CONFIG[level]
                   return (
-                    <button
-                      key={level}
-                      onClick={() => setForm(f => ({ ...f, riskLevel: level }))}
-                      style={{
-                        padding: '4px 12px', borderRadius: '10px', fontSize: '12px',
-                        fontWeight: active ? 700 : 400, cursor: 'pointer',
-                        border: `2px solid ${active ? c.color : '#edebe9'}`,
-                        backgroundColor: active ? c.bg : '#ffffff',
-                        color: active ? c.color : '#323130',
-                        transition: 'all 0.1s',
-                      }}
-                    >
-                      {level}
-                    </button>
+                    <button key={level} onClick={() => setForm(f => ({ ...f, riskLevel: level }))} style={{
+                      padding: '4px 12px', borderRadius: '10px', fontSize: '12px',
+                      fontWeight: active ? 700 : 400, cursor: 'pointer',
+                      border: `2px solid ${active ? c.color : '#edebe9'}`,
+                      backgroundColor: active ? c.bg : '#ffffff',
+                      color: active ? c.color : '#323130', transition: 'all 0.1s',
+                    }}>{level}</button>
                   )
                 })}
               </div>
@@ -404,20 +342,13 @@ function AssessmentDialog({
                   const active = form.complianceStatus === status
                   const c = COMPLIANCE_CONFIG[status]
                   return (
-                    <button
-                      key={status}
-                      onClick={() => setForm(f => ({ ...f, complianceStatus: status }))}
-                      style={{
-                        padding: '4px 10px', borderRadius: '10px', fontSize: '11px',
-                        fontWeight: active ? 700 : 400, cursor: 'pointer',
-                        border: `2px solid ${active ? c.color : '#edebe9'}`,
-                        backgroundColor: active ? c.bg : '#ffffff',
-                        color: active ? c.color : '#323130',
-                        transition: 'all 0.1s',
-                      }}
-                    >
-                      {status}
-                    </button>
+                    <button key={status} onClick={() => setForm(f => ({ ...f, complianceStatus: status }))} style={{
+                      padding: '4px 10px', borderRadius: '10px', fontSize: '11px',
+                      fontWeight: active ? 700 : 400, cursor: 'pointer',
+                      border: `2px solid ${active ? c.color : '#edebe9'}`,
+                      backgroundColor: active ? c.bg : '#ffffff',
+                      color: active ? c.color : '#323130', transition: 'all 0.1s',
+                    }}>{status}</button>
                   )
                 })}
               </div>
@@ -428,13 +359,8 @@ function AssessmentDialog({
 
             <div className={classes.formField}>
               <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
-              <Textarea
-                value={form.riskNotes}
-                onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
-                placeholder="Document specific risk findings, vulnerabilities, or compliance gaps…"
-                resize="vertical"
-                rows={3}
-              />
+              <Textarea value={form.riskNotes} onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
+                placeholder="Document specific risk findings, vulnerabilities, or compliance gaps…" resize="vertical" rows={3} />
               {submitAttempted && !form.riskNotes.trim() && (
                 <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Risk notes are required</Caption1>
               )}
@@ -442,13 +368,8 @@ function AssessmentDialog({
 
             <div className={classes.formField} style={{ marginBottom: isApp ? '14px' : 0 }}>
               <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
-              <Textarea
-                value={form.notes}
-                onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
-                placeholder="General notes, remediation steps, or context for this resource…"
-                resize="vertical"
-                rows={3}
-              />
+              <Textarea value={form.notes} onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
+                placeholder="General notes, remediation steps, or context for this resource…" resize="vertical" rows={3} />
               {submitAttempted && !form.notes.trim() && (
                 <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Admin notes are required</Caption1>
               )}
@@ -479,35 +400,46 @@ function AssessmentDialog({
                           padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, flexShrink: 0,
                           color: p.roleName === 'Owner' ? '#004578' : p.roleName === 'CanEdit' ? '#8764b8' : '#605e5c',
                           backgroundColor: p.roleName === 'Owner' ? '#cfe4fa' : p.roleName === 'CanEdit' ? '#f0ebf8' : '#f3f2f1',
-                        }}>
-                          {p.roleName}
-                        </span>
+                        }}>{p.roleName}</span>
                       </div>
                     ))}
-                    {sharing.length > 12 && (
-                      <Caption1 style={{ color: '#737373' }}>…and {sharing.length - 12} more</Caption1>
-                    )}
+                    {sharing.length > 12 && <Caption1 style={{ color: '#737373' }}>…and {sharing.length - 12} more</Caption1>}
                   </div>
                 )}
               </div>
             )}
-          </DialogContent>
-          <DialogActions>
-            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+          </div>
+        )}
+      </DrawerBody>
+
+      <DrawerFooter style={{ borderTop: '1px solid #edebe9', padding: '12px 16px', display: 'flex', gap: '8px' }}>
+        {mode === 'view' ? (
+          <>
+            <Button appearance="primary" onClick={onEditMode}>{assessment ? 'Edit Assessment' : 'Add Assessment'}</Button>
+            <Button appearance="secondary" onClick={onClose}>Close</Button>
+          </>
+        ) : (
+          <>
             <Button appearance="primary" onClick={handleSave}>Save Assessment</Button>
-          </DialogActions>
-        </DialogBody>
-      </DialogSurface>
-    </Dialog>
+            <Button appearance="secondary" onClick={onCancelEdit}>Cancel</Button>
+          </>
+        )}
+      </DrawerFooter>
+    </OverlayDrawer>
   )
 }
 
 export function RiskAssessmentView({ allResources, ownerNames, currentUser }: RiskAssessmentViewProps) {
   const classes = useClasses()
   const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, saveMany, isSavingMany, exportData, importData } = useAdminData()
-  const [editTarget, setEditTarget] = useState<ResourceItem | null>(null)
   const [selectedForPanel, setSelectedForPanel] = useState<ResourceItem | null>(null)
+  const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
   const [search, setSearch] = useState('')
+
+  const openPanel = (r: ResourceItem, mode: 'view' | 'edit' = 'view') => {
+    setSelectedForPanel(r)
+    setPanelMode(mode)
+  }
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
   const [typeFilter, setTypeFilter] = useState<'all' | 'apps' | 'flows' | 'agents'>('all')
   const [hideSystem, setHideSystem] = useState(true)
@@ -580,27 +512,18 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
 
   return (
     <div className={classes.root}>
-      {editTarget && (
-        <AssessmentDialog
-          resource={editTarget}
-          existing={assessments[editTarget.id]}
-          currentUser={currentUser}
-          ownerNames={ownerNames}
-          onSave={save}
-          onClose={() => setEditTarget(null)}
-        />
-      )}
-
       {selectedForPanel && (
         <AssessmentSidePanel
+          key={selectedForPanel.id}
           resource={selectedForPanel}
           assessment={assessments[selectedForPanel.id]}
+          mode={panelMode}
+          currentUser={currentUser}
           ownerNames={ownerNames}
+          onSave={(a) => { save(a); setPanelMode('view') }}
           onClose={() => setSelectedForPanel(null)}
-          onEdit={() => {
-            setEditTarget(selectedForPanel)
-            setSelectedForPanel(null)
-          }}
+          onEditMode={() => setPanelMode('edit')}
+          onCancelEdit={() => setPanelMode('view')}
         />
       )}
 
@@ -741,7 +664,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                         <Caption1 style={{ color: '#737373' }}>{a?.updatedBy ?? '—'}</Caption1>
                       </td>
                       <td className={classes.td}>
-                        <Button size="small" appearance="subtle" onClick={() => setEditTarget(r)}>Edit</Button>
+                        <Button size="small" appearance="subtle" onClick={() => openPanel(r, 'edit')}>Edit</Button>
                       </td>
                     </tr>
                   )
