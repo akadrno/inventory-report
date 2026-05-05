@@ -122,7 +122,7 @@ export async function fetchGroupRuleAssignments(
   const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?includeRuleSetCounts=true&$top=100&api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (res.status === 404) return { assignments: [], rawJson: '{"value":[],"_note":"404 not found"}' }
