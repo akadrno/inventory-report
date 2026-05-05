@@ -663,6 +663,15 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const seenPolicyIds = new Set<string>()
       const policies: PolicyEntry[] = []
 
+      // Collect all known identifiers for this group: API-path GUID + resourceIds from assignments
+      const groupIdentifiers: string[] = groupGuid ? [groupGuid] : []
+      for (const a of assignments) {
+        const rid = typeof a.resourceId === 'string'
+          ? (a.resourceId.includes('/') ? a.resourceId.split('/').filter(Boolean).pop()! : a.resourceId)
+          : null
+        if (rid && !groupIdentifiers.includes(rid)) groupIdentifiers.push(rid)
+      }
+
       // --- fetch full policy for each assignment (ruleSets are not inlined) ---
       await Promise.all(assignments.map(async (a) => {
         seenPolicyIds.add(a.policyId)
@@ -679,12 +688,15 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         }
       }))
 
-      // --- tenant policies: find any for this group not in assignments ---
+      // --- tenant policies: find any for this group not surfaced by assignments ---
       for (const p of allPolicies) {
         const key = p.id ?? ''
         if (seenPolicyIds.has(key)) continue
-        // MG-<groupGuid>-... naming convention used by Power Platform
-        if (groupGuid && p.name?.includes(groupGuid)) {
+        // Skip per-environment synced copies (EP-<envGuid>-... naming pattern)
+        if (/^EP-[0-9a-f-]{8}/i.test(p.name ?? '') || (p.displayName ?? '').toLowerCase().startsWith('synced environment')) continue
+        // Match by name OR full policy JSON containing any known group identifier
+        const pJson = JSON.stringify(p)
+        if (groupIdentifiers.some(id => pJson.includes(id))) {
           seenPolicyIds.add(key)
           const policyName = p.displayName ?? humanizeName(p.name ?? key)
           policies.push({ policyName, ruleSets: p.ruleSets ?? [], rawJson: JSON.stringify(p, null, 2) })
