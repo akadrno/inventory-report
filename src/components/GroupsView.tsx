@@ -28,8 +28,8 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchRuleBasedPolicy } from '../api/governanceApi'
-import type { GroupRuleAssignment, RuleBasedPolicy } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchRuleBasedPolicy, fetchPolicyRules } from '../api/governanceApi'
+import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRule } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -571,7 +571,7 @@ function humanizeName(name: string | undefined): string {
     .replace(/\s+/g, ' ')
 }
 
-function extractRules(policy: RuleBasedPolicy | null): import('../api/governanceApi').PolicyRule[] {
+function extractRules(policy: RuleBasedPolicy | null): PolicyRule[] {
   if (!policy) return []
   const fromRuleSets = (policy.ruleSets ?? []).flatMap(rs => rs.rules ?? [])
   if (fromRuleSets.length > 0) return fromRuleSets
@@ -581,6 +581,7 @@ function extractRules(policy: RuleBasedPolicy | null): import('../api/governance
 interface PolicyWithAssignment {
   assignment: GroupRuleAssignment
   policy: RuleBasedPolicy | null
+  rules: PolicyRule[]
 }
 
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
@@ -594,9 +595,14 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         assignments.map(async (a) => {
           try {
             const policy = await fetchRuleBasedPolicy(a.policyId)
-            return { assignment: a, policy }
+            // Use rules from policy response; if none, call the /rules sub-endpoint
+            let rules = extractRules(policy)
+            if (rules.length === 0) {
+              rules = await fetchPolicyRules(a.policyId).catch(() => [])
+            }
+            return { assignment: a, policy, rules }
           } catch {
-            return { assignment: a, policy: null }
+            return { assignment: a, policy: null, rules: [] }
           }
         }),
       )
@@ -647,12 +653,13 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {data && data.map(({ assignment, policy }) => {
-            const policyName = policy?.displayName ?? policy?.name
+          {data && data.map(({ assignment, policy, rules }) => {
+            // displayName is already human-readable; name is a system identifier — humanize it
+            const policyName = policy?.displayName
+              ?? (policy?.name ? humanizeName(policy.name) : null)
               ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
             const desc = policy?.description as string | undefined
             const status = policy?.status as string | undefined
-            const rules = extractRules(policy)
 
             return (
               <div

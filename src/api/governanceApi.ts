@@ -131,11 +131,25 @@ export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedP
   const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies/${id}?api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/${id}?$expand=ruleSets&api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (!res.ok) throw new Error(`Rule-based policy fetch failed: ${res.status}`)
   return res.json()
+}
+
+export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> {
+  const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
+  const token = await getPowerPlatformToken()
+  // Try the direct /rules sub-resource first
+  const res = await fetch(
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/${id}/rules?api-version=2022-03-01-preview`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (res.status === 404) return []
+  if (!res.ok) throw new Error(`Policy rules fetch failed: ${res.status}`)
+  const json = await res.json()
+  return json.value ?? json.rules ?? []
 }
 
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
