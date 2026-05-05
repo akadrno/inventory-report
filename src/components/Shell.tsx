@@ -20,6 +20,9 @@ import {
   LightbulbRegular,
   ChevronRightRegular,
   ChevronLeftRegular,
+  TagMultipleRegular,
+  TagRegular,
+  BookmarkRegular,
 } from '@fluentui/react-icons'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useMsal } from '@azure/msal-react'
@@ -35,6 +38,8 @@ import { EnvironmentsView } from './EnvironmentsView'
 import { ReportView, RecsTab, buildRecs } from './ReportView'
 import { MakerAnalyticsView } from './MakerAnalyticsView'
 import { RiskAssessmentView } from './RiskAssessmentView'
+import { ResourceTaggingView } from './ResourceTaggingView'
+import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
 import { DebugPanel } from './DebugPanel'
 import { useDebug } from '../context/DebugContext'
@@ -65,7 +70,7 @@ const STROKE1 = '#edebe9'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RailSection = 'home' | 'inventory' | 'governance'
+type RailSection = 'home' | 'inventory' | 'governance' | 'tags'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 
@@ -527,6 +532,7 @@ export function Shell() {
   const [rail, setRail] = useState<RailSection>('home')
   const [invView, setInvView] = useState<InvView>('all')
   const [govView, setGovView] = useState<GovView>('overview')
+  const [tagView, setTagView] = useState<TagView>('browser')
   const [search, setSearch] = useState('')
   const [panelOpen, setPanelOpen] = useState(true)
   const [hideSystemInv, setHideSystemInv] = useState(true)
@@ -643,6 +649,30 @@ export function Shell() {
       )
     }
 
+    if (rail === 'tags') {
+      const tagLabels: Record<TagView, string> = { browser: 'Tag Resources', termstore: 'Term Store' }
+      const tagSubs: Record<TagView, string> = {
+        browser: 'Browse and tag your Power Platform resources',
+        termstore: 'Manage groups, term sets, and terms',
+      }
+      return (
+        <>
+          <div className={classes.contentHeader}>
+            <div>
+              <Text className={classes.pageTitle}>{tagLabels[tagView]}</Text>
+              <Caption1 className={classes.pageSub}>{tagSubs[tagView]}</Caption1>
+            </div>
+          </div>
+          <ResourceTaggingView
+            allResources={allResources}
+            allEnvironments={allEnvironments}
+            currentUser={account?.username ?? ''}
+            view={tagView}
+          />
+        </>
+      )
+    }
+
     if (rail === 'governance') {
       const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
       return (
@@ -685,6 +715,7 @@ export function Shell() {
           <RailButton icon={<HomeRegular />} label="Home" active={rail === 'home'} onClick={() => handleRailClick('home')} />
           <RailButton icon={<TableSimpleRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />
           <RailButton icon={<ShieldRegular />} label="Governance" active={rail === 'governance'} onClick={() => handleRailClick('governance')} />
+          <RailButton icon={<TagMultipleRegular />} label="Tagging" active={rail === 'tags'} onClick={() => handleRailClick('tags')} />
         </nav>
 
         {/* Secondary panel */}
@@ -732,6 +763,25 @@ export function Shell() {
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
             <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
             <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />
+          </div>
+        )}
+
+        {rail === 'tags' && (
+          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
+            {panelOpen ? (
+              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ flex: 1 }}>Resource Tagging</span>
+                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
+                  <ChevronLeftRegular fontSize={16} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
+                <ChevronRightRegular fontSize={16} />
+              </button>
+            )}
+            <NavItem icon={<TagRegular />} label="Tag Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
+            <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />
           </div>
         )}
 
