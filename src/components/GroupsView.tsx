@@ -28,7 +28,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies, fetchGroupAssignmentsNoVersion } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies, fetchGroupAssignmentsAllVersions } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
@@ -607,7 +607,7 @@ interface GroupRulesData {
   ruleSets: PolicyRuleSet[]
   rawAssignmentsJson: string
   allPoliciesJson: string
-  rawAssignmentsNoVersionJson: string
+  assignmentsByVersion: Record<string, string>
 }
 
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
@@ -619,11 +619,11 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
   const { data, isLoading, error } = useQuery<GroupRulesData>({
     queryKey: ['groupRulePolicies', group?.id],
     queryFn: async () => {
-      // Three parallel calls: assignments, all-policies, and assignments without api-version
-      const [assignmentsResult, allPoliciesResult, rawAssignmentsNoVersionJson] = await Promise.all([
+      // Three parallel calls: assignments, all-policies, and all API versions of assignments
+      const [assignmentsResult, allPoliciesResult, assignmentsByVersion] = await Promise.all([
         fetchGroupRuleAssignments(group!.id),
         fetchAllRuleBasedPolicies().catch(() => ({ policies: [], rawJson: '{"_error":"fetch failed"}' })),
-        fetchGroupAssignmentsNoVersion(group!.id),
+        fetchGroupAssignmentsAllVersions(group!.id),
       ])
 
       const { assignments, rawJson: rawAssignmentsJson } = assignmentsResult
@@ -669,7 +669,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         }
       }
 
-      return { ruleSets, rawAssignmentsJson, allPoliciesJson, rawAssignmentsNoVersionJson }
+      return { ruleSets, rawAssignmentsJson, allPoliciesJson, assignmentsByVersion }
     },
     enabled: isOpen && !!group?.id,
     staleTime: 5 * 60 * 1000,
@@ -709,18 +709,10 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           {/* Debug boxes */}
           {data && (
             <>
-              <DebugBox
-                label="Debug 1: assignments (with api-version)"
-                content={data.rawAssignmentsJson}
-              />
-              <DebugBox
-                label="Debug 2: all tenant policies"
-                content={data.allPoliciesJson}
-              />
-              <DebugBox
-                label="Debug 3: assignments (no api-version)"
-                content={data.rawAssignmentsNoVersionJson}
-              />
+              <DebugBox label="Debug: all tenant policies" content={data.allPoliciesJson} />
+              {Object.entries(data.assignmentsByVersion).map(([version, raw]) => (
+                <DebugBox key={version} label={`Debug: assignments api-version=${version}`} content={raw} />
+              ))}
             </>
           )}
 

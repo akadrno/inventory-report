@@ -133,18 +133,26 @@ export async function fetchGroupRuleAssignments(
   return { assignments: json.value ?? [], rawJson: text }
 }
 
-export async function fetchGroupAssignmentsNoVersion(groupId: string): Promise<string> {
+export async function fetchGroupAssignmentsAllVersions(
+  groupId: string,
+): Promise<Record<string, string>> {
   const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
-  try {
-    const res = await fetch(
-      `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-    return await res.text()
-  } catch (e) {
-    return JSON.stringify({ _error: String(e) })
-  }
+  const versions = ['2024-10-01', '2022-03-01-preview', '2021-10-01-preview']
+  const results = await Promise.all(
+    versions.map(async v => {
+      try {
+        const res = await fetch(
+          `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?api-version=${v}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        return [v, await res.text()] as const
+      } catch (e) {
+        return [v, JSON.stringify({ _error: String(e) })] as const
+      }
+    }),
+  )
+  return Object.fromEntries(results)
 }
 
 export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {
