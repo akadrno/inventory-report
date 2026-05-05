@@ -71,6 +71,45 @@ export interface BillingPolicy {
   }
 }
 
+export interface GroupRuleAssignment {
+  policyId: string
+  resourceId: string
+  resourceType: string
+  ruleSetCount?: number
+  tenantId?: string
+}
+
+export interface RuleBasedPolicy {
+  id?: string
+  name?: string
+  displayName?: string
+  description?: string
+  type?: string
+  status?: string
+  [key: string]: unknown
+}
+
+export async function fetchGroupRuleAssignments(groupId: string): Promise<GroupRuleAssignment[]> {
+  const token = await getPowerPlatformToken()
+  const res = await fetch(
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${groupId}/assignments?includeRuleSetCounts=true&api-version=2022-03-01-preview`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error(`Group rule assignments fetch failed: ${res.status}`)
+  const json = await res.json()
+  return json.value ?? []
+}
+
+export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {
+  const token = await getPowerPlatformToken()
+  const res = await fetch(
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/${policyId}?api-version=2022-03-01-preview`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error(`Rule-based policy fetch failed: ${res.status}`)
+  return res.json()
+}
+
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
   const token = await getPowerPlatformToken()
   const res = await fetch(

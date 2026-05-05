@@ -1,5 +1,9 @@
 import { useState, useMemo } from 'react'
-import { makeStyles, tokens, Text, Caption1, Button, Badge, Card, Select } from '@fluentui/react-components'
+import { useQuery } from '@tanstack/react-query'
+import {
+  makeStyles, tokens, Text, Caption1, Button, Badge, Card, Select, Spinner, Divider,
+  OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody,
+} from '@fluentui/react-components'
 import {
   ArrowLeftRegular,
   FolderOpenRegular,
@@ -9,6 +13,8 @@ import {
   ChevronDownRegular,
   ArrowSortRegular,
   MoreHorizontalRegular,
+  ShieldRegular,
+  DismissRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import {
@@ -22,6 +28,8 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
+import { fetchGroupRuleAssignments, fetchRuleBasedPolicy } from '../api/governanceApi'
+import type { GroupRuleAssignment, RuleBasedPolicy } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -548,10 +556,123 @@ function DrillDown({
 }
 
 // ---------------------------------------------------------------------------
+// Group rules side panel
+// ---------------------------------------------------------------------------
+
+interface PolicyWithAssignment {
+  assignment: GroupRuleAssignment
+  policy: RuleBasedPolicy | null
+}
+
+function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
+  const groupName = group ? getDisplayName(group) : ''
+
+  const { data, isLoading, error } = useQuery<PolicyWithAssignment[]>({
+    queryKey: ['groupRulePolicies', group?.id],
+    queryFn: async () => {
+      const assignments = await fetchGroupRuleAssignments(group!.id)
+      const results = await Promise.all(
+        assignments.map(async (a) => {
+          try {
+            const policy = await fetchRuleBasedPolicy(a.policyId)
+            return { assignment: a, policy }
+          } catch {
+            return { assignment: a, policy: null }
+          }
+        }),
+      )
+      return results
+    },
+    enabled: isOpen && !!group?.id,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  return (
+    <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '420px' }}>
+      <DrawerHeader>
+        <DrawerHeaderTitle
+          action={<Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+            <ShieldRegular style={{ color: tokens.colorBrandForeground1, fontSize: '18px' }} />
+            <span>Rules &amp; Policies</span>
+          </div>
+        </DrawerHeaderTitle>
+      </DrawerHeader>
+      <DrawerBody>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, paddingBottom: tokens.spacingVerticalL }}>
+          <Text weight="semibold" style={{ display: 'block', color: tokens.colorNeutralForeground2 }}>{groupName}</Text>
+          <Divider />
+
+          {isLoading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, padding: tokens.spacingVerticalM }}>
+              <Spinner size="small" />
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading policies…</Caption1>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ padding: tokens.spacingVerticalM }}>
+              <Text style={{ color: tokens.colorStatusDangerForeground1 }}>
+                Failed to load rules. The API may not support this environment group.
+              </Text>
+            </div>
+          )}
+
+          {data && data.length === 0 && (
+            <div style={{ padding: tokens.spacingVerticalL, textAlign: 'center' }}>
+              <ShieldRegular fontSize={32} style={{ opacity: 0.3, display: 'block', margin: '0 auto', marginBottom: tokens.spacingVerticalS }} />
+              <Text style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>No policies assigned to this group</Text>
+            </div>
+          )}
+
+          {data && data.map(({ assignment, policy }) => {
+            const name = policy?.displayName ?? policy?.name ?? assignment.policyId
+            const desc = policy?.description as string | undefined
+            const status = policy?.status as string | undefined
+            return (
+              <div
+                key={assignment.policyId}
+                style={{
+                  backgroundColor: tokens.colorNeutralBackground1,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  borderRadius: tokens.borderRadiusMedium,
+                  padding: tokens.spacingVerticalS,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacingHorizontalS, marginBottom: desc ? tokens.spacingVerticalXS : 0 }}>
+                  <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase200, flex: 1 }}>{name}</Text>
+                  <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
+                    {status && (
+                      <Badge appearance="tint" color={status === 'Active' ? 'success' : 'subtle'} size="small">{status}</Badge>
+                    )}
+                    {assignment.ruleSetCount !== undefined && (
+                      <Badge appearance="tint" color="brand" size="small">
+                        {assignment.ruleSetCount} rule{assignment.ruleSetCount !== 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                {desc && (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>{desc}</Caption1>
+                )}
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, fontFamily: 'Consolas, monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {assignment.policyId}
+                </Caption1>
+              </div>
+            )
+          })}
+        </div>
+      </DrawerBody>
+    </OverlayDrawer>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Group card
 // ---------------------------------------------------------------------------
 
-function GroupCard({ group, envCount, onClick }: { group: ResourceItem; envCount: number; onClick: () => void }) {
+function GroupCard({ group, envCount, onClick, onViewRules }: { group: ResourceItem; envCount: number; onClick: () => void; onViewRules: () => void }) {
   const classes = useClasses()
   const name = getDisplayName(group)
   const desc = (group.properties?.['description'] as string | undefined) ?? ''
@@ -575,6 +696,14 @@ function GroupCard({ group, envCount, onClick }: { group: ResourceItem; envCount
       <div className={classes.cardFooter}>
         <GlobeRegular fontSize={14} />
         <Caption1>{envCount} environment{envCount !== 1 ? 's' : ''}</Caption1>
+        <div style={{ flex: 1 }} />
+        <Button
+          appearance="subtle"
+          icon={<ShieldRegular fontSize={14} />}
+          size="small"
+          title="View rules & policies"
+          onClick={e => { e.stopPropagation(); onViewRules() }}
+        />
       </div>
     </Card>
   )
@@ -589,6 +718,8 @@ export function GroupsView({ groups, environments, allResources, ownerNames, isL
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [hideEmpty, setHideEmpty] = useState(true)
   const [minEnvs, setMinEnvs] = useState(0)
+  const [rulesGroup, setRulesGroup] = useState<ResourceItem | null>(null)
+  const [rulesPanelOpen, setRulesPanelOpen] = useState(false)
   const classes = useClasses()
 
   const envsForSelected = useMemo(
@@ -701,10 +832,17 @@ export function GroupsView({ groups, environments, allResources, ownerNames, isL
               group={group}
               envCount={envCountByGroup.get(group.id) ?? 0}
               onClick={() => setSelectedGroup(group)}
+              onViewRules={() => { setRulesGroup(group); setRulesPanelOpen(true) }}
             />
           ))}
         </div>
       )}
+
+      <GroupRulesPanel
+        group={rulesGroup}
+        isOpen={rulesPanelOpen}
+        onClose={() => setRulesPanelOpen(false)}
+      />
     </div>
   )
 }
