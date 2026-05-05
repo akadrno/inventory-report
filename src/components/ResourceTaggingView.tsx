@@ -10,14 +10,16 @@ import {
   EditRegular, DeleteRegular, SearchRegular,
   ChevronDownRegular, ChevronRightRegular, CheckmarkRegular,
   BookmarkRegular, SaveRegular, DismissCircleRegular,
-  InfoRegular,
+  InfoRegular, SparkleRegular,
 } from '@fluentui/react-icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTermStore, useAllResourceTags, useTaggingMutations } from '../hooks/useTagging'
 import type { TermGroup, TermSet, Term, ResourceTag } from '../hooks/useTagging'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { tableStorageConfigured } from '../api/tableStorageApi'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getResourceCategory } from '../types'
+import { seedDemoTags, type SeedResult } from '../utils/seedDemoTags'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -555,11 +557,42 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
 
 type EditTarget = { kind: 'group'; item: TermGroup } | { kind: 'termset'; item: TermSet } | { kind: 'term'; item: Term } | null
 type AddTarget = { kind: 'group' } | { kind: 'termset'; groupId: string } | { kind: 'term'; termSetId: string; groupId: string } | null
+type SeedState = 'idle' | 'seeding' | 'done' | 'error'
 
-function TermStoreManager() {
+interface TermStoreManagerProps {
+  allResources: ResourceItem[]
+  allEnvironments: ResourceItem[]
+  currentUser: string
+}
+
+function TermStoreManager({ allResources, allEnvironments, currentUser }: TermStoreManagerProps) {
   const classes = useClasses()
+  const qc = useQueryClient()
   const { data: store = { groups: [], termSets: [], terms: [] }, isLoading } = useTermStore()
   const mutations = useTaggingMutations()
+
+  const [seedState, setSeedState] = useState<SeedState>('idle')
+  const [seedProgress, setSeedProgress] = useState({ done: 0, total: 0 })
+  const [seedResult, setSeedResult] = useState<SeedResult | null>(null)
+
+  const handleSeedDemoTags = async () => {
+    if (seedState === 'seeding') return
+    setSeedState('seeding')
+    setSeedProgress({ done: 0, total: 0 })
+    setSeedResult(null)
+    try {
+      const result = await seedDemoTags(
+        allResources, store, allEnvironments, currentUser,
+        (done, total) => setSeedProgress({ done, total }),
+      )
+      setSeedResult(result)
+      setSeedState(result.errors.length > 0 ? 'error' : 'done')
+      qc.invalidateQueries({ queryKey: ['allResourceTags'] })
+    } catch (e) {
+      setSeedResult({ resourcesTagged: 0, tagsCreated: 0, errors: [String(e)] })
+      setSeedState('error')
+    }
+  }
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [selectedTermSetId, setSelectedTermSetId] = useState<string | null>(null)
@@ -662,6 +695,35 @@ function TermStoreManager() {
 
   return (
     <div className={classes.root}>
+      {/* Demo data seeder */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' }}>
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={seedState === 'seeding' ? <Spinner size="tiny" /> : <SparkleRegular />}
+          disabled={seedState === 'seeding' || store.terms.length === 0}
+          onClick={handleSeedDemoTags}
+        >
+          Seed Demo Tags
+        </Button>
+        {seedState === 'seeding' && (
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            Writing tags… {seedProgress.total > 0 ? `${seedProgress.done}/${seedProgress.total}` : ''}
+          </Caption1>
+        )}
+        {seedState === 'done' && seedResult && (
+          <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>
+            Done — {seedResult.resourcesTagged} resources tagged with {seedResult.tagsCreated} tags
+          </Caption1>
+        )}
+        {seedState === 'error' && seedResult && (
+          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
+            {seedResult.tagsCreated > 0
+              ? `Partial: ${seedResult.tagsCreated} tags written, ${seedResult.errors.length} error(s)`
+              : `Failed: ${seedResult.errors[0] ?? 'Unknown error'}`}
+          </Caption1>
+        )}
+      </div>
       <div className={classes.tsLayout}>
         {/* Tree */}
         <div className={classes.tsTree}>
@@ -847,7 +909,7 @@ export function ResourceTaggingView({ allResources, allEnvironments, currentUser
         </div>
         {view === 'browser'
           ? <TagBrowserView allResources={allResources} allEnvironments={allEnvironments} currentUser={currentUser} />
-          : <TermStoreManager />
+          : <TermStoreManager allResources={allResources} allEnvironments={allEnvironments} currentUser={currentUser} />
         }
       </div>
     )
@@ -855,5 +917,5 @@ export function ResourceTaggingView({ allResources, allEnvironments, currentUser
 
   return view === 'browser'
     ? <TagBrowserView allResources={allResources} allEnvironments={allEnvironments} currentUser={currentUser} />
-    : <TermStoreManager />
+    : <TermStoreManager allResources={allResources} allEnvironments={allEnvironments} currentUser={currentUser} />
 }
