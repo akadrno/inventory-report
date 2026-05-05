@@ -11,11 +11,13 @@ import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnviro
 import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
 import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
+import { useAdminData } from '../hooks/useAdminData'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
   allEnvironments: ResourceItem[]
   ownerNames?: Map<string, string>
+  onNavigateToRiskAssessments?: () => void
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -280,11 +282,17 @@ function resolveEnvName(item: ResourceItem, envMap: Map<string, string>): string
 
 // ── Small shared pieces ───────────────────────────────────────────────────────
 
-function HealthChip({ label, color }: { label: string; color: 'danger' | 'warning' | 'success' | 'subtle' }) {
-  return (
+function HealthChip({ label, color, onClick }: { label: string; color: 'danger' | 'warning' | 'success' | 'subtle'; onClick?: () => void }) {
+  const chip = (
     <Badge appearance="tint" color={color} size="medium" style={{ padding: '6px 12px', fontSize: '13px' }}>
       {label}
     </Badge>
+  )
+  if (!onClick) return chip
+  return (
+    <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+      {chip}
+    </button>
   )
 }
 
@@ -745,7 +753,7 @@ const TABS: { id: ReportTab; label: string }[] = [
   { id: 'recommendations', label: 'Recommendations' },
 ]
 
-export function ReportView({ allResources, allEnvironments }: ReportViewProps) {
+export function ReportView({ allResources, allEnvironments, onNavigateToRiskAssessments }: ReportViewProps) {
   const [tab, setTab] = useState<ReportTab>('overview')
   const classes = useClasses()
 
@@ -755,9 +763,22 @@ export function ReportView({ allResources, allEnvironments }: ReportViewProps) {
   const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
   const { data: settings } = useTenantSettings()
   const { data: dlp } = useDLPPolicies()
+  const { data: assessments } = useAdminData()
   const recs = useMemo(() => buildRecs(allEnvironments, dlp, settings), [allEnvironments, dlp, settings])
   const criticalCount = recs.filter(r => r.priority === 'Critical').length
   const highCount = recs.filter(r => r.priority === 'High').length
+
+  const compliantCount = useMemo(
+    () => allResources.filter(r => assessments[r.id]?.complianceStatus === 'Compliant').length,
+    [allResources, assessments],
+  )
+  const notReviewedCount = useMemo(
+    () => allResources.filter(r => {
+      const s = assessments[r.id]?.complianceStatus
+      return !s || s === 'Not Reviewed'
+    }).length,
+    [allResources, assessments],
+  )
 
   return (
     <div className={classes.root}>
@@ -787,7 +808,20 @@ export function ReportView({ allResources, allEnvironments }: ReportViewProps) {
         <div className={classes.healthBar}>
           {criticalCount > 0 && <HealthChip label={`${criticalCount} Critical`} color="danger" />}
           {highCount > 0 && <HealthChip label={`${highCount} High Priority`} color="warning" />}
-          {managedCount > 0 && <HealthChip label={`${managedCount} Managed`} color="success" />}
+          {compliantCount > 0 && (
+            <HealthChip
+              label={`${compliantCount} Compliant Resources`}
+              color="success"
+              onClick={onNavigateToRiskAssessments}
+            />
+          )}
+          {notReviewedCount > 0 && (
+            <HealthChip
+              label={`${notReviewedCount} Not Reviewed — Review Now`}
+              color="warning"
+              onClick={onNavigateToRiskAssessments}
+            />
+          )}
           {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
         </div>
       </div>

@@ -580,7 +580,7 @@ export function Shell() {
   // ── Render content ──────────────────────────────────────────────────────────
 
   const renderContent = () => {
-    if (rail === 'home') return <ReportView allResources={allResources} allEnvironments={allEnvironments} />
+    if (rail === 'home') return <ReportView allResources={allResources} allEnvironments={allEnvironments} onNavigateToRiskAssessments={() => { setRail('governance'); setGovView('risk-assessments') }} />
 
     if (rail === 'inventory') {
       const label = INV_LABELS[invView]
