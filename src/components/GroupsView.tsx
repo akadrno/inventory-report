@@ -630,14 +630,8 @@ function DebugBox({ label, content }: { label: string; content: string }) {
   )
 }
 
-interface PolicyEntry {
-  policyName: string
-  ruleSets: PolicyRuleSet[]
-  rawJson: string
-}
-
 interface GroupRulesData {
-  policies: PolicyEntry[]
+  ruleSets: PolicyRuleSet[]
   rawAssignmentsJson: string
   allPoliciesJson: string
 }
@@ -661,7 +655,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const { policies: allPolicies, rawJson: allPoliciesJson } = allPoliciesResult
 
       const seenPolicyIds = new Set<string>()
-      const policies: PolicyEntry[] = []
+      const collectedRuleSets: PolicyRuleSet[][] = []
 
       // Collect all known identifiers for this group: API-path GUID + resourceIds from assignments
       const groupIdentifiers: string[] = groupGuid ? [groupGuid] : []
@@ -677,14 +671,9 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         seenPolicyIds.add(a.policyId)
         try {
           const policy = await fetchRuleBasedPolicy(a.policyId)
-          const policyName = policy.displayName ?? humanizeName(policy.name ?? a.policyId)
-          policies.push({ policyName, ruleSets: policy.ruleSets ?? [], rawJson: JSON.stringify(policy, null, 2) })
-        } catch (e) {
-          policies.push({
-            policyName: humanizeName(a.policyId),
-            ruleSets: [],
-            rawJson: JSON.stringify({ error: String(e), assignment: a }, null, 2),
-          })
+          collectedRuleSets.push(policy.ruleSets ?? [])
+        } catch {
+          // skip failed individual policy fetches
         }
       }))
 
@@ -698,12 +687,24 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         const pJson = JSON.stringify(p)
         if (groupIdentifiers.some(id => pJson.includes(id))) {
           seenPolicyIds.add(key)
-          const policyName = p.displayName ?? humanizeName(p.name ?? key)
-          policies.push({ policyName, ruleSets: p.ruleSets ?? [], rawJson: JSON.stringify(p, null, 2) })
+          collectedRuleSets.push(p.ruleSets ?? [])
         }
       }
 
-      return { policies, rawAssignmentsJson, allPoliciesJson }
+      // Flatten and deduplicate by ruleSet id
+      const seenRuleSetIds = new Set<string>()
+      const ruleSets: PolicyRuleSet[] = []
+      for (const batch of collectedRuleSets) {
+        for (const rs of batch) {
+          const key = rs.id ?? rs.name ?? JSON.stringify(rs)
+          if (!seenRuleSetIds.has(key)) {
+            seenRuleSetIds.add(key)
+            ruleSets.push(rs)
+          }
+        }
+      }
+
+      return { ruleSets, rawAssignmentsJson, allPoliciesJson }
     },
     enabled: isOpen && !!group?.id,
     staleTime: 5 * 60 * 1000,
@@ -740,11 +741,11 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {/* Top-level debug boxes */}
+          {/* Debug boxes */}
           {data && (
             <>
               <DebugBox
-                label={`Debug 1: assignments response (${data.policies.length} entr${data.policies.length !== 1 ? 'ies' : 'y'} — click to select)`}
+                label={`Debug 1: assignments response (${data.ruleSets.length} rule set${data.ruleSets.length !== 1 ? 's' : ''} — click to select)`}
                 content={data.rawAssignmentsJson}
               />
               <DebugBox
@@ -754,74 +755,50 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </>
           )}
 
-          {data && data.policies.length === 0 && (
+          {data && data.ruleSets.length === 0 && (
             <div style={{ padding: tokens.spacingVerticalL, textAlign: 'center' }}>
               <ShieldRegular fontSize={32} style={{ opacity: 0.3, display: 'block', margin: '0 auto', marginBottom: tokens.spacingVerticalS }} />
-              <Text style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>No policies assigned to this group</Text>
+              <Text style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>No rules assigned to this group</Text>
             </div>
           )}
 
-          {data && data.policies.map(({ policyName, ruleSets, rawJson }, idx) => (
-            <div
-              key={idx}
-              style={{
-                backgroundColor: tokens.colorNeutralBackground1,
-                border: `1px solid ${tokens.colorNeutralStroke2}`,
-                borderRadius: tokens.borderRadiusMedium,
-                padding: tokens.spacingVerticalS,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: tokens.spacingVerticalXS,
-              }}
-            >
-              {/* Policy header */}
-              <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase300 }}>{policyName}</Text>
-
-              {/* Rule sets */}
-              {ruleSets.length > 0 ? (
-                <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {ruleSets.map((rs, rsIdx) => {
-                    const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
-                    const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
-                    return (
-                      <div
-                        key={rs.id ?? rsIdx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          justifyContent: 'space-between',
-                          gap: tokens.spacingHorizontalS,
-                          padding: `6px ${tokens.spacingHorizontalS}`,
-                          backgroundColor: tokens.colorNeutralBackground3,
-                          borderRadius: tokens.borderRadiusSmall,
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <Caption1 style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
-                            {rsName}
-                          </Caption1>
-                          {summary && (
-                            <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
-                              {summary}
-                            </Caption1>
-                          )}
-                        </div>
-                        <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '1px' }}>
-                          Active
-                        </Badge>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '2px' }}>
-                  No rule sets configured
-                </Caption1>
-              )}
-
-              <DebugBox label="Debug: raw policy JSON (click to select)" content={rawJson} />
+          {data && data.ruleSets.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {data.ruleSets.map((rs, rsIdx) => {
+                const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
+                const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
+                return (
+                  <div
+                    key={rs.id ?? rsIdx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: tokens.spacingHorizontalS,
+                      padding: `8px ${tokens.spacingHorizontalM}`,
+                      backgroundColor: tokens.colorNeutralBackground1,
+                      border: `1px solid ${tokens.colorNeutralStroke2}`,
+                      borderRadius: tokens.borderRadiusSmall,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
+                        {rsName}
+                      </Text>
+                      {summary && (
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
+                          {summary}
+                        </Caption1>
+                      )}
+                    </div>
+                    <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '2px' }}>
+                      Active
+                    </Badge>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          )}
         </div>
       </DrawerBody>
     </OverlayDrawer>
