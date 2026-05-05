@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   makeStyles, Text, Caption1, Badge, Button, Input, Spinner, Textarea,
   OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody, DrawerFooter,
@@ -447,8 +447,12 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
   const [complianceFilter, setComplianceFilter] = useState<ComplianceStatus | 'All'>('All')
   const [typeFilter, setTypeFilter] = useState<'all' | 'apps' | 'flows' | 'agents'>('all')
-  const [hideSystem, setHideSystem] = useState(true)
+  const [hideSystem, setHideSystem] = useState(false)
+  const [pageSize, setPageSize] = useState(50)
+  const [currentPage, setCurrentPage] = useState(1)
   const importRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setCurrentPage(1) }, [search, riskFilter, complianceFilter, typeFilter, hideSystem])
 
   const visibleResources = useMemo(
     () => hideSystem ? allResources.filter(r => !isSystemResource(r)) : allResources,
@@ -498,6 +502,13 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     }
     return items
   }, [visibleResources, typeFilter, riskFilter, complianceFilter, search, assessments])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const pageStart = (safeCurrentPage - 1) * pageSize
+  const paginated = filtered.slice(pageStart, pageStart + pageSize)
+  const displayStart = filtered.length === 0 ? 0 : pageStart + 1
+  const displayEnd = Math.min(pageStart + pageSize, filtered.length)
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -669,6 +680,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
         ) : filtered.length === 0 ? (
           <div style={{ padding: '16px' }}><Caption1 style={{ color: '#737373' }}>No resources match the current filters.</Caption1></div>
         ) : (
+          <>
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
               <thead>
@@ -683,7 +695,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(r => {
+                {paginated.map(r => {
                   const a = assessments[r.id]
                   return (
                     <tr key={r.id}>
@@ -732,6 +744,47 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
               </tbody>
             </table>
           </div>
+          <div style={{
+            padding: '8px 16px', borderTop: '1px solid #edebe9',
+            display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+            backgroundColor: '#faf9f8',
+          }}>
+            <Caption1 style={{ color: '#737373', flex: 1, whiteSpace: 'nowrap' }}>
+              {filtered.length === 0
+                ? 'No resources'
+                : `Showing ${displayStart}–${displayEnd} of ${filtered.length} resource${filtered.length !== 1 ? 's' : ''}`
+              }
+            </Caption1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Button
+                size="small" appearance="subtle"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >← Prev</Button>
+              <Caption1 style={{ color: '#605e5c', whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center' }}>
+                Page {safeCurrentPage} of {totalPages}
+              </Caption1>
+              <Button
+                size="small" appearance="subtle"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >Next →</Button>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+                style={{
+                  fontSize: '12px', padding: '4px 8px', borderRadius: '4px',
+                  border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff',
+                  cursor: 'pointer', marginLeft: '4px',
+                }}
+              >
+                {[25, 50, 100, 150, 200, 300, 500, 1000].map(n => (
+                  <option key={n} value={n}>{n} per page</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          </>
         )}
       </div>
     </div>
