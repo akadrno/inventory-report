@@ -28,7 +28,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchRuleBasedPolicy, fetchAllRuleBasedPolicies } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
@@ -618,7 +618,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
   const { data, isLoading, error } = useQuery<GroupRulesData>({
     queryKey: ['groupRulePolicies', group?.id],
     queryFn: async () => {
-      // Fetch assignments and tenant policies in parallel
+      // Two parallel calls: assignments (to get policyIds + resourceId) and all policies (full data inline)
       const [assignmentsResult, allPoliciesResult] = await Promise.all([
         fetchGroupRuleAssignments(group!.id),
         fetchAllRuleBasedPolicies().catch(() => ({ policies: [], rawJson: '{"_error":"fetch failed"}' })),
@@ -627,36 +627,26 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const { assignments, rawJson: rawAssignmentsJson } = assignmentsResult
       const { policies: allPolicies, rawJson: allPoliciesJson } = allPoliciesResult
 
-      const seenPolicyIds = new Set<string>()
-      const collectedRuleSets: PolicyRuleSet[][] = []
-
-      // Collect all known identifiers for this group: API-path GUID + resourceIds from assignments
+      // Build all known identifiers: group GUID, assigned policyIds, resourceId from assignments
       const groupIdentifiers: string[] = groupGuid ? [groupGuid] : []
       for (const a of assignments) {
+        if (a.policyId && !groupIdentifiers.includes(a.policyId)) groupIdentifiers.push(a.policyId)
         const rid = typeof a.resourceId === 'string'
           ? (a.resourceId.includes('/') ? a.resourceId.split('/').filter(Boolean).pop()! : a.resourceId)
           : null
         if (rid && !groupIdentifiers.includes(rid)) groupIdentifiers.push(rid)
       }
 
-      // --- fetch full policy for each assignment (ruleSets are not inlined) ---
-      await Promise.all(assignments.map(async (a) => {
-        seenPolicyIds.add(a.policyId)
-        try {
-          const policy = await fetchRuleBasedPolicy(a.policyId)
-          collectedRuleSets.push(policy.ruleSets ?? [])
-        } catch {
-          // skip failed individual policy fetches
-        }
-      }))
+      // Single pass over all-policies: include any policy that references this group.
+      // The all-policies list already has ruleSets inline — no extra fetches needed.
+      const seenPolicyIds = new Set<string>()
+      const collectedRuleSets: PolicyRuleSet[][] = []
 
-      // --- tenant policies: find any for this group not surfaced by assignments ---
       for (const p of allPolicies) {
         const key = p.id ?? ''
         if (seenPolicyIds.has(key)) continue
-        // Skip per-environment synced copies (EP-<envGuid>-... naming pattern)
-        if (/^EP-[0-9a-f-]{8}/i.test(p.name ?? '') || (p.displayName ?? '').toLowerCase().startsWith('synced environment')) continue
-        // Match by name OR full policy JSON containing any known group identifier
+        // Skip per-environment synced copies
+        if (p.name === 'Synced Environment Policy (from Environment Group)') continue
         const pJson = JSON.stringify(p)
         if (groupIdentifiers.some(id => pJson.includes(id))) {
           seenPolicyIds.add(key)
@@ -664,7 +654,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         }
       }
 
-      // Flatten and deduplicate by ruleSet id
+      // Flatten and deduplicate ruleSets by id
       const seenRuleSetIds = new Set<string>()
       const ruleSets: PolicyRuleSet[] = []
       for (const batch of collectedRuleSets) {
