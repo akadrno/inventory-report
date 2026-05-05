@@ -571,33 +571,6 @@ function humanizeName(name: string | undefined): string {
     .replace(/\s+/g, ' ')
 }
 
-function summarizeRuleSetInputs(id: string | undefined, inputs: Record<string, unknown> | undefined): string {
-  if (!inputs) return ''
-  if (id === 'ConnectorManagement') {
-    const list = inputs['AllowedConnectorList']
-    if (Array.isArray(list)) {
-      const names = list
-        .map(c => {
-          const path = (c as Record<string, unknown>)['AllowedConnector']
-          return typeof path === 'string' ? path.split('/').pop()?.replace(/^shared_/, '') ?? path : ''
-        })
-        .filter(Boolean)
-      if (names.length <= 5) return names.join(', ')
-      return `${names.slice(0, 5).join(', ')} +${names.length - 5} more`
-    }
-  }
-  if (id === 'MakerOnboardingContent') {
-    const url = inputs['makerOnboardingUrl']
-    if (typeof url === 'string' && url) return url
-  }
-  // Generic: first bool or string key-value
-  for (const [k, v] of Object.entries(inputs)) {
-    if (typeof v === 'boolean') return `${humanizeName(k)}: ${v ? 'Yes' : 'No'}`
-    if (typeof v === 'string' && v) return v.length > 80 ? v.slice(0, 80) + '…' : v
-    if (Array.isArray(v)) return `${v.length} item${v.length !== 1 ? 's' : ''}`
-  }
-  return ''
-}
 
 // Copyable debug textarea — click anywhere inside to select all
 function DebugBox({ label, content }: { label: string; content: string }) {
@@ -766,7 +739,6 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {data.ruleSets.map((rs, rsIdx) => {
                 const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
-                const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
                 return (
                   <div
                     key={rs.id ?? rsIdx}
@@ -785,11 +757,6 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                       <Text style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
                         {rsName}
                       </Text>
-                      {summary && (
-                        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
-                          {summary}
-                        </Caption1>
-                      )}
                     </div>
                     <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '2px' }}>
                       Active
