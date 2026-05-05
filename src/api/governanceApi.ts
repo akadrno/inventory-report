@@ -90,11 +90,16 @@ export interface RuleBasedPolicy {
 }
 
 export async function fetchGroupRuleAssignments(groupId: string): Promise<GroupRuleAssignment[]> {
+  // groupId may be a full resource path — extract just the last segment (the GUID)
+  const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${groupId}/assignments?includeRuleSetCounts=true&api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?includeRuleSetCounts=true&api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
+  // 404 means no assignments exist for this group — treat as empty, not an error
+  if (res.status === 404) return []
+  if (res.status === 403) throw new Error('403: Insufficient permissions to read rule assignments')
   if (!res.ok) throw new Error(`Group rule assignments fetch failed: ${res.status}`)
   const json = await res.json()
   return json.value ?? []

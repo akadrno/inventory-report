@@ -614,7 +614,9 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           {error && (
             <div style={{ padding: tokens.spacingVerticalM }}>
               <Text style={{ color: tokens.colorStatusDangerForeground1 }}>
-                Failed to load rules. The API may not support this environment group.
+                {(error as Error).message?.includes('403')
+                  ? 'Insufficient permissions to read rule assignments for this group.'
+                  : 'Failed to load rules for this environment group.'}
               </Text>
             </div>
           )}
