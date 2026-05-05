@@ -28,7 +28,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchRuleBasedPolicy, fetchAllRuleBasedPolicies } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
@@ -660,29 +660,33 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const { assignments, rawJson: rawAssignmentsJson } = assignmentsResult
       const { policies: allPolicies, rawJson: allPoliciesJson } = allPoliciesResult
 
-      // Build a set of policy ids seen from assignments
-      const seenIds = new Set<string>()
+      const seenPolicyIds = new Set<string>()
       const policies: PolicyEntry[] = []
 
-      // --- assignments: ruleSets are already inlined in the response ---
-      for (const a of assignments) {
-        const key = a.id ?? a.name ?? a.policyId ?? ''
-        seenIds.add(key)
-        const ruleSets = (a.ruleSets as PolicyRuleSet[] | undefined) ?? []
-        const rawName = a.displayName ?? a.name ?? a.policyId
-        const policyName = a.displayName ?? (rawName ? humanizeName(rawName) : key)
-        policies.push({ policyName, ruleSets, rawJson: JSON.stringify(a, null, 2) })
-      }
+      // --- fetch full policy for each assignment (ruleSets are not inlined) ---
+      await Promise.all(assignments.map(async (a) => {
+        seenPolicyIds.add(a.policyId)
+        try {
+          const policy = await fetchRuleBasedPolicy(a.policyId)
+          const policyName = policy.displayName ?? humanizeName(policy.name ?? a.policyId)
+          policies.push({ policyName, ruleSets: policy.ruleSets ?? [], rawJson: JSON.stringify(policy, null, 2) })
+        } catch (e) {
+          policies.push({
+            policyName: humanizeName(a.policyId),
+            ruleSets: [],
+            rawJson: JSON.stringify({ error: String(e), assignment: a }, null, 2),
+          })
+        }
+      }))
 
-      // --- tenant policies: find any assigned to this group not already seen ---
+      // --- tenant policies: find any for this group not in assignments ---
       for (const p of allPolicies) {
-        const key = p.id ?? p.name ?? ''
-        if (seenIds.has(key)) continue
-        // Check if this policy mentions our group in its name (common naming convention)
+        const key = p.id ?? ''
+        if (seenPolicyIds.has(key)) continue
+        // MG-<groupGuid>-... naming convention used by Power Platform
         if (groupGuid && p.name?.includes(groupGuid)) {
-          seenIds.add(key)
-          const rawName = p.displayName ?? p.name
-          const policyName = p.displayName ?? (rawName ? humanizeName(rawName) : key)
+          seenPolicyIds.add(key)
+          const policyName = p.displayName ?? humanizeName(p.name ?? key)
           policies.push({ policyName, ruleSets: p.ruleSets ?? [], rawJson: JSON.stringify(p, null, 2) })
         }
       }

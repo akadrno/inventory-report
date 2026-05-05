@@ -72,18 +72,11 @@ export interface BillingPolicy {
 }
 
 export interface GroupRuleAssignment {
-  // Actual API shape: the full policy object is returned inline in the assignments endpoint
-  id?: string
-  name?: string           // system name, e.g. MG-<guid>-MakeOnboardingRuleBasedPolicy
-  displayName?: string
+  policyId: string       // GUID of the rule-based policy
   tenantId?: string
-  lastModified?: string
-  ruleSetCount?: number
-  ruleSets?: PolicyRuleSet[]
-  // Legacy / other shapes
-  policyId?: string
-  resourceId?: string
+  resourceId?: string    // group's internal resource ID
   resourceType?: string
+  ruleSetCount?: number
   [key: string]: unknown
 }
 
@@ -165,17 +158,17 @@ export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> 
   return json.value ?? json.rules ?? []
 }
 
-// Returns all tenant rule-based policies including their ruleSets.
-// Used to find policies assigned to a specific environment group that may
-// not surface via the assignments endpoint.
+// Lists all tenant rule-based policies (without $expand — the list endpoint
+// does not support it). Used to discover policies for a group that may not
+// surface via the per-group assignments endpoint.
 export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBasedPolicy[]; rawJson: string }> {
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies?$expand=ruleSets&$top=100&api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies?$top=100&api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (res.status === 404) return { policies: [], rawJson: '{"value":[],"_note":"404"}' }
-  if (!res.ok) throw new Error(`List rule-based policies failed: ${res.status}`)
+  if (!res.ok) throw new Error(`List rule-based policies failed: ${res.status} ${await res.text()}`)
   const text = await res.text()
   const json = JSON.parse(text) as { value?: RuleBasedPolicy[] }
   return { policies: json.value ?? [], rawJson: text }
