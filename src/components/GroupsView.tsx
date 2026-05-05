@@ -28,8 +28,8 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchRuleBasedPolicy } from '../api/governanceApi'
-import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRuleSet } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
+import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -630,43 +630,64 @@ function DebugBox({ label, content }: { label: string; content: string }) {
   )
 }
 
-interface PolicyWithAssignment {
-  assignment: GroupRuleAssignment
-  policy: RuleBasedPolicy | null
+interface PolicyEntry {
+  policyName: string
   ruleSets: PolicyRuleSet[]
   rawJson: string
-  fetchError: string | null
 }
 
 interface GroupRulesData {
-  policies: PolicyWithAssignment[]
+  policies: PolicyEntry[]
   rawAssignmentsJson: string
+  allPoliciesJson: string
 }
 
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
   const groupName = group ? getDisplayName(group) : ''
+  const groupId = group?.id ?? ''
+  // Extract bare GUID from resource path if needed
+  const groupGuid = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
 
   const { data, isLoading, error } = useQuery<GroupRulesData>({
     queryKey: ['groupRulePolicies', group?.id],
     queryFn: async () => {
-      const { assignments, rawJson: rawAssignmentsJson } = await fetchGroupRuleAssignments(group!.id)
-      const policies = await Promise.all(
-        assignments.map(async (a) => {
-          let policy: RuleBasedPolicy | null = null
-          let ruleSets: PolicyRuleSet[] = []
-          let rawJson = ''
-          let fetchError: string | null = null
-          try {
-            policy = await fetchRuleBasedPolicy(a.policyId)
-            rawJson = JSON.stringify(policy, null, 2)
-            ruleSets = policy?.ruleSets ?? []
-          } catch (e) {
-            fetchError = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e)
-          }
-          return { assignment: a, policy, ruleSets, rawJson, fetchError }
-        }),
-      )
-      return { policies, rawAssignmentsJson }
+      // Fetch assignments and tenant policies in parallel
+      const [assignmentsResult, allPoliciesResult] = await Promise.all([
+        fetchGroupRuleAssignments(group!.id),
+        fetchAllRuleBasedPolicies().catch(() => ({ policies: [], rawJson: '{"_error":"fetch failed"}' })),
+      ])
+
+      const { assignments, rawJson: rawAssignmentsJson } = assignmentsResult
+      const { policies: allPolicies, rawJson: allPoliciesJson } = allPoliciesResult
+
+      // Build a set of policy ids seen from assignments
+      const seenIds = new Set<string>()
+      const policies: PolicyEntry[] = []
+
+      // --- assignments: ruleSets are already inlined in the response ---
+      for (const a of assignments) {
+        const key = a.id ?? a.name ?? a.policyId ?? ''
+        seenIds.add(key)
+        const ruleSets = (a.ruleSets as PolicyRuleSet[] | undefined) ?? []
+        const rawName = a.displayName ?? a.name ?? a.policyId
+        const policyName = a.displayName ?? (rawName ? humanizeName(rawName) : key)
+        policies.push({ policyName, ruleSets, rawJson: JSON.stringify(a, null, 2) })
+      }
+
+      // --- tenant policies: find any assigned to this group not already seen ---
+      for (const p of allPolicies) {
+        const key = p.id ?? p.name ?? ''
+        if (seenIds.has(key)) continue
+        // Check if this policy mentions our group in its name (common naming convention)
+        if (groupGuid && p.name?.includes(groupGuid)) {
+          seenIds.add(key)
+          const rawName = p.displayName ?? p.name
+          const policyName = p.displayName ?? (rawName ? humanizeName(rawName) : key)
+          policies.push({ policyName, ruleSets: p.ruleSets ?? [], rawJson: JSON.stringify(p, null, 2) })
+        }
+      }
+
+      return { policies, rawAssignmentsJson, allPoliciesJson }
     },
     enabled: isOpen && !!group?.id,
     staleTime: 5 * 60 * 1000,
@@ -703,12 +724,18 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {/* Top-level debug: raw assignments API response */}
+          {/* Top-level debug boxes */}
           {data && (
-            <DebugBox
-              label={`Debug: assignments API response (${data.policies.length} assignment${data.policies.length !== 1 ? 's' : ''} — click to select all)`}
-              content={data.rawAssignmentsJson}
-            />
+            <>
+              <DebugBox
+                label={`Debug 1: assignments response (${data.policies.length} entr${data.policies.length !== 1 ? 'ies' : 'y'} — click to select)`}
+                content={data.rawAssignmentsJson}
+              />
+              <DebugBox
+                label="Debug 2: all tenant policies (click to select)"
+                content={data.allPoliciesJson}
+              />
+            </>
           )}
 
           {data && data.policies.length === 0 && (
@@ -718,98 +745,67 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {data && data.policies.map(({ assignment, policy, ruleSets, rawJson, fetchError }) => {
-            const policyName = policy?.displayName
-              ?? (policy?.name ? humanizeName(policy.name) : null)
-              ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
-            const desc = policy?.description as string | undefined
-            const status = policy?.status as string | undefined
+          {data && data.policies.map(({ policyName, ruleSets, rawJson }, idx) => (
+            <div
+              key={idx}
+              style={{
+                backgroundColor: tokens.colorNeutralBackground1,
+                border: `1px solid ${tokens.colorNeutralStroke2}`,
+                borderRadius: tokens.borderRadiusMedium,
+                padding: tokens.spacingVerticalS,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: tokens.spacingVerticalXS,
+              }}
+            >
+              {/* Policy header */}
+              <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase300 }}>{policyName}</Text>
 
-            return (
-              <div
-                key={assignment.policyId}
-                style={{
-                  backgroundColor: tokens.colorNeutralBackground1,
-                  border: `1px solid ${tokens.colorNeutralStroke2}`,
-                  borderRadius: tokens.borderRadiusMedium,
-                  padding: tokens.spacingVerticalS,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: tokens.spacingVerticalXS,
-                }}
-              >
-                {/* Policy header */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacingHorizontalS }}>
-                  <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase300, flex: 1 }}>{policyName}</Text>
-                  {status && (
-                    <Badge appearance="tint" color={status === 'Active' ? 'success' : 'subtle'} size="small">{status}</Badge>
-                  )}
-                </div>
-
-                {desc && (
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>{desc}</Caption1>
-                )}
-
-                {/* Per-policy fetch error */}
-                {fetchError && (
-                  <div>
-                    <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginBottom: '2px' }}>
-                      Error fetching policy:
-                    </Caption1>
-                    <DebugBox label="Copy error" content={fetchError} />
-                  </div>
-                )}
-
-                {/* Rule sets — each entry in ruleSets[] is a named configuration block */}
-                {ruleSets.length > 0 ? (
-                  <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {ruleSets.map((rs, idx) => {
-                      const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
-                      const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
-                      return (
-                        <div
-                          key={rs.id ?? idx}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            gap: tokens.spacingHorizontalS,
-                            padding: `6px ${tokens.spacingHorizontalS}`,
-                            backgroundColor: tokens.colorNeutralBackground3,
-                            borderRadius: tokens.borderRadiusSmall,
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <Caption1 style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
-                              {rsName}
+              {/* Rule sets */}
+              {ruleSets.length > 0 ? (
+                <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {ruleSets.map((rs, rsIdx) => {
+                    const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
+                    const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
+                    return (
+                      <div
+                        key={rs.id ?? rsIdx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: tokens.spacingHorizontalS,
+                          padding: `6px ${tokens.spacingHorizontalS}`,
+                          backgroundColor: tokens.colorNeutralBackground3,
+                          borderRadius: tokens.borderRadiusSmall,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Caption1 style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
+                            {rsName}
+                          </Caption1>
+                          {summary && (
+                            <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
+                              {summary}
                             </Caption1>
-                            {summary && (
-                              <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
-                                {summary}
-                              </Caption1>
-                            )}
-                          </div>
-                          <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '1px' }}>
-                            Active
-                          </Badge>
+                          )}
                         </div>
-                      )
-                    })}
-                  </div>
-                ) : !fetchError ? (
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '2px' }}>
-                    No rule sets configured
-                  </Caption1>
-                ) : null}
+                        <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '1px' }}>
+                          Active
+                        </Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '2px' }}>
+                  No rule sets configured
+                </Caption1>
+              )}
 
-                {/* Debug: raw API response */}
-                <DebugBox
-                  label="Debug: raw API response (click to select all)"
-                  content={rawJson || JSON.stringify({ assignment }, null, 2)}
-                />
-              </div>
-            )
-          })}
+              <DebugBox label="Debug: raw policy JSON (click to select)" content={rawJson} />
+            </div>
+          ))}
         </div>
       </DrawerBody>
     </OverlayDrawer>

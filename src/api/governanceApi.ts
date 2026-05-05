@@ -72,11 +72,19 @@ export interface BillingPolicy {
 }
 
 export interface GroupRuleAssignment {
-  policyId: string
-  resourceId: string
-  resourceType: string
-  ruleSetCount?: number
+  // Actual API shape: the full policy object is returned inline in the assignments endpoint
+  id?: string
+  name?: string           // system name, e.g. MG-<guid>-MakeOnboardingRuleBasedPolicy
+  displayName?: string
   tenantId?: string
+  lastModified?: string
+  ruleSetCount?: number
+  ruleSets?: PolicyRuleSet[]
+  // Legacy / other shapes
+  policyId?: string
+  resourceId?: string
+  resourceType?: string
+  [key: string]: unknown
 }
 
 export interface PolicyRule {
@@ -147,7 +155,6 @@ export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedP
 export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> {
   const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
   const token = await getPowerPlatformToken()
-  // Try the direct /rules sub-resource first
   const res = await fetch(
     `https://api.powerplatform.com/governance/ruleBasedPolicies/${id}/rules?api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -156,6 +163,22 @@ export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> 
   if (!res.ok) throw new Error(`Policy rules fetch failed: ${res.status}`)
   const json = await res.json()
   return json.value ?? json.rules ?? []
+}
+
+// Returns all tenant rule-based policies including their ruleSets.
+// Used to find policies assigned to a specific environment group that may
+// not surface via the assignments endpoint.
+export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBasedPolicy[]; rawJson: string }> {
+  const token = await getPowerPlatformToken()
+  const res = await fetch(
+    `https://api.powerplatform.com/governance/ruleBasedPolicies?$expand=ruleSets&$top=100&api-version=2022-03-01-preview`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (res.status === 404) return { policies: [], rawJson: '{"value":[],"_note":"404"}' }
+  if (!res.ok) throw new Error(`List rule-based policies failed: ${res.status}`)
+  const text = await res.text()
+  const json = JSON.parse(text) as { value?: RuleBasedPolicy[] }
+  return { policies: json.value ?? [], rawJson: text }
 }
 
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
