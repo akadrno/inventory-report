@@ -29,7 +29,7 @@ import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { fetchGroupRuleAssignments, fetchRuleBasedPolicy, fetchPolicyRules } from '../api/governanceApi'
-import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRule } from '../api/governanceApi'
+import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRule, PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -573,15 +573,58 @@ function humanizeName(name: string | undefined): string {
 
 function extractRules(policy: RuleBasedPolicy | null): PolicyRule[] {
   if (!policy) return []
+  // Direct ruleSets[].rules
   const fromRuleSets = (policy.ruleSets ?? []).flatMap(rs => rs.rules ?? [])
   if (fromRuleSets.length > 0) return fromRuleSets
-  return policy.rules ?? []
+  // Direct rules[]
+  if ((policy.rules ?? []).length > 0) return policy.rules!
+  // Azure-style properties wrapper
+  const props = policy['properties'] as Record<string, unknown> | undefined
+  if (props) {
+    const fromPropsRuleSets = ((props['ruleSets'] as PolicyRuleSet[] | undefined) ?? []).flatMap(rs => rs.rules ?? [])
+    if (fromPropsRuleSets.length > 0) return fromPropsRuleSets
+    if (Array.isArray(props['rules'])) return props['rules'] as PolicyRule[]
+  }
+  return []
+}
+
+// Copyable debug textarea — click anywhere inside to select all
+function DebugBox({ label, content }: { label: string; content: string }) {
+  return (
+    <details style={{ marginTop: '4px' }}>
+      <summary style={{ cursor: 'pointer', fontSize: '11px', color: tokens.colorNeutralForeground3, userSelect: 'none', paddingBottom: '2px' }}>
+        {label}
+      </summary>
+      <textarea
+        readOnly
+        value={content}
+        onClick={e => (e.target as HTMLTextAreaElement).select()}
+        style={{
+          width: '100%',
+          height: '180px',
+          marginTop: '4px',
+          fontSize: '10px',
+          fontFamily: 'Consolas, monospace',
+          backgroundColor: tokens.colorNeutralBackground4 ?? tokens.colorNeutralBackground3,
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          borderRadius: tokens.borderRadiusSmall,
+          padding: '6px',
+          resize: 'vertical',
+          color: tokens.colorNeutralForeground2,
+          boxSizing: 'border-box',
+          display: 'block',
+        }}
+      />
+    </details>
+  )
 }
 
 interface PolicyWithAssignment {
   assignment: GroupRuleAssignment
   policy: RuleBasedPolicy | null
   rules: PolicyRule[]
+  rawJson: string
+  fetchError: string | null
 }
 
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
@@ -593,17 +636,29 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const assignments = await fetchGroupRuleAssignments(group!.id)
       const results = await Promise.all(
         assignments.map(async (a) => {
+          let policy: RuleBasedPolicy | null = null
+          let rules: PolicyRule[] = []
+          let rawJson = ''
+          let fetchError: string | null = null
           try {
-            const policy = await fetchRuleBasedPolicy(a.policyId)
-            // Use rules from policy response; if none, call the /rules sub-endpoint
-            let rules = extractRules(policy)
+            policy = await fetchRuleBasedPolicy(a.policyId)
+            rawJson = JSON.stringify(policy, null, 2)
+            rules = extractRules(policy)
             if (rules.length === 0) {
-              rules = await fetchPolicyRules(a.policyId).catch(() => [])
+              const subRules = await fetchPolicyRules(a.policyId).catch((e: unknown) => {
+                const msg = e instanceof Error ? e.message : String(e)
+                fetchError = (fetchError ? fetchError + '\n' : '') + `fetchPolicyRules: ${msg}`
+                return []
+              })
+              if (subRules.length > 0) {
+                rules = subRules
+                rawJson += '\n\n// /rules sub-endpoint:\n' + JSON.stringify(subRules, null, 2)
+              }
             }
-            return { assignment: a, policy, rules }
-          } catch {
-            return { assignment: a, policy: null, rules: [] }
+          } catch (e) {
+            fetchError = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e)
           }
+          return { assignment: a, policy, rules, rawJson, fetchError }
         }),
       )
       return results
@@ -613,7 +668,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
   })
 
   return (
-    <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '440px' }}>
+    <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '460px' }}>
       <DrawerHeader>
         <DrawerHeaderTitle
           action={<Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />}
@@ -637,12 +692,9 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           )}
 
           {error && (
-            <div style={{ padding: tokens.spacingVerticalM }}>
-              <Text style={{ color: tokens.colorStatusDangerForeground1 }}>
-                {(error as Error).message?.includes('403')
-                  ? 'Insufficient permissions to read rule assignments for this group.'
-                  : 'Failed to load rules for this environment group.'}
-              </Text>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
+              <Text style={{ color: tokens.colorStatusDangerForeground1 }}>Failed to load rules for this environment group.</Text>
+              <DebugBox label="Copy error details" content={(error as Error).message ?? String(error)} />
             </div>
           )}
 
@@ -653,8 +705,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {data && data.map(({ assignment, policy, rules }) => {
-            // displayName is already human-readable; name is a system identifier — humanize it
+          {data && data.map(({ assignment, policy, rules, rawJson, fetchError }) => {
             const policyName = policy?.displayName
               ?? (policy?.name ? humanizeName(policy.name) : null)
               ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
@@ -686,6 +737,16 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                   <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>{desc}</Caption1>
                 )}
 
+                {/* Per-policy fetch error */}
+                {fetchError && (
+                  <div>
+                    <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginBottom: '2px' }}>
+                      Error fetching rules:
+                    </Caption1>
+                    <DebugBox label="Copy error" content={fetchError} />
+                  </div>
+                )}
+
                 {/* Individual rules */}
                 {rules.length > 0 ? (
                   <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -708,22 +769,26 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                           <Caption1 style={{ flex: 1, color: enabled ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground3 }}>
                             {ruleName}
                           </Caption1>
-                          <Badge
-                            appearance="tint"
-                            color={enabled ? 'success' : 'subtle'}
-                            size="small"
-                          >
+                          <Badge appearance="tint" color={enabled ? 'success' : 'subtle'} size="small">
                             {enabled ? 'Enabled' : 'Disabled'}
                           </Badge>
                         </div>
                       )
                     })}
                   </div>
-                ) : assignment.ruleSetCount !== undefined && assignment.ruleSetCount > 0 ? (
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                    {assignment.ruleSetCount} rule{assignment.ruleSetCount !== 1 ? 's' : ''} configured
+                ) : (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '2px' }}>
+                    {assignment.ruleSetCount !== undefined && assignment.ruleSetCount > 0
+                      ? `${assignment.ruleSetCount} rule set${assignment.ruleSetCount !== 1 ? 's' : ''} — rules not returned by API`
+                      : 'No rules found'}
                   </Caption1>
-                ) : null}
+                )}
+
+                {/* Debug: raw API response */}
+                <DebugBox
+                  label="Debug: raw API response (click to select all)"
+                  content={rawJson || JSON.stringify({ assignment }, null, 2)}
+                />
               </div>
             )
           })}
