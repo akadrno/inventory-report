@@ -114,20 +114,23 @@ export interface RuleBasedPolicy {
   [key: string]: unknown
 }
 
-export async function fetchGroupRuleAssignments(groupId: string): Promise<GroupRuleAssignment[]> {
+export async function fetchGroupRuleAssignments(
+  groupId: string,
+): Promise<{ assignments: GroupRuleAssignment[]; rawJson: string }> {
   // groupId may be a full resource path — extract just the last segment (the GUID)
   const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?includeRuleSetCounts=true&api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?includeRuleSetCounts=true&$top=100&api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
-  // 404 means no assignments exist for this group — treat as empty, not an error
-  if (res.status === 404) return []
+  if (res.status === 404) return { assignments: [], rawJson: '{"value":[],"_note":"404 not found"}' }
   if (res.status === 403) throw new Error('403: Insufficient permissions to read rule assignments')
   if (!res.ok) throw new Error(`Group rule assignments fetch failed: ${res.status}`)
-  const json = await res.json()
-  return json.value ?? []
+  // Capture raw text so the panel can show it for debugging
+  const text = await res.text()
+  const json = JSON.parse(text) as { value?: GroupRuleAssignment[] }
+  return { assignments: json.value ?? [], rawJson: text }
 }
 
 export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {

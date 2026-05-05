@@ -638,14 +638,19 @@ interface PolicyWithAssignment {
   fetchError: string | null
 }
 
+interface GroupRulesData {
+  policies: PolicyWithAssignment[]
+  rawAssignmentsJson: string
+}
+
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
   const groupName = group ? getDisplayName(group) : ''
 
-  const { data, isLoading, error } = useQuery<PolicyWithAssignment[]>({
+  const { data, isLoading, error } = useQuery<GroupRulesData>({
     queryKey: ['groupRulePolicies', group?.id],
     queryFn: async () => {
-      const assignments = await fetchGroupRuleAssignments(group!.id)
-      const results = await Promise.all(
+      const { assignments, rawJson: rawAssignmentsJson } = await fetchGroupRuleAssignments(group!.id)
+      const policies = await Promise.all(
         assignments.map(async (a) => {
           let policy: RuleBasedPolicy | null = null
           let ruleSets: PolicyRuleSet[] = []
@@ -661,7 +666,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           return { assignment: a, policy, ruleSets, rawJson, fetchError }
         }),
       )
-      return results
+      return { policies, rawAssignmentsJson }
     },
     enabled: isOpen && !!group?.id,
     staleTime: 5 * 60 * 1000,
@@ -675,7 +680,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
             <ShieldRegular style={{ color: tokens.colorBrandForeground1, fontSize: '18px' }} />
-            <span>Rules &amp; Policies</span>
+            <span>Enabled Rules</span>
           </div>
         </DrawerHeaderTitle>
       </DrawerHeader>
@@ -698,14 +703,22 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {data && data.length === 0 && (
+          {/* Top-level debug: raw assignments API response */}
+          {data && (
+            <DebugBox
+              label={`Debug: assignments API response (${data.policies.length} assignment${data.policies.length !== 1 ? 's' : ''} — click to select all)`}
+              content={data.rawAssignmentsJson}
+            />
+          )}
+
+          {data && data.policies.length === 0 && (
             <div style={{ padding: tokens.spacingVerticalL, textAlign: 'center' }}>
               <ShieldRegular fontSize={32} style={{ opacity: 0.3, display: 'block', margin: '0 auto', marginBottom: tokens.spacingVerticalS }} />
               <Text style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>No policies assigned to this group</Text>
             </div>
           )}
 
-          {data && data.map(({ assignment, policy, ruleSets, rawJson, fetchError }) => {
+          {data && data.policies.map(({ assignment, policy, ruleSets, rawJson, fetchError }) => {
             const policyName = policy?.displayName
               ?? (policy?.name ? humanizeName(policy.name) : null)
               ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
