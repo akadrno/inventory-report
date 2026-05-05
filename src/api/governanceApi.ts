@@ -92,8 +92,10 @@ export interface PolicyRule {
 export interface PolicyRuleSet {
   id?: string
   ruleSetId?: string
+  version?: string
   name?: string
   displayName?: string
+  inputs?: Record<string, unknown>
   rules?: PolicyRule[]
   [key: string]: unknown
 }
@@ -106,6 +108,7 @@ export interface RuleBasedPolicy {
   description?: string
   type?: string
   status?: string
+  ruleSetCount?: number
   ruleSets?: PolicyRuleSet[]
   rules?: PolicyRule[]
   [key: string]: unknown

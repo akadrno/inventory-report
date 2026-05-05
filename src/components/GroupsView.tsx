@@ -28,8 +28,8 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchRuleBasedPolicy, fetchPolicyRules } from '../api/governanceApi'
-import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRule, PolicyRuleSet } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchRuleBasedPolicy } from '../api/governanceApi'
+import type { GroupRuleAssignment, RuleBasedPolicy, PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -571,21 +571,32 @@ function humanizeName(name: string | undefined): string {
     .replace(/\s+/g, ' ')
 }
 
-function extractRules(policy: RuleBasedPolicy | null): PolicyRule[] {
-  if (!policy) return []
-  // Direct ruleSets[].rules
-  const fromRuleSets = (policy.ruleSets ?? []).flatMap(rs => rs.rules ?? [])
-  if (fromRuleSets.length > 0) return fromRuleSets
-  // Direct rules[]
-  if ((policy.rules ?? []).length > 0) return policy.rules!
-  // Azure-style properties wrapper
-  const props = policy['properties'] as Record<string, unknown> | undefined
-  if (props) {
-    const fromPropsRuleSets = ((props['ruleSets'] as PolicyRuleSet[] | undefined) ?? []).flatMap(rs => rs.rules ?? [])
-    if (fromPropsRuleSets.length > 0) return fromPropsRuleSets
-    if (Array.isArray(props['rules'])) return props['rules'] as PolicyRule[]
+function summarizeRuleSetInputs(id: string | undefined, inputs: Record<string, unknown> | undefined): string {
+  if (!inputs) return ''
+  if (id === 'ConnectorManagement') {
+    const list = inputs['AllowedConnectorList']
+    if (Array.isArray(list)) {
+      const names = list
+        .map(c => {
+          const path = (c as Record<string, unknown>)['AllowedConnector']
+          return typeof path === 'string' ? path.split('/').pop()?.replace(/^shared_/, '') ?? path : ''
+        })
+        .filter(Boolean)
+      if (names.length <= 5) return names.join(', ')
+      return `${names.slice(0, 5).join(', ')} +${names.length - 5} more`
+    }
   }
-  return []
+  if (id === 'MakerOnboardingContent') {
+    const url = inputs['makerOnboardingUrl']
+    if (typeof url === 'string' && url) return url
+  }
+  // Generic: first bool or string key-value
+  for (const [k, v] of Object.entries(inputs)) {
+    if (typeof v === 'boolean') return `${humanizeName(k)}: ${v ? 'Yes' : 'No'}`
+    if (typeof v === 'string' && v) return v.length > 80 ? v.slice(0, 80) + '…' : v
+    if (Array.isArray(v)) return `${v.length} item${v.length !== 1 ? 's' : ''}`
+  }
+  return ''
 }
 
 // Copyable debug textarea — click anywhere inside to select all
@@ -622,7 +633,7 @@ function DebugBox({ label, content }: { label: string; content: string }) {
 interface PolicyWithAssignment {
   assignment: GroupRuleAssignment
   policy: RuleBasedPolicy | null
-  rules: PolicyRule[]
+  ruleSets: PolicyRuleSet[]
   rawJson: string
   fetchError: string | null
 }
@@ -637,28 +648,17 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
       const results = await Promise.all(
         assignments.map(async (a) => {
           let policy: RuleBasedPolicy | null = null
-          let rules: PolicyRule[] = []
+          let ruleSets: PolicyRuleSet[] = []
           let rawJson = ''
           let fetchError: string | null = null
           try {
             policy = await fetchRuleBasedPolicy(a.policyId)
             rawJson = JSON.stringify(policy, null, 2)
-            rules = extractRules(policy)
-            if (rules.length === 0) {
-              const subRules = await fetchPolicyRules(a.policyId).catch((e: unknown) => {
-                const msg = e instanceof Error ? e.message : String(e)
-                fetchError = (fetchError ? fetchError + '\n' : '') + `fetchPolicyRules: ${msg}`
-                return []
-              })
-              if (subRules.length > 0) {
-                rules = subRules
-                rawJson += '\n\n// /rules sub-endpoint:\n' + JSON.stringify(subRules, null, 2)
-              }
-            }
+            ruleSets = policy?.ruleSets ?? []
           } catch (e) {
             fetchError = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e)
           }
-          return { assignment: a, policy, rules, rawJson, fetchError }
+          return { assignment: a, policy, ruleSets, rawJson, fetchError }
         }),
       )
       return results
@@ -705,7 +705,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
             </div>
           )}
 
-          {data && data.map(({ assignment, policy, rules, rawJson, fetchError }) => {
+          {data && data.map(({ assignment, policy, ruleSets, rawJson, fetchError }) => {
             const policyName = policy?.displayName
               ?? (policy?.name ? humanizeName(policy.name) : null)
               ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
@@ -741,48 +741,53 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                 {fetchError && (
                   <div>
                     <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginBottom: '2px' }}>
-                      Error fetching rules:
+                      Error fetching policy:
                     </Caption1>
                     <DebugBox label="Copy error" content={fetchError} />
                   </div>
                 )}
 
-                {/* Individual rules */}
-                {rules.length > 0 ? (
+                {/* Rule sets — each entry in ruleSets[] is a named configuration block */}
+                {ruleSets.length > 0 ? (
                   <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {rules.map((rule, idx) => {
-                      const ruleName = rule.displayName ?? humanizeName(rule.name)
-                      const enabled = rule.isEnabled !== false
+                    {ruleSets.map((rs, idx) => {
+                      const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
+                      const summary = summarizeRuleSetInputs(rs.id, rs.inputs)
                       return (
                         <div
-                          key={rule.id ?? rule.name ?? idx}
+                          key={rs.id ?? idx}
                           style={{
                             display: 'flex',
-                            alignItems: 'center',
+                            alignItems: 'flex-start',
                             justifyContent: 'space-between',
                             gap: tokens.spacingHorizontalS,
-                            padding: `4px ${tokens.spacingHorizontalS}`,
+                            padding: `6px ${tokens.spacingHorizontalS}`,
                             backgroundColor: tokens.colorNeutralBackground3,
                             borderRadius: tokens.borderRadiusSmall,
                           }}
                         >
-                          <Caption1 style={{ flex: 1, color: enabled ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground3 }}>
-                            {ruleName}
-                          </Caption1>
-                          <Badge appearance="tint" color={enabled ? 'success' : 'subtle'} size="small">
-                            {enabled ? 'Enabled' : 'Disabled'}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <Caption1 style={{ fontWeight: tokens.fontWeightSemibold, display: 'block' }}>
+                              {rsName}
+                            </Caption1>
+                            {summary && (
+                              <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={summary}>
+                                {summary}
+                              </Caption1>
+                            )}
+                          </div>
+                          <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '1px' }}>
+                            Active
                           </Badge>
                         </div>
                       )
                     })}
                   </div>
-                ) : (
+                ) : !fetchError ? (
                   <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '2px' }}>
-                    {assignment.ruleSetCount !== undefined && assignment.ruleSetCount > 0
-                      ? `${assignment.ruleSetCount} rule set${assignment.ruleSetCount !== 1 ? 's' : ''} — rules not returned by API`
-                      : 'No rules found'}
+                    No rule sets configured
                   </Caption1>
-                )}
+                ) : null}
 
                 {/* Debug: raw API response */}
                 <DebugBox
