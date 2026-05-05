@@ -26,6 +26,12 @@
 .PARAMETER DeploymentToken
     Azure Static Web Apps deployment token.
 
+.PARAMETER StorageAccount
+    Azure Storage account name (injected as VITE_STORAGE_ACCOUNT). Optional.
+
+.PARAMETER TableSas
+    Account-level Table Storage SAS token (injected as VITE_TABLE_SAS). Optional.
+
 .PARAMETER Environment
     SWA deployment environment. Default: production.
 #>
@@ -37,7 +43,9 @@ param(
     [Parameter(Mandatory)][string]$ClientId,
     [Parameter(Mandatory)][string]$TenantId,
     [Parameter(Mandatory)][string]$DeploymentToken,
-    [string]$Environment = "production"
+    [string]$StorageAccount = "",
+    [string]$TableSas        = "",
+    [string]$Environment     = "production"
 )
 
 Set-StrictMode -Version Latest
@@ -59,6 +67,8 @@ if (-not (Test-Path (Join-Path $repoRoot "node_modules"))) {
 # Set build-time environment variables
 $env:VITE_CLIENT_ID = $ClientId
 $env:VITE_TENANT_ID = $TenantId
+if ($StorageAccount) { $env:VITE_STORAGE_ACCOUNT = $StorageAccount }
+if ($TableSas)        { $env:VITE_TABLE_SAS        = $TableSas }
 
 # Run Vite build
 Write-Host "  Building application (npm run build)..."
@@ -74,8 +84,10 @@ try {
 Write-Host "  Build succeeded." -ForegroundColor Green
 
 # Clear env vars (they are now baked into dist/)
-Remove-Item Env:VITE_CLIENT_ID -ErrorAction SilentlyContinue
-Remove-Item Env:VITE_TENANT_ID -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_CLIENT_ID       -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_TENANT_ID       -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_STORAGE_ACCOUNT -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_TABLE_SAS       -ErrorAction SilentlyContinue
 
 # Ensure SWA CLI is available
 $swaCli = Get-Command "swa" -ErrorAction SilentlyContinue

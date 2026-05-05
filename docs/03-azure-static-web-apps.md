@@ -38,22 +38,24 @@ Azure Static Web Apps (SWA) is a free-tier-eligible Azure service that hosts sta
 
 8. Click **Review + create**, then **Create**.
 
-Azure will commit a GitHub Actions workflow file (`.github/workflows/azure-static-web-apps.yml`) to your repository automatically.
+> **Note:** Azure may attempt to commit a GitHub Actions workflow file to your repository automatically. If the repository already contains `.github/workflows/deploy.yml`, delete any auto-generated workflow Azure adds to avoid duplicate deploys.
 
 ---
 
 ### Step 2 — Add environment variable secrets to GitHub
 
-The build step needs your Azure AD credentials. Store them as GitHub repository secrets — never hard-code them in source files.
+The build step needs your configuration values. Store them as GitHub repository secrets — never hard-code them in source files.
 
 1. Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**.
 2. Add the following secrets (click **New repository secret** for each):
 
    | Secret name | Value |
    |---|---|
-   | `AZURE_STATIC_WEB_APPS_API_TOKEN` | The deployment token from the SWA resource (see below) |
+   | `SWA_DEPLOYMENT_TOKEN` | The deployment token from the SWA resource (see below) |
    | `VITE_CLIENT_ID` | Your App Registration's Client ID |
    | `VITE_TENANT_ID` | Your Azure AD Tenant ID or domain |
+   | `VITE_STORAGE_ACCOUNT` | Storage account name *(optional — for persistent assessments and tagging)* |
+   | `VITE_TABLE_SAS` | Account-level Table Storage SAS token *(optional — required if using storage)* |
 
 **Finding the SWA deployment token:**
 - Go to the Static Web Apps resource in the Azure portal.
@@ -107,8 +109,12 @@ Use this to deploy the built `dist/` folder directly without GitHub Actions.
 # Install the CLI
 npm install -g @azure/static-web-apps-cli
 
-# Build the app first
-VITE_CLIENT_ID=<your-client-id> VITE_TENANT_ID=<your-tenant-id> npm run build
+# Build the app (add VITE_STORAGE_ACCOUNT and VITE_TABLE_SAS if using cloud storage)
+VITE_CLIENT_ID=<your-client-id> \
+VITE_TENANT_ID=<your-tenant-id> \
+VITE_STORAGE_ACCOUNT=<your-storage-account> \
+VITE_TABLE_SAS=<your-sas-token> \
+npm run build
 
 # Deploy
 npx swa deploy ./dist \
@@ -120,6 +126,8 @@ npx swa deploy ./dist \
 > ```powershell
 > $env:VITE_CLIENT_ID="<your-client-id>"
 > $env:VITE_TENANT_ID="<your-tenant-id>"
+> $env:VITE_STORAGE_ACCOUNT="<your-storage-account>"
+> $env:VITE_TABLE_SAS="<your-sas-token>"
 > npm run build
 > ```
 
@@ -138,7 +146,7 @@ npx swa deploy ./dist \
 
 - [ ] Azure Static Web Apps resource created (Free tier)
 - [ ] GitHub repository linked
-- [ ] GitHub secrets set: `AZURE_STATIC_WEB_APPS_API_TOKEN`, `VITE_CLIENT_ID`, `VITE_TENANT_ID`
+- [ ] GitHub secrets set: `SWA_DEPLOYMENT_TOKEN`, `VITE_CLIENT_ID`, `VITE_TENANT_ID` (plus `VITE_STORAGE_ACCOUNT` and `VITE_TABLE_SAS` if using cloud storage)
 - [ ] GitHub Actions workflow ran successfully
 - [ ] SWA URL added as redirect URI in the App Registration
 

@@ -37,7 +37,7 @@ All data is fetched live from the Power Platform and Microsoft Graph APIs using 
 | [Azure Static Web Apps](docs/03-azure-static-web-apps.md) | Host the app in Azure |
 | [User Guide](docs/04-user-guide.md) | How to use the dashboard |
 | [API Reference](docs/05-api-reference.md) | All APIs called, with links to official docs |
-| [GitHub Actions Deployment](docs/06-github-actions-deployment.md) | One-click deployment via GitHub Actions with OIDC |
+| [GitHub Actions Deployment](docs/06-github-actions-deployment.md) | Automated deployment via GitHub Actions on every push to main |
 
 ## Quick start (summary)
 

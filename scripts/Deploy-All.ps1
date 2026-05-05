@@ -60,8 +60,10 @@ param(
     [Parameter(Mandatory)][string]$SubscriptionId,
     [Parameter(Mandatory)][string]$ResourceGroup,
     [Parameter(Mandatory)][string]$GitHubRepo,
-    [string]$AppName    = "ppac-inventory-report",
-    [string]$Location   = "eastus2",
+    [string]$AppName         = "ppac-inventory-report",
+    [string]$Location        = "eastus2",
+    [string]$StorageAccount  = "",
+    [string]$TableSas        = "",
     [switch]$SkipConsent,
     [switch]$SkipGitHub,
     [switch]$CreateResourceGroup
@@ -182,7 +184,9 @@ if (-not $SkipGitHub) {
         -GitHubRepo      $GitHubRepo `
         -ClientId        $clientId `
         -TenantId        $TenantId `
-        -DeploymentToken $deploymentToken
+        -DeploymentToken $deploymentToken `
+        -StorageAccount  $StorageAccount `
+        -TableSas        $TableSas
     Write-Host "  GitHub secrets written." -ForegroundColor Green
 } else {
     Write-Host "`n[4/5] Skipping GitHub secrets (--SkipGitHub)." -ForegroundColor DarkGray
@@ -194,7 +198,9 @@ Write-Host "`n[5/5] Building and deploying application..." -ForegroundColor Cyan
 & "$scriptRoot\steps\05-Build-Deploy.ps1" `
     -ClientId        $clientId `
     -TenantId        $TenantId `
-    -DeploymentToken $deploymentToken
+    -DeploymentToken $deploymentToken `
+    -StorageAccount  $StorageAccount `
+    -TableSas        $TableSas
 Write-Host "  Deployment complete." -ForegroundColor Green
 
 # ── Post-deployment instructions ──────────────────────────────────────────────
