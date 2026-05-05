@@ -559,6 +559,25 @@ function DrillDown({
 // Group rules side panel
 // ---------------------------------------------------------------------------
 
+function humanizeName(name: string | undefined): string {
+  if (!name) return '—'
+  // Strip common system namespace prefixes (e.g. "Microsoft.PowerApps.Governance.")
+  const stripped = name.replace(/^(?:[A-Za-z]+\.){2,}/, '')
+  // Split PascalCase/camelCase into words, then clean up separators
+  return stripped
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function extractRules(policy: RuleBasedPolicy | null): import('../api/governanceApi').PolicyRule[] {
+  if (!policy) return []
+  const fromRuleSets = (policy.ruleSets ?? []).flatMap(rs => rs.rules ?? [])
+  if (fromRuleSets.length > 0) return fromRuleSets
+  return policy.rules ?? []
+}
+
 interface PolicyWithAssignment {
   assignment: GroupRuleAssignment
   policy: RuleBasedPolicy | null
@@ -588,7 +607,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
   })
 
   return (
-    <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '420px' }}>
+    <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '440px' }}>
       <DrawerHeader>
         <DrawerHeaderTitle
           action={<Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />}
@@ -629,9 +648,12 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           )}
 
           {data && data.map(({ assignment, policy }) => {
-            const name = policy?.displayName ?? policy?.name ?? assignment.policyId
+            const policyName = policy?.displayName ?? policy?.name
+              ?? humanizeName(assignment.policyId.split('/').filter(Boolean).pop())
             const desc = policy?.description as string | undefined
             const status = policy?.status as string | undefined
+            const rules = extractRules(policy)
+
             return (
               <div
                 key={assignment.policyId}
@@ -640,27 +662,61 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                   border: `1px solid ${tokens.colorNeutralStroke2}`,
                   borderRadius: tokens.borderRadiusMedium,
                   padding: tokens.spacingVerticalS,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: tokens.spacingVerticalXS,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacingHorizontalS, marginBottom: desc ? tokens.spacingVerticalXS : 0 }}>
-                  <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase200, flex: 1 }}>{name}</Text>
-                  <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
-                    {status && (
-                      <Badge appearance="tint" color={status === 'Active' ? 'success' : 'subtle'} size="small">{status}</Badge>
-                    )}
-                    {assignment.ruleSetCount !== undefined && (
-                      <Badge appearance="tint" color="brand" size="small">
-                        {assignment.ruleSetCount} rule{assignment.ruleSetCount !== 1 ? 's' : ''}
-                      </Badge>
-                    )}
-                  </div>
+                {/* Policy header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: tokens.spacingHorizontalS }}>
+                  <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase300, flex: 1 }}>{policyName}</Text>
+                  {status && (
+                    <Badge appearance="tint" color={status === 'Active' ? 'success' : 'subtle'} size="small">{status}</Badge>
+                  )}
                 </div>
+
                 {desc && (
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>{desc}</Caption1>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>{desc}</Caption1>
                 )}
-                <Caption1 style={{ color: tokens.colorNeutralForeground3, fontFamily: 'Consolas, monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {assignment.policyId}
-                </Caption1>
+
+                {/* Individual rules */}
+                {rules.length > 0 ? (
+                  <div style={{ marginTop: tokens.spacingVerticalXS, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {rules.map((rule, idx) => {
+                      const ruleName = rule.displayName ?? humanizeName(rule.name)
+                      const enabled = rule.isEnabled !== false
+                      return (
+                        <div
+                          key={rule.id ?? rule.name ?? idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: tokens.spacingHorizontalS,
+                            padding: `4px ${tokens.spacingHorizontalS}`,
+                            backgroundColor: tokens.colorNeutralBackground3,
+                            borderRadius: tokens.borderRadiusSmall,
+                          }}
+                        >
+                          <Caption1 style={{ flex: 1, color: enabled ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground3 }}>
+                            {ruleName}
+                          </Caption1>
+                          <Badge
+                            appearance="tint"
+                            color={enabled ? 'success' : 'subtle'}
+                            size="small"
+                          >
+                            {enabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : assignment.ruleSetCount !== undefined && assignment.ruleSetCount > 0 ? (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    {assignment.ruleSetCount} rule{assignment.ruleSetCount !== 1 ? 's' : ''} configured
+                  </Caption1>
+                ) : null}
               </div>
             )
           })}

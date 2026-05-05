@@ -79,13 +79,35 @@ export interface GroupRuleAssignment {
   tenantId?: string
 }
 
+export interface PolicyRule {
+  id?: string
+  name?: string
+  displayName?: string
+  description?: string
+  isEnabled?: boolean
+  ruleType?: string
+  [key: string]: unknown
+}
+
+export interface PolicyRuleSet {
+  id?: string
+  ruleSetId?: string
+  name?: string
+  displayName?: string
+  rules?: PolicyRule[]
+  [key: string]: unknown
+}
+
 export interface RuleBasedPolicy {
   id?: string
+  policyId?: string
   name?: string
   displayName?: string
   description?: string
   type?: string
   status?: string
+  ruleSets?: PolicyRuleSet[]
+  rules?: PolicyRule[]
   [key: string]: unknown
 }
 
@@ -106,9 +128,10 @@ export async function fetchGroupRuleAssignments(groupId: string): Promise<GroupR
 }
 
 export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {
+  const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
   const token = await getPowerPlatformToken()
   const res = await fetch(
-    `https://api.powerplatform.com/governance/ruleBasedPolicies/${policyId}?api-version=2022-03-01-preview`,
+    `https://api.powerplatform.com/governance/ruleBasedPolicies/${id}?api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (!res.ok) throw new Error(`Rule-based policy fetch failed: ${res.status}`)
