@@ -12,6 +12,10 @@ import {
   PersonRegular,
   InfoRegular,
   DismissRegular,
+  QuestionCircleRegular,
+  ClockRegular,
+  DismissCircleRegular,
+  ShieldCheckmarkRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory } from '../types'
@@ -441,6 +445,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     setPanelMode(mode)
   }
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
+  const [complianceFilter, setComplianceFilter] = useState<ComplianceStatus | 'All'>('All')
   const [typeFilter, setTypeFilter] = useState<'all' | 'apps' | 'flows' | 'agents'>('all')
   const [hideSystem, setHideSystem] = useState(true)
   const importRef = useRef<HTMLInputElement>(null)
@@ -463,6 +468,17 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     return counts
   }, [visibleResources, assessments])
 
+  const complianceCounts = useMemo(() => {
+    const counts: Record<ComplianceStatus, number> = {
+      'Not Reviewed': 0, 'In Review': 0, 'Compliant': 0, 'Non-Compliant': 0, 'Exempted': 0,
+    }
+    for (const r of visibleResources) {
+      const status = assessments[r.id]?.complianceStatus ?? 'Not Reviewed'
+      counts[status]++
+    }
+    return counts
+  }, [visibleResources, assessments])
+
   const filtered = useMemo(() => {
     let items = visibleResources
     if (typeFilter !== 'all') items = items.filter(r => getResourceCategory(r.type) === typeFilter)
@@ -473,12 +489,15 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
         items = items.filter(r => assessments[r.id]?.riskLevel === riskFilter)
       }
     }
+    if (complianceFilter !== 'All') {
+      items = items.filter(r => (assessments[r.id]?.complianceStatus ?? 'Not Reviewed') === complianceFilter)
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       items = items.filter(r => getDisplayName(r).toLowerCase().includes(q) || r.name.toLowerCase().includes(q))
     }
     return items
-  }, [visibleResources, typeFilter, riskFilter, search, assessments])
+  }, [visibleResources, typeFilter, riskFilter, complianceFilter, search, assessments])
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -502,13 +521,26 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     )
   }
 
-  const summaryItems: Array<{ key: RiskFilter; color: string; label: string; icon: React.ReactNode; count: number }> = [
+  const riskSummaryItems: Array<{ key: RiskFilter; color: string; label: string; icon: React.ReactNode; count: number }> = [
     { key: 'Critical',    color: '#c50f1f', label: 'Critical',     icon: <ErrorCircleRegular fontSize={24} style={{ color: '#c50f1f' }} />,   count: riskCounts.Critical },
     { key: 'High',        color: '#e17800', label: 'High',         icon: <WarningRegular fontSize={24} style={{ color: '#e17800' }} />,        count: riskCounts.High },
     { key: 'Medium',      color: '#8764b8', label: 'Medium',       icon: <InfoRegular fontSize={24} style={{ color: '#8764b8' }} />,           count: riskCounts.Medium },
     { key: 'Low',         color: '#107c10', label: 'Low',          icon: <CheckmarkCircleRegular fontSize={24} style={{ color: '#107c10' }} />, count: riskCounts.Low },
     { key: 'NotAssessed', color: '#616161', label: 'Not Assessed', icon: <ShieldRegular fontSize={24} style={{ color: '#616161' }} />,         count: riskCounts.NotAssessed },
   ]
+
+  const complianceSummaryItems: Array<{ key: ComplianceStatus; color: string; label: string; icon: React.ReactNode; count: number }> = [
+    { key: 'Non-Compliant', color: '#c50f1f', label: 'Non-Compliant', icon: <DismissCircleRegular fontSize={24} style={{ color: '#c50f1f' }} />,    count: complianceCounts['Non-Compliant'] },
+    { key: 'In Review',     color: '#004578', label: 'In Review',     icon: <ClockRegular fontSize={24} style={{ color: '#004578' }} />,             count: complianceCounts['In Review'] },
+    { key: 'Not Reviewed',  color: '#616161', label: 'Not Reviewed',  icon: <QuestionCircleRegular fontSize={24} style={{ color: '#616161' }} />,    count: complianceCounts['Not Reviewed'] },
+    { key: 'Compliant',     color: '#107c10', label: 'Compliant',     icon: <CheckmarkCircleRegular fontSize={24} style={{ color: '#107c10' }} />,   count: complianceCounts['Compliant'] },
+    { key: 'Exempted',      color: '#e17800', label: 'Exempted',      icon: <ShieldCheckmarkRegular fontSize={24} style={{ color: '#e17800' }} />,   count: complianceCounts['Exempted'] },
+  ]
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: '11px', fontWeight: 600, color: '#605e5c',
+    textTransform: 'uppercase', letterSpacing: '0.4px',
+  }
 
   return (
     <div className={classes.root}>
@@ -527,26 +559,54 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
         />
       )}
 
-      {/* Summary cards */}
-      <div className={classes.summaryGrid}>
-        {summaryItems.map(({ key, color, label, icon, count }) => (
-          <div
-            key={key}
-            className={classes.summaryCard}
-            style={{
-              borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: color,
-              outline: riskFilter === key ? `2px solid ${color}` : undefined,
-            }}
-            onClick={() => setRiskFilter(riskFilter === key ? 'All' : key)}
-            role="button"
-          >
-            {icon}
-            <div>
-              <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{count}</Text>
-              <Caption1 style={{ color: '#737373' }}>{label}</Caption1>
+      {/* Risk summary cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <span style={sectionLabel}>Risk Level</span>
+        <div className={classes.summaryGrid}>
+          {riskSummaryItems.map(({ key, color, label, icon, count }) => (
+            <div
+              key={key}
+              className={classes.summaryCard}
+              style={{
+                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: color,
+                outline: riskFilter === key ? `2px solid ${color}` : undefined,
+              }}
+              onClick={() => setRiskFilter(riskFilter === key ? 'All' : key)}
+              role="button"
+            >
+              {icon}
+              <div>
+                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{count}</Text>
+                <Caption1 style={{ color: '#737373' }}>{label}</Caption1>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
+
+      {/* Compliance summary cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <span style={sectionLabel}>Compliance Status</span>
+        <div className={classes.summaryGrid}>
+          {complianceSummaryItems.map(({ key, color, label, icon, count }) => (
+            <div
+              key={key}
+              className={classes.summaryCard}
+              style={{
+                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: color,
+                outline: complianceFilter === key ? `2px solid ${color}` : undefined,
+              }}
+              onClick={() => setComplianceFilter(complianceFilter === key ? 'All' : key)}
+              role="button"
+            >
+              {icon}
+              <div>
+                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{count}</Text>
+                <Caption1 style={{ color: '#737373' }}>{label}</Caption1>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -598,9 +658,9 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
           <ShieldRegular fontSize={16} style={{ color: '#004578' }} />
           Resource Risk Assessments
           <Badge appearance="tint" color="subtle" size="small">{filtered.length} resource{filtered.length !== 1 ? 's' : ''}</Badge>
-          {riskFilter !== 'All' && (
-            <Button size="small" appearance="subtle" onClick={() => setRiskFilter('All')} style={{ marginLeft: 'auto', padding: '0 8px' }}>
-              Clear filter
+          {(riskFilter !== 'All' || complianceFilter !== 'All') && (
+            <Button size="small" appearance="subtle" onClick={() => { setRiskFilter('All'); setComplianceFilter('All') }} style={{ marginLeft: 'auto', padding: '0 8px' }}>
+              Clear filters
             </Button>
           )}
         </div>
