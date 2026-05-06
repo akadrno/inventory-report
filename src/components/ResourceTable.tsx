@@ -33,6 +33,7 @@ const useClasses = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     overflow: 'hidden',
     boxShadow: tokens.shadow4,
+    flexShrink: 0,
   },
   scrollX: {
     overflowX: 'auto',
@@ -91,7 +92,6 @@ const useClasses = makeStyles({
     borderBottomColor: tokens.colorNeutralStroke2,
   },
   nameCell: {
-    maxWidth: '240px',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',

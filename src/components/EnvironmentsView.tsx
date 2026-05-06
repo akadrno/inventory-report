@@ -38,6 +38,7 @@ const useClasses = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     overflow: 'hidden',
     boxShadow: tokens.shadow4,
+    flexShrink: 0,
   },
   table: {
     width: '100%',
