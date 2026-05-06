@@ -117,42 +117,18 @@ export interface RuleBasedPolicy {
 
 export async function fetchGroupRuleAssignments(
   groupId: string,
-): Promise<{ assignments: GroupRuleAssignment[]; rawJson: string }> {
-  // groupId may be a full resource path — extract just the last segment (the GUID)
+): Promise<{ assignments: GroupRuleAssignment[] }> {
   const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
   const res = await fetch(
     `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
-  if (res.status === 404) return { assignments: [], rawJson: '{"value":[],"_note":"404 not found"}' }
+  if (res.status === 404) return { assignments: [] }
   if (res.status === 403) throw new Error('403: Insufficient permissions to read rule assignments')
   if (!res.ok) throw new Error(`Group rule assignments fetch failed: ${res.status}`)
-  const text = await res.text()
-  const json = JSON.parse(text) as { value?: GroupRuleAssignment[] }
-  return { assignments: json.value ?? [], rawJson: text }
-}
-
-export async function fetchGroupAssignmentsAllVersions(
-  groupId: string,
-): Promise<Record<string, string>> {
-  const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
-  const token = await getPowerPlatformToken()
-  const versions = ['2024-10-01', '2022-03-01-preview', '2021-10-01-preview']
-  const results = await Promise.all(
-    versions.map(async v => {
-      try {
-        const res = await fetch(
-          `https://api.powerplatform.com/governance/ruleBasedPolicies/environmentGroups/${id}/assignments?api-version=${v}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        return [v, await res.text()] as const
-      } catch (e) {
-        return [v, JSON.stringify({ _error: String(e) })] as const
-      }
-    }),
-  )
-  return Object.fromEntries(results)
+  const json = await res.json() as { value?: GroupRuleAssignment[] }
+  return { assignments: json.value ?? [] }
 }
 
 export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {
@@ -182,17 +158,16 @@ export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> 
 // Lists all tenant rule-based policies (without $expand — the list endpoint
 // does not support it). Used to discover policies for a group that may not
 // surface via the per-group assignments endpoint.
-export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBasedPolicy[]; rawJson: string }> {
+export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBasedPolicy[] }> {
   const token = await getPowerPlatformToken()
   const res = await fetch(
     `https://api.powerplatform.com/governance/ruleBasedPolicies?$top=100&api-version=2022-03-01-preview`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
-  if (res.status === 404) return { policies: [], rawJson: '{"value":[],"_note":"404"}' }
-  if (!res.ok) throw new Error(`List rule-based policies failed: ${res.status} ${await res.text()}`)
-  const text = await res.text()
-  const json = JSON.parse(text) as { value?: RuleBasedPolicy[] }
-  return { policies: json.value ?? [], rawJson: text }
+  if (res.status === 404) return { policies: [] }
+  if (!res.ok) throw new Error(`List rule-based policies failed: ${res.status}`)
+  const json = await res.json() as { value?: RuleBasedPolicy[] }
+  return { policies: json.value ?? [] }
 }
 
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {

@@ -28,7 +28,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailModal } from './ResourceDetailModal'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies, fetchGroupAssignmentsAllVersions } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
@@ -572,42 +572,8 @@ function humanizeName(name: string | undefined): string {
 }
 
 
-// Copyable debug textarea — click anywhere inside to select all
-function DebugBox({ label, content }: { label: string; content: string }) {
-  return (
-    <details style={{ marginTop: '4px' }}>
-      <summary style={{ cursor: 'pointer', fontSize: '11px', color: tokens.colorNeutralForeground3, userSelect: 'none', paddingBottom: '2px' }}>
-        {label}
-      </summary>
-      <textarea
-        readOnly
-        value={content}
-        onClick={e => (e.target as HTMLTextAreaElement).select()}
-        style={{
-          width: '100%',
-          height: '180px',
-          marginTop: '4px',
-          fontSize: '10px',
-          fontFamily: 'Consolas, monospace',
-          backgroundColor: tokens.colorNeutralBackground4 ?? tokens.colorNeutralBackground3,
-          border: `1px solid ${tokens.colorNeutralStroke2}`,
-          borderRadius: tokens.borderRadiusSmall,
-          padding: '6px',
-          resize: 'vertical',
-          color: tokens.colorNeutralForeground2,
-          boxSizing: 'border-box',
-          display: 'block',
-        }}
-      />
-    </details>
-  )
-}
-
 interface GroupRulesData {
   ruleSets: PolicyRuleSet[]
-  rawAssignmentsJson: string
-  allPoliciesJson: string
-  assignmentsByVersion: Record<string, string>
 }
 
 function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | null; isOpen: boolean; onClose: () => void }) {
@@ -619,15 +585,13 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
   const { data, isLoading, error } = useQuery<GroupRulesData>({
     queryKey: ['groupRulePolicies', group?.id],
     queryFn: async () => {
-      // Three parallel calls: assignments, all-policies, and all API versions of assignments
-      const [assignmentsResult, allPoliciesResult, assignmentsByVersion] = await Promise.all([
+      const [assignmentsResult, allPoliciesResult] = await Promise.all([
         fetchGroupRuleAssignments(group!.id),
-        fetchAllRuleBasedPolicies().catch(() => ({ policies: [], rawJson: '{"_error":"fetch failed"}' })),
-        fetchGroupAssignmentsAllVersions(group!.id),
+        fetchAllRuleBasedPolicies().catch(() => ({ policies: [], rawJson: '{}' })),
       ])
 
-      const { assignments, rawJson: rawAssignmentsJson } = assignmentsResult
-      const { policies: allPolicies, rawJson: allPoliciesJson } = allPoliciesResult
+      const { assignments } = assignmentsResult
+      const { policies: allPolicies } = allPoliciesResult
 
       // Build all known identifiers: group GUID, assigned policyIds, resourceId from assignments
       const groupIdentifiers: string[] = groupGuid ? [groupGuid] : []
@@ -669,7 +633,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
         }
       }
 
-      return { ruleSets, rawAssignmentsJson, allPoliciesJson, assignmentsByVersion }
+      return { ruleSets }
     },
     enabled: isOpen && !!group?.id,
     staleTime: 5 * 60 * 1000,
@@ -700,20 +664,9 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           )}
 
           {error && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
-              <Text style={{ color: tokens.colorStatusDangerForeground1 }}>Failed to load rules for this environment group.</Text>
-              <DebugBox label="Copy error details" content={(error as Error).message ?? String(error)} />
-            </div>
-          )}
-
-          {/* Debug boxes */}
-          {data && (
-            <>
-              <DebugBox label="Debug: all tenant policies" content={data.allPoliciesJson} />
-              {Object.entries(data.assignmentsByVersion).map(([version, raw]) => (
-                <DebugBox key={version} label={`Debug: assignments api-version=${version}`} content={raw} />
-              ))}
-            </>
+            <Text style={{ color: tokens.colorStatusDangerForeground1 }}>
+              Failed to load rules: {(error as Error).message ?? String(error)}
+            </Text>
           )}
 
           {data && data.ruleSets.length === 0 && (
