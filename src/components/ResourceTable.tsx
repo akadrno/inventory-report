@@ -157,7 +157,8 @@ const HEADERS: { key: SortField; label: string }[] = [
   { key: 'region', label: 'Region' },
 ]
 
-const PAGE_SIZE = 25
+const DEFAULT_PAGE_SIZE = 50
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 150, 200, 300, 500, 1000]
 
 function SortIcon({ field, sort }: { field: SortField; sort: { field: SortField; dir: SortDir } }) {
   if (sort.field !== field) return <ArrowSortRegular fontSize={14} style={{ opacity: 0.4 }} />
@@ -231,6 +232,7 @@ function ResourceIcon({ type }: { type: string }) {
 export function ResourceTable({ resources, isLoading, ownerNames, allEnvironments }: ResourceTableProps) {
   const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const classes = useClasses()
 
@@ -276,9 +278,12 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
     return sort.dir === 'asc' ? cmp : -cmp
   })
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
   const currentPage = Math.min(page, totalPages)
-  const pageItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize)
+  const displayStart = sorted.length === 0 ? 0 : pageStart + 1
+  const displayEnd = Math.min(pageStart + pageSize, sorted.length)
 
   const handleSort = (field: SortField) => {
     setSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
@@ -355,28 +360,42 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
           </table>
         </div>
 
-        {!isLoading && sorted.length > PAGE_SIZE && (
+        {!isLoading && (
           <div className={classes.pagination}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sorted.length)} of {sorted.length}
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, flex: 1, whiteSpace: 'nowrap' }}>
+              {sorted.length === 0
+                ? 'No resources'
+                : `Showing ${displayStart}–${displayEnd} of ${sorted.length} resource${sorted.length !== 1 ? 's' : ''}`}
             </Caption1>
             <div className={classes.paginationBtns}>
               <Button
                 appearance="secondary"
                 size="small"
-                disabled={currentPage === 1}
+                disabled={currentPage <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-              >
-                Prev
-              </Button>
+              >← Prev</Button>
+              <Caption1 style={{ color: tokens.colorNeutralForeground2, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center', alignSelf: 'center' }}>
+                Page {currentPage} of {totalPages}
+              </Caption1>
               <Button
                 appearance="secondary"
                 size="small"
-                disabled={currentPage === totalPages}
+                disabled={currentPage >= totalPages}
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >Next →</Button>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                style={{
+                  fontSize: '12px', padding: '4px 8px', borderRadius: '4px',
+                  border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff',
+                  cursor: 'pointer', marginLeft: '4px',
+                }}
               >
-                Next
-              </Button>
+                {PAGE_SIZE_OPTIONS.map(n => (
+                  <option key={n} value={n}>{n} per page</option>
+                ))}
+              </select>
             </div>
           </div>
         )}

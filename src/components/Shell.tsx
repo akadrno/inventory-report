@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { makeStyles, Text, Caption1, Button, Badge, Spinner, Input } from '@fluentui/react-components'
 import {
   HomeRegular,
-  TableSimpleRegular,
+  ClipboardBulletListRegular,
   ShieldRegular,
   GlobeRegular,
   FolderOpenRegular,
@@ -713,7 +713,7 @@ export function Shell() {
         {/* Rail */}
         <nav className={classes.rail}>
           <RailButton icon={<HomeRegular />} label="Home" active={rail === 'home'} onClick={() => handleRailClick('home')} />
-          <RailButton icon={<TableSimpleRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />
+          <RailButton icon={<ClipboardBulletListRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />
           <RailButton icon={<ShieldRegular />} label="Governance" active={rail === 'governance'} onClick={() => handleRailClick('governance')} />
           <RailButton icon={<TagMultipleRegular />} label="Tagging" active={rail === 'tags'} onClick={() => handleRailClick('tags')} />
         </nav>
