@@ -115,6 +115,25 @@ const useClasses = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
   countBadges: { display: 'flex', gap: tokens.spacingHorizontalXS },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralBackground3,
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  paginationBtns: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+  },
 })
 
 function resolveOwner(raw: string, ownerNames: Map<string, string>): string {
@@ -373,8 +392,12 @@ const USER_HEADERS: { key: UserSortField; label: string }[] = [
   { key: 'total', label: 'Total' },
 ]
 
+const USER_PAGE_SIZE_OPTIONS = [25, 50, 100, 150, 200, 300, 500, 1000]
+
 function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick: (u: UserEntry) => void }) {
   const [sort, setSort] = useState<{ field: UserSortField; dir: SortDir }>({ field: 'total', dir: 'desc' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const classes = useClasses()
 
   const sorted = [...users].sort((a, b) => {
@@ -388,8 +411,17 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
     return sort.dir === 'asc' ? c : -c
   })
 
-  const handleSort = (f: UserSortField) =>
+  const handleSort = (f: UserSortField) => {
     setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
+    setPage(1)
+  }
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize)
+  const displayStart = sorted.length === 0 ? 0 : pageStart + 1
+  const displayEnd = Math.min(pageStart + pageSize, sorted.length)
 
   return (
     <div className={classes.tableWrapper}>
@@ -409,7 +441,7 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
             </tr>
           </thead>
           <tbody>
-            {sorted.map(user => (
+            {pageItems.map(user => (
               <tr key={user.id} className={classes.tr} onClick={() => onUserClick(user)}>
                 <td className={classes.td}>
                   <div className={classes.nameCell}>
@@ -438,6 +470,27 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
             ))}
           </tbody>
         </table>
+      </div>
+      <div className={classes.pagination}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3, flex: 1, whiteSpace: 'nowrap' }}>
+          {sorted.length === 0
+            ? 'No users'
+            : `Showing ${displayStart}–${displayEnd} of ${sorted.length} user${sorted.length !== 1 ? 's' : ''}`}
+        </Caption1>
+        <div className={classes.paginationBtns}>
+          <Button size="small" appearance="secondary" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</Button>
+          <Caption1 style={{ color: tokens.colorNeutralForeground2, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center', alignSelf: 'center' }}>
+            Page {currentPage} of {totalPages}
+          </Caption1>
+          <Button size="small" appearance="secondary" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</Button>
+          <select
+            value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+            style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff', cursor: 'pointer', marginLeft: '4px' }}
+          >
+            {USER_PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n} per page</option>)}
+          </select>
+        </div>
       </div>
     </div>
   )

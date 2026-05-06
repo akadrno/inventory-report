@@ -96,6 +96,25 @@ const useClasses = makeStyles({
     textAlign: 'center',
     color: tokens.colorNeutralForeground3,
   },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralBackground3,
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  paginationBtns: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+  },
   // modal styles
   modalSurface: { maxWidth: '640px', width: '100%', maxHeight: '85vh' },
   modalContent: { overflowY: 'auto', maxHeight: '60vh' },
@@ -375,6 +394,8 @@ function EnvironmentResourcesView({
 
 type EnvSortField = 'name' | 'type' | 'region' | 'resources'
 
+const ENV_PAGE_SIZE_OPTIONS = [25, 50, 100, 150, 200, 300, 500, 1000]
+
 function EnvironmentListTable({
   environments,
   resourceCounts,
@@ -386,6 +407,8 @@ function EnvironmentListTable({
 }) {
   const [sort, setSort] = useState<{ field: EnvSortField; dir: SortDir }>({ field: 'resources', dir: 'desc' })
   const [menuEnv, setMenuEnv] = useState<ResourceItem | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const classes = useClasses()
 
   const sorted = [...environments].sort((a, b) => {
@@ -398,8 +421,17 @@ function EnvironmentListTable({
     return sort.dir === 'asc' ? c : -c
   })
 
-  const handleSort = (f: EnvSortField) =>
+  const handleSort = (f: EnvSortField) => {
     setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
+    setPage(1)
+  }
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize)
+  const displayStart = sorted.length === 0 ? 0 : pageStart + 1
+  const displayEnd = Math.min(pageStart + pageSize, sorted.length)
 
   return (
     <>
@@ -425,7 +457,7 @@ function EnvironmentListTable({
               </tr>
             </thead>
             <tbody>
-              {sorted.map(env => {
+              {pageItems.map(env => {
                 const name = getDisplayName(env)
                 const envType = getEnvTypeName(env)
                 const region = env.environmentRegion ?? env.location
@@ -468,6 +500,27 @@ function EnvironmentListTable({
               })}
             </tbody>
           </table>
+        </div>
+        <div className={classes.pagination}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, flex: 1, whiteSpace: 'nowrap' }}>
+            {sorted.length === 0
+              ? 'No environments'
+              : `Showing ${displayStart}–${displayEnd} of ${sorted.length} environment${sorted.length !== 1 ? 's' : ''}`}
+          </Caption1>
+          <div className={classes.paginationBtns}>
+            <Button size="small" appearance="secondary" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</Button>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center', alignSelf: 'center' }}>
+              Page {currentPage} of {totalPages}
+            </Caption1>
+            <Button size="small" appearance="secondary" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</Button>
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+              style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff', cursor: 'pointer', marginLeft: '4px' }}
+            >
+              {ENV_PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n} per page</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
