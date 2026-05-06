@@ -650,7 +650,7 @@ export function Shell() {
     }
 
     if (rail === 'tags') {
-      const tagLabels: Record<TagView, string> = { browser: 'Tag Resources', termstore: 'Term Store' }
+      const tagLabels: Record<TagView, string> = { browser: 'Resources', termstore: 'Term Store' }
       const tagSubs: Record<TagView, string> = {
         browser: 'Browse and tag your Power Platform resources',
         termstore: 'Manage groups, term sets, and terms',
@@ -780,7 +780,7 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<TagRegular />} label="Tag Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
+            <NavItem icon={<TagRegular />} label="Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
             <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />
           </div>
         )}

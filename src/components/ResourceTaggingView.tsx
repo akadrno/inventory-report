@@ -41,13 +41,14 @@ function groupBadgeColor(idx: number): BColor { return PALETTE[idx % PALETTE.len
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const useClasses = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, flexShrink: 0 },
   tableWrapper: {
     backgroundColor: tokens.colorNeutralBackground1,
     borderRadius: tokens.borderRadiusLarge,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     overflow: 'hidden',
     boxShadow: tokens.shadow4,
+    flexShrink: 0,
   },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: tokens.fontSizeBase200 },
   thead: { backgroundColor: tokens.colorNeutralBackground3 },
@@ -358,7 +359,8 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
   const [panelResource, setPanelResource] = useState<ResourceItem | null>(null)
   const [showTaggedOnly, setShowTaggedOnly] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const PAGE_SIZE = 50
+  const [pageSize, setPageSize] = useState(50)
+  const PAGE_SIZE_OPTIONS = [25, 50, 100, 150, 200, 300, 500, 1000]
 
   const groupColorMap = useMemo(() => new Map(termStore.groups.map((g, i) => [g.id, groupBadgeColor(i)])), [termStore.groups])
   const tagsByResource = useMemo(() => {
@@ -402,9 +404,12 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
     return items
   }, [allResources, typeFilter, groupFilter, showTaggedOnly, search, tagsByResource])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(currentPage, totalPages)
-  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pageStart = (safePage - 1) * pageSize
+  const paginated = filtered.slice(pageStart, pageStart + pageSize)
+  const displayStart = filtered.length === 0 ? 0 : pageStart + 1
+  const displayEnd = Math.min(pageStart + pageSize, filtered.length)
 
   const isLoading = storeLoading || tagsLoading
 
@@ -450,7 +455,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
         >
           {showTaggedOnly ? 'Tagged only' : 'Show all'}
         </Button>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, marginLeft: 'auto' }}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3, marginLeft: 'auto', whiteSpace: 'nowrap' }}>
           {filtered.length} resource{filtered.length !== 1 ? 's' : ''}
         </Caption1>
       </div>
@@ -527,13 +532,23 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`, borderTop: `1px solid ${tokens.colorNeutralStroke2}` }}>
-                <Button size="small" appearance="subtle" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>← Prev</Button>
-                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Page {safePage} of {totalPages}</Caption1>
-                <Button size="small" appearance="subtle" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next →</Button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacingHorizontalS, padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`, borderTop: `1px solid ${tokens.colorNeutralStroke2}`, backgroundColor: tokens.colorNeutralBackground3 }}>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, flex: 1, whiteSpace: 'nowrap' }}>
+                {filtered.length === 0 ? 'No resources' : `Showing ${displayStart}–${displayEnd} of ${filtered.length} resource${filtered.length !== 1 ? 's' : ''}`}
+              </Caption1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
+                <Button size="small" appearance="secondary" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>← Prev</Button>
+                <Caption1 style={{ color: tokens.colorNeutralForeground2, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center' }}>Page {safePage} of {totalPages}</Caption1>
+                <Button size="small" appearance="secondary" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next →</Button>
+                <select
+                  value={pageSize}
+                  onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff', cursor: 'pointer', marginLeft: '4px' }}
+                >
+                  {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n} per page</option>)}
+                </select>
               </div>
-            )}
+            </div>
           </div>
         )
       }

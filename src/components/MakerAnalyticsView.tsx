@@ -23,7 +23,7 @@ interface MakerAnalyticsViewProps {
 }
 
 const useClasses = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  root: { display: 'flex', flexDirection: 'column', gap: '20px', flexShrink: 0 },
   summaryGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
@@ -43,6 +43,7 @@ const useClasses = makeStyles({
     border: '1px solid #edebe9',
     borderRadius: '4px',
     overflow: 'hidden',
+    flexShrink: 0,
   },
   cardHead: {
     display: 'flex',
