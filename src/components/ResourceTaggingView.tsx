@@ -18,7 +18,7 @@ import type { TermGroup, TermSet, Term, ResourceTag } from '../hooks/useTagging'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { tableStorageConfigured } from '../api/tableStorageApi'
 import type { ResourceItem } from '../types'
-import { getDisplayName, getResourceCategory } from '../types'
+import { getDisplayName, getResourceCategory, getEnvironmentName } from '../types'
 import { seedDemoTags, type SeedResult } from '../utils/seedDemoTags'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -144,11 +144,49 @@ const useClasses = makeStyles({
 
 function newId(): string { return crypto.randomUUID() }
 
-function envName(resource: ResourceItem, environments: ResourceItem[]): string {
-  const envId = resource.environmentId ?? (resource.properties?.['environment'] as Record<string, unknown> | undefined)?.['id'] as string | undefined
-  if (!envId) return resource.environmentName ?? '—'
-  const env = environments.find(e => e.id === envId || e.name === envId)
-  return env ? getDisplayName(env) : (resource.environmentName ?? envId ?? '—')
+const ENV_IN_PATH_RE = /\/environments\/([^/]+)/i
+
+function extractEnvIdFromPath(id: string): string | undefined {
+  return ENV_IN_PATH_RE.exec(id)?.[1]
+}
+
+function envMapLookup(key: string, envMap: Map<string, string>): string | undefined {
+  return envMap.get(key) ?? envMap.get(key.toLowerCase())
+}
+
+function buildEnvMap(environments: ResourceItem[]): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const env of environments) {
+    const displayName = getDisplayName(env)
+    m.set(env.id, displayName)
+    m.set(env.name, displayName)
+    const seg = env.id.split('/').pop()
+    if (seg) m.set(seg, displayName)
+    m.set(env.id.toLowerCase(), displayName)
+    m.set(env.name.toLowerCase(), displayName)
+    if (seg) m.set(seg.toLowerCase(), displayName)
+  }
+  return m
+}
+
+function resolveEnvName(resource: ResourceItem, envMap: Map<string, string>): string {
+  if (resource.environmentId) {
+    const r = envMapLookup(resource.environmentId, envMap)
+    if (r) return r
+  }
+  const envIdFromPath = extractEnvIdFromPath(resource.id)
+  if (envIdFromPath) {
+    const r = envMapLookup(envIdFromPath, envMap)
+    if (r) return r
+    if (envMap.size === 0) return envIdFromPath
+  }
+  const raw = getEnvironmentName(resource)
+  if (raw) {
+    const r = envMapLookup(raw, envMap)
+    if (r) return r
+    return raw
+  }
+  return envIdFromPath ?? resource.environmentId ?? '—'
 }
 
 // ── TagChip ───────────────────────────────────────────────────────────────────
@@ -189,6 +227,7 @@ function TagPickerPanel({
   const classes = useClasses()
   const [search, setSearch] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const envMap = useMemo(() => buildEnvMap(environments), [environments])
 
   if (!resource) return null
 
@@ -242,7 +281,7 @@ function TagPickerPanel({
             <Text weight="semibold" style={{ display: 'block' }}>{getDisplayName(resource)}</Text>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
               <ResourceTypeBadge type={resource.type} kind={resource.kind} />
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{envName(resource, environments)}</Caption1>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{resolveEnvName(resource, envMap)}</Caption1>
             </div>
           </div>
 
@@ -362,6 +401,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
   const [pageSize, setPageSize] = useState(50)
   const PAGE_SIZE_OPTIONS = [25, 50, 100, 150, 200, 300, 500, 1000]
 
+  const envMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
   const groupColorMap = useMemo(() => new Map(termStore.groups.map((g, i) => [g.id, groupBadgeColor(i)])), [termStore.groups])
   const tagsByResource = useMemo(() => {
     const m = new Map<string, ResourceTag[]>()
@@ -504,7 +544,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
                             <ResourceTypeBadge type={r.type} kind={r.kind} />
                           </td>
                           <td className={classes.td}>
-                            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{envName(r, allEnvironments)}</Caption1>
+                            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{resolveEnvName(r, envMap)}</Caption1>
                           </td>
                           <td className={classes.td}>
                             <div className={classes.tagRow}>
