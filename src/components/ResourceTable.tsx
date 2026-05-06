@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { makeStyles, tokens, Text, Caption1, Button } from '@fluentui/react-components'
 import {
   ChevronUpRegular,
@@ -284,8 +284,6 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
   const pageItems = sorted.slice(pageStart, pageStart + pageSize)
   const displayStart = sorted.length === 0 ? 0 : pageStart + 1
   const displayEnd = Math.min(pageStart + pageSize, sorted.length)
-
-  useEffect(() => { setPage(1) }, [resources])
 
   const handleSort = (field: SortField) => {
     setSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
