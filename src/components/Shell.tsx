@@ -643,7 +643,7 @@ export function Shell() {
             ? <UsersView resources={allResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
             : invView === 'environments'
             ? <EnvironmentsView environments={allEnvironments} allResources={allResources} ownerNames={ownerNames} />
-            : <ResourceTable resources={filtered} isLoading={isLoadingResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
+            : <ResourceTable key={invView} resources={filtered} isLoading={isLoadingResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
           }
         </>
       )
