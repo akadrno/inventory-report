@@ -549,6 +549,7 @@ export function Shell() {
   const allGroups = useMemo(() => groups.data?.pages.flatMap(p => p.data) ?? [], [groups.data])
   const allEnvironments = useMemo(() => environmentsQuery.data?.pages.flatMap(p => p.data) ?? [], [environmentsQuery.data])
   const ownerNames = useOwnerNames(allResources)
+  const nonSystemResources = useMemo(() => allResources.filter(r => !isSystemResource(r)), [allResources])
 
   const isLoadingResources = resources.isLoading && allResources.length === 0
   const isLoadingGroups = groups.isLoading && allGroups.length === 0
@@ -638,11 +639,11 @@ export function Shell() {
           {resources.error && <ErrorBanner error={resources.error} onRetry={() => resources.refetch()} />}
 
           {invView === 'groups'
-            ? <GroupsView groups={allGroups} environments={allEnvironments} allResources={allResources} ownerNames={ownerNames} isLoading={isLoadingGroups} />
+            ? <GroupsView groups={allGroups} environments={allEnvironments} allResources={nonSystemResources} ownerNames={ownerNames} isLoading={isLoadingGroups} />
             : invView === 'users'
-            ? <UsersView resources={allResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
+            ? <UsersView resources={nonSystemResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
             : invView === 'environments'
-            ? <EnvironmentsView environments={allEnvironments} allResources={allResources} ownerNames={ownerNames} />
+            ? <EnvironmentsView environments={allEnvironments} allResources={nonSystemResources} ownerNames={ownerNames} />
             : <ResourceTable key={invView} resources={filtered} isLoading={isLoadingResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
           }
         </>
@@ -664,7 +665,7 @@ export function Shell() {
             </div>
           </div>
           <ResourceTaggingView
-            allResources={allResources}
+            allResources={nonSystemResources}
             allEnvironments={allEnvironments}
             currentUser={account?.username ?? ''}
             view={tagView}
@@ -682,7 +683,7 @@ export function Shell() {
           </div>
           {govView === 'overview' && (
             <GovOverviewPage
-              allResources={allResources}
+              allResources={nonSystemResources}
               allEnvironments={allEnvironments}
               onRecsClick={() => setGovView('recommendations')}
               onEnvsClick={() => { setRail('inventory'); setInvView('environments') }}

@@ -18,8 +18,7 @@ export function useResources() {
         onDebug: addEntry,
       }),
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.resultTruncated === 0 ? lastPage.skipToken : undefined,
+    getNextPageParam: (lastPage) => lastPage.skipToken,
   })
 
   useEffect(() => {

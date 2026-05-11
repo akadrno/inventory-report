@@ -447,7 +447,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
   const [complianceFilter, setComplianceFilter] = useState<ComplianceStatus | 'All'>('All')
   const [typeFilter, setTypeFilter] = useState<'all' | 'apps' | 'flows' | 'agents'>('all')
-  const [hideSystem, setHideSystem] = useState(false)
+  const [hideSystem, setHideSystem] = useState(true)
   const [pageSize, setPageSize] = useState(50)
   const [currentPage, setCurrentPage] = useState(1)
   const importRef = useRef<HTMLInputElement>(null)
