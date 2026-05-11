@@ -1,4 +1,4 @@
-import { makeStyles, tokens, Text, Button, Title2, Caption1 } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Button, Title2 } from '@fluentui/react-components'
 import { useMsal } from '@azure/msal-react'
 import { powerPlatformScopes } from '../auth/msalConfig'
 
@@ -87,9 +87,6 @@ export function SignInPage() {
           Sign in with Microsoft
         </Button>
 
-        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-          Tenant: akadrno.onmicrosoft.com
-        </Caption1>
       </div>
     </div>
   )
