@@ -1,7 +1,7 @@
 import { Configuration, PublicClientApplication } from '@azure/msal-browser'
 
 const clientId = import.meta.env.VITE_CLIENT_ID as string
-const tenantId = (import.meta.env.VITE_TENANT_ID as string) || 'akadrno.onmicrosoft.com'
+const tenantId = (import.meta.env.VITE_TENANT_ID as string) || 'organizations'
 
 export const msalConfig: Configuration = {
   auth: {
