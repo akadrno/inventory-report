@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import { makeStyles, tokens, Text, Caption1, Button } from '@fluentui/react-components'
 import {
   ChevronUpRegular,
@@ -42,6 +43,7 @@ const useClasses = makeStyles({
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: tokens.fontSizeBase200,
+    tableLayout: 'fixed' as const,
   },
   thead: {
     backgroundColor: tokens.colorNeutralBackground3,
@@ -57,10 +59,12 @@ const useClasses = makeStyles({
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
+    position: 'relative' as const,
     ':hover': { color: tokens.colorNeutralForeground1 },
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
+    overflow: 'hidden',
   },
   thAction: {
     paddingLeft: tokens.spacingHorizontalM,
@@ -90,6 +94,8 @@ const useClasses = makeStyles({
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
   },
   nameCell: {
     display: 'flex',
@@ -235,6 +241,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const classes = useClasses()
+  const { widths, getResizeProps } = useResizableColumns({ name: 260, type: 150, environment: 210, owner: 180, region: 110 })
 
   const envMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -295,6 +302,14 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
       <div className={classes.wrapper}>
         <div className={classes.scrollX}>
           <table className={classes.table}>
+            <colgroup>
+              <col style={{ width: widths.name }} />
+              <col style={{ width: widths.type }} />
+              <col style={{ width: widths.environment }} />
+              <col style={{ width: widths.owner }} />
+              <col style={{ width: widths.region }} />
+              <col style={{ width: 40 }} />
+            </colgroup>
             <thead className={classes.thead}>
               <tr>
                 {HEADERS.map(h => (
@@ -303,6 +318,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
                       {h.label}
                       <SortIcon field={h.key} sort={sort} />
                     </div>
+                    <div {...getResizeProps(h.key)} style={RESIZE_HANDLE_STYLE} />
                   </th>
                 ))}
                 <th className={classes.thAction} />

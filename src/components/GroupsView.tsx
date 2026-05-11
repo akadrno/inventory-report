@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import { useQuery } from '@tanstack/react-query'
 import {
   makeStyles, tokens, Text, Caption1, Button, Badge, Card, Select, Spinner, Divider,
@@ -119,6 +120,7 @@ const useClasses = makeStyles({
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: tokens.fontSizeBase200,
+    tableLayout: 'fixed' as const,
   },
   thead: {
     backgroundColor: tokens.colorNeutralBackground3,
@@ -133,6 +135,9 @@ const useClasses = makeStyles({
     color: tokens.colorNeutralForeground2,
     cursor: 'pointer',
     userSelect: 'none',
+    whiteSpace: 'nowrap' as const,
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
     ':hover': { color: tokens.colorNeutralForeground1 },
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -164,6 +169,8 @@ const useClasses = makeStyles({
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
   },
   tr: {
     cursor: 'pointer',
@@ -266,6 +273,7 @@ function EnvironmentTable({
   onEnvClick: (env: ResourceItem) => void
 }) {
   const [sort, setSort] = useState<{ field: EnvSortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
+  const { widths: envWidths, getResizeProps: getEnvResize } = useResizableColumns({ name: 280, type: 150, region: 130, managed: 100 })
   const [detailEnv, setDetailEnv] = useState<ResourceItem | null>(null)
   const classes = useClasses()
 
@@ -287,6 +295,10 @@ function EnvironmentTable({
       <div className={classes.tableWrapper}>
         <div style={{ overflowX: 'auto' }}>
           <table className={classes.table}>
+            <colgroup>
+              {ENV_HEADERS.map(h => <col key={h.key} style={{ width: envWidths[h.key] }} />)}
+              <col style={{ width: 40 }} />
+            </colgroup>
             <thead className={classes.thead}>
               <tr>
                 {ENV_HEADERS.map(h => (
@@ -295,6 +307,7 @@ function EnvironmentTable({
                       {h.label}
                       <TableSortIcon isActive={sort.field === h.key} dir={sort.dir} />
                     </div>
+                    <div {...getEnvResize(h.key)} style={RESIZE_HANDLE_STYLE} />
                   </th>
                 ))}
                 <th className={classes.thNoSort} />
@@ -386,6 +399,7 @@ function EnvironmentResourcesView({
   const [sort, setSort] = useState<{ field: ResSortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const classes = useClasses()
+  const { widths: resWidths, getResizeProps: getResResize } = useResizableColumns({ name: 260, type: 150, owner: 180 })
 
   const sorted = [...resources].sort((a, b) => {
     const aSystem = getOwnerFromProperties(a).startsWith(SYSTEM_PREFIX)
@@ -436,6 +450,9 @@ function EnvironmentResourcesView({
         <div className={classes.tableWrapper}>
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
+              <colgroup>
+                {RES_HEADERS.map(h => <col key={h.key} style={{ width: resWidths[h.key] }} />)}
+              </colgroup>
               <thead className={classes.thead}>
                 <tr>
                   {RES_HEADERS.map(h => (
@@ -444,6 +461,7 @@ function EnvironmentResourcesView({
                         {h.label}
                         <TableSortIcon isActive={sort.field === h.key} dir={sort.dir} />
                       </div>
+                      <div {...getResResize(h.key)} style={RESIZE_HANDLE_STYLE} />
                     </th>
                   ))}
                 </tr>

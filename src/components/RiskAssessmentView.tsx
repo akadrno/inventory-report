@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import {
   makeStyles, Text, Caption1, Badge, Button, Input, Spinner, Textarea,
   OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody, DrawerFooter,
@@ -95,7 +96,7 @@ const useClasses = makeStyles({
     fontWeight: 600,
     color: '#323130',
   },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' as const },
   th: {
     padding: '8px 16px',
     textAlign: 'left',
@@ -109,6 +110,8 @@ const useClasses = makeStyles({
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
   },
   td: {
     padding: '10px 16px',
@@ -116,6 +119,8 @@ const useClasses = makeStyles({
     borderBottomStyle: 'solid',
     borderBottomColor: '#edebe9',
     verticalAlign: 'middle',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
   },
   formField: {
     display: 'flex',
@@ -435,6 +440,7 @@ function AssessmentSidePanel({
 
 export function RiskAssessmentView({ allResources, ownerNames, currentUser }: RiskAssessmentViewProps) {
   const classes = useClasses()
+  const { widths: riskWidths, getResizeProps: getRiskResize } = useResizableColumns({ resource: 260, owner: 150, risk: 110, compliance: 130, lastReviewed: 130, reviewedBy: 150, action: 72 })
   const { data: assessments, isLoading: assessmentsLoading, error: assessmentsError, save, saveMany, isSavingMany, exportData, importData } = useAdminData()
   const [selectedForPanel, setSelectedForPanel] = useState<ResourceItem | null>(null)
   const [panelMode, setPanelMode] = useState<'view' | 'edit'>('view')
@@ -683,15 +689,24 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
           <>
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
+              <colgroup>
+                <col style={{ width: riskWidths.resource }} />
+                <col style={{ width: riskWidths.owner }} />
+                <col style={{ width: riskWidths.risk }} />
+                <col style={{ width: riskWidths.compliance }} />
+                <col style={{ width: riskWidths.lastReviewed }} />
+                <col style={{ width: riskWidths.reviewedBy }} />
+                <col style={{ width: riskWidths.action }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th className={classes.th}>Resource</th>
-                  <th className={classes.th}>Owner</th>
-                  <th className={classes.th}>Risk Level</th>
-                  <th className={classes.th}>Compliance</th>
-                  <th className={classes.th}>Last Reviewed</th>
-                  <th className={classes.th}>Reviewed By</th>
-                  <th className={classes.th} style={{ width: '72px' }} />
+                  <th className={classes.th}>Resource<div {...getRiskResize('resource')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Owner<div {...getRiskResize('owner')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Risk Level<div {...getRiskResize('risk')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Compliance<div {...getRiskResize('compliance')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Last Reviewed<div {...getRiskResize('lastReviewed')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Reviewed By<div {...getRiskResize('reviewedBy')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th} />
                 </tr>
               </thead>
               <tbody>

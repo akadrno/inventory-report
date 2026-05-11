@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import { makeStyles, tokens, Text, Caption1, Button, Badge } from '@fluentui/react-components'
 import {
   ArrowLeftRegular,
@@ -48,6 +49,7 @@ const useClasses = makeStyles({
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: tokens.fontSizeBase200,
+    tableLayout: 'fixed' as const,
   },
   thead: { backgroundColor: tokens.colorNeutralBackground3 },
   th: {
@@ -61,6 +63,8 @@ const useClasses = makeStyles({
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
     ':hover': { color: tokens.colorNeutralForeground1 },
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -88,6 +92,8 @@ const useClasses = makeStyles({
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
   },
   tr: {
     cursor: 'pointer',
@@ -400,6 +406,7 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const classes = useClasses()
+  const { widths, getResizeProps } = useResizableColumns({ name: 260, apps: 80, flows: 80, agents: 80, total: 80 })
 
   const sorted = [...users].sort((a, b) => {
     let av: string | number = '', bv: string | number = ''
@@ -428,6 +435,10 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
     <div className={classes.tableWrapper}>
       <div style={{ overflowX: 'auto' }}>
         <table className={classes.table}>
+          <colgroup>
+            {USER_HEADERS.map(h => <col key={h.key} style={{ width: widths[h.key] }} />)}
+            <col style={{ width: 40 }} />
+          </colgroup>
           <thead className={classes.thead}>
             <tr>
               {USER_HEADERS.map(h => (
@@ -436,6 +447,7 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
                     {h.label}
                     <SortIcon active={sort.field === h.key} dir={sort.dir} />
                   </div>
+                  <div {...getResizeProps(h.key)} style={RESIZE_HANDLE_STYLE} />
                 </th>
               ))}
               <th className={classes.thStatic} />

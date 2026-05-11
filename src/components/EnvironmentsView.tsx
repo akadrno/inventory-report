@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import {
   makeStyles, tokens, Text, Button, Badge,
   Menu, MenuTrigger, MenuPopover, MenuList, MenuItem,
@@ -44,6 +45,7 @@ const useClasses = makeStyles({
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: tokens.fontSizeBase200,
+    tableLayout: 'fixed' as const,
   },
   thead: { backgroundColor: tokens.colorNeutralBackground3 },
   th: {
@@ -57,6 +59,8 @@ const useClasses = makeStyles({
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
     ':hover': { color: tokens.colorNeutralForeground1 },
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -81,6 +85,8 @@ const useClasses = makeStyles({
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
   },
   tr: {
     cursor: 'pointer',
@@ -411,6 +417,7 @@ function EnvironmentListTable({
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const classes = useClasses()
+  const { widths, getResizeProps } = useResizableColumns({ name: 280, action: 40, type: 150, region: 120, resources: 100 })
 
   const sorted = [...environments].sort((a, b) => {
     let av: string | number = '', bv: string | number = ''
@@ -439,20 +446,32 @@ function EnvironmentListTable({
       <div className={classes.tableWrapper}>
         <div style={{ overflowX: 'auto' }}>
           <table className={classes.table}>
+            <colgroup>
+              <col style={{ width: widths.name }} />
+              <col style={{ width: widths.action }} />
+              <col style={{ width: widths.type }} />
+              <col style={{ width: widths.region }} />
+              <col style={{ width: widths.resources }} />
+              <col style={{ width: widths.action }} />
+            </colgroup>
             <thead className={classes.thead}>
               <tr>
                 <th className={classes.th} onClick={() => handleSort('name')}>
                   <div className={classes.thInner}>Environment <SortIcon active={sort.field === 'name'} dir={sort.dir} /></div>
+                  <div {...getResizeProps('name')} style={RESIZE_HANDLE_STYLE} />
                 </th>
                 <th className={classes.thStatic} />
                 <th className={classes.th} onClick={() => handleSort('type')}>
                   <div className={classes.thInner}>Type <SortIcon active={sort.field === 'type'} dir={sort.dir} /></div>
+                  <div {...getResizeProps('type')} style={RESIZE_HANDLE_STYLE} />
                 </th>
                 <th className={classes.th} onClick={() => handleSort('region')}>
                   <div className={classes.thInner}>Region <SortIcon active={sort.field === 'region'} dir={sort.dir} /></div>
+                  <div {...getResizeProps('region')} style={RESIZE_HANDLE_STYLE} />
                 </th>
                 <th className={classes.th} onClick={() => handleSort('resources')}>
                   <div className={classes.thInner}>Resources <SortIcon active={sort.field === 'resources'} dir={sort.dir} /></div>
+                  <div {...getResizeProps('resources')} style={RESIZE_HANDLE_STYLE} />
                 </th>
                 <th className={classes.thStatic} />
               </tr>

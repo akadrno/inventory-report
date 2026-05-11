@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import { makeStyles, tokens, Text, Caption1, Badge, Button } from '@fluentui/react-components'
 import {
   WarningRegular,
@@ -57,7 +58,7 @@ const useClasses = makeStyles({
     fontWeight: 600,
     color: '#323130',
   },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' as const },
   th: {
     padding: '8px 16px',
     textAlign: 'left',
@@ -71,6 +72,8 @@ const useClasses = makeStyles({
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
   },
   thR: {
     padding: '8px 16px',
@@ -85,6 +88,8 @@ const useClasses = makeStyles({
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
   },
   td: {
     padding: '10px 16px',
@@ -92,6 +97,8 @@ const useClasses = makeStyles({
     borderBottomStyle: 'solid',
     borderBottomColor: '#edebe9',
     verticalAlign: 'middle',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
     ':last-child': { borderBottom: 'none' },
   },
   tdR: {
@@ -102,6 +109,8 @@ const useClasses = makeStyles({
     borderBottomColor: '#edebe9',
     fontVariantNumeric: 'tabular-nums',
     fontWeight: 600,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
     ':last-child': { borderBottom: 'none' },
   },
   barBg: {
@@ -178,6 +187,8 @@ interface MakerEntry {
 export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }: MakerAnalyticsViewProps) {
   const classes = useClasses()
   const [hideSystem, setHideSystem] = useState(true)
+  const { widths: makerWidths, getResizeProps: getMakerResize } = useResizableColumns({ maker: 220, apps: 80, flows: 80, agents: 80, total: 80, dist: 160, envs: 110, status: 120 })
+  const { widths: connWidths, getResizeProps: getConnResize } = useResizableColumns({ connector: 220, using: 130, freq: 160 })
 
   const visibleResources = useMemo(
     () => hideSystem ? allResources.filter(r => !isSystemResource(r)) : allResources,
@@ -324,16 +335,26 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
+              <colgroup>
+                <col style={{ width: makerWidths.maker }} />
+                <col style={{ width: makerWidths.apps }} />
+                <col style={{ width: makerWidths.flows }} />
+                <col style={{ width: makerWidths.agents }} />
+                <col style={{ width: makerWidths.total }} />
+                <col style={{ width: makerWidths.dist }} />
+                <col style={{ width: makerWidths.envs }} />
+                <col style={{ width: makerWidths.status }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th className={classes.th}>Maker</th>
-                  <th className={classes.thR}><PowerAppsIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Apps</th>
-                  <th className={classes.thR}><PowerAutomateIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Flows</th>
-                  <th className={classes.thR}><CopilotStudioIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Agents</th>
-                  <th className={classes.thR}>Total</th>
-                  <th className={classes.th}>Distribution</th>
-                  <th className={classes.thR}>Environments</th>
-                  <th className={classes.th}>Status</th>
+                  <th className={classes.th}>Maker<div {...getMakerResize('maker')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}><PowerAppsIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Apps<div {...getMakerResize('apps')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}><PowerAutomateIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Flows<div {...getMakerResize('flows')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}><CopilotStudioIcon fontSize={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Agents<div {...getMakerResize('agents')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}>Total<div {...getMakerResize('total')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Distribution<div {...getMakerResize('dist')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}>Environments<div {...getMakerResize('envs')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Status<div {...getMakerResize('status')} style={RESIZE_HANDLE_STYLE} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -376,11 +397,16 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
+              <colgroup>
+                <col style={{ width: connWidths.connector }} />
+                <col style={{ width: connWidths.using }} />
+                <col style={{ width: connWidths.freq }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th className={classes.th}>Connector</th>
-                  <th className={classes.thR}>Resources Using</th>
-                  <th className={classes.th} style={{ minWidth: '120px' }}>Frequency</th>
+                  <th className={classes.th}>Connector<div {...getConnResize('connector')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.thR}>Resources Using<div {...getConnResize('using')} style={RESIZE_HANDLE_STYLE} /></th>
+                  <th className={classes.th}>Frequency<div {...getConnResize('freq')} style={RESIZE_HANDLE_STYLE} /></th>
                 </tr>
               </thead>
               <tbody>

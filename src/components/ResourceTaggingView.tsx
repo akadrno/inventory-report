@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import {
   makeStyles, tokens, Text, Caption1, Button, Badge, Input, Checkbox,
   Spinner, Divider,
@@ -50,7 +51,7 @@ const useClasses = makeStyles({
     boxShadow: tokens.shadow4,
     flexShrink: 0,
   },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: tokens.fontSizeBase200 },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: tokens.fontSizeBase200, tableLayout: 'fixed' as const },
   thead: { backgroundColor: tokens.colorNeutralBackground3 },
   th: {
     paddingLeft: tokens.spacingHorizontalM, paddingRight: tokens.spacingHorizontalM,
@@ -58,12 +59,17 @@ const useClasses = makeStyles({
     textAlign: 'left', fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap' as const,
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
   },
   td: {
     paddingLeft: tokens.spacingHorizontalM, paddingRight: tokens.spacingHorizontalM,
     paddingTop: tokens.spacingVerticalS, paddingBottom: tokens.spacingVerticalS,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: tokens.colorNeutralStroke2,
     verticalAlign: 'middle',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
   },
   tr: { ':hover': { backgroundColor: tokens.colorBrandBackground2 }, ':last-child td': { borderBottom: 'none' } },
   tagRow: { display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' },
@@ -391,6 +397,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
   const { data: termStore = { groups: [], termSets: [], terms: [] }, isLoading: storeLoading } = useTermStore()
   const { data: allTags = [], isLoading: tagsLoading } = useAllResourceTags()
   const mutations = useTaggingMutations()
+  const { widths, getResizeProps } = useResizableColumns({ resource: 260, type: 150, environment: 210, tags: 300 })
 
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -506,12 +513,18 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
           <div className={classes.tableWrapper}>
             <div style={{ overflowX: 'auto' }}>
               <table className={classes.table}>
+                <colgroup>
+                  <col style={{ width: widths.resource }} />
+                  <col style={{ width: widths.type }} />
+                  <col style={{ width: widths.environment }} />
+                  <col style={{ width: widths.tags }} />
+                </colgroup>
                 <thead className={classes.thead}>
                   <tr>
-                    <th className={classes.th}>Resource</th>
-                    <th className={classes.th}>Type</th>
-                    <th className={classes.th}>Environment</th>
-                    <th className={classes.th}>Tags</th>
+                    <th className={classes.th}>Resource<div {...getResizeProps('resource')} style={RESIZE_HANDLE_STYLE} /></th>
+                    <th className={classes.th}>Type<div {...getResizeProps('type')} style={RESIZE_HANDLE_STYLE} /></th>
+                    <th className={classes.th}>Environment<div {...getResizeProps('environment')} style={RESIZE_HANDLE_STYLE} /></th>
+                    <th className={classes.th}>Tags<div {...getResizeProps('tags')} style={RESIZE_HANDLE_STYLE} /></th>
                   </tr>
                 </thead>
                 <tbody>
