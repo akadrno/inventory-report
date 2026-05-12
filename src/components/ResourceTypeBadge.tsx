@@ -11,6 +11,7 @@ function friendlyType(type: string, kind?: string): string {
   const lower = type.toLowerCase()
   if (kind) return kind
   if (lower.includes('modeldriven')) return 'Model Driven'
+  if (lower.includes('codeapp') || lower.includes('codeapps')) return 'Code App'
   if (lower.includes('canvasapp') || lower.includes('/apps')) return 'Canvas App'
   if (lower.includes('flow') || lower.includes('logic')) return 'Cloud Flow'
   if (lower.includes('bot') || lower.includes('agent') || lower.includes('copilot')) return 'Agent'
