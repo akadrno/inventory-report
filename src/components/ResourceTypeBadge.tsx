@@ -7,7 +7,7 @@ interface ResourceTypeBadgeProps {
   kind?: string
 }
 
-function friendlyType(type: string, kind?: string): string {
+export function friendlyType(type: string, kind?: string): string {
   const lower = type.toLowerCase()
   if (kind) return kind
   if (lower.includes('modeldriven')) return 'Model Driven'

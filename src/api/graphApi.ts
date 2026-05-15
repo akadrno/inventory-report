@@ -1,5 +1,5 @@
-import { IPublicClientApplication } from '@azure/msal-browser'
-import { graphScopes } from '../auth/msalConfig'
+import { IPublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser'
+import { graphScopes, graphOrgScopes, msalInstance as defaultMsalInstance } from '../auth/msalConfig'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 
@@ -110,4 +110,79 @@ export async function resolveOwnerIds(
   }
 
   return result
+}
+
+// ── License / SubscribedSku fetching ─────────────────────────────────────────
+
+export interface SubscribedSkuPrepaidUnits {
+  enabled: number
+  suspended: number
+  warning: number
+  lockedOut: number
+}
+
+export interface ServicePlanInfo {
+  servicePlanId: string
+  servicePlanName: string
+  provisioningStatus: string
+  appliesTo: string
+}
+
+export interface SubscribedSku {
+  id: string
+  skuId: string
+  skuPartNumber: string
+  appliesTo: string
+  capabilityStatus: string
+  consumedUnits: number
+  prepaidUnits: SubscribedSkuPrepaidUnits
+  servicePlans: ServicePlanInfo[]
+}
+
+const POWER_PLATFORM_SKU_KEYWORDS = [
+  'powerapps', 'power_apps',
+  'flow', 'power_automate', 'powerautomate',
+  'copilot', 'virtual_agent', 'powervirtualagent', 'power_virtual',
+  'copilotstudio',
+]
+
+export function isPowerPlatformSku(sku: SubscribedSku): boolean {
+  const partLower = sku.skuPartNumber.toLowerCase()
+  if (POWER_PLATFORM_SKU_KEYWORDS.some(kw => partLower.includes(kw))) return true
+  // Also check service plan names
+  return sku.servicePlans.some(sp => {
+    const spLower = sp.servicePlanName.toLowerCase()
+    return POWER_PLATFORM_SKU_KEYWORDS.some(kw => spLower.includes(kw))
+  })
+}
+
+let _orgTokenInFlight: Promise<string> | null = null
+
+async function getGraphOrgToken(): Promise<string> {
+  if (_orgTokenInFlight) return _orgTokenInFlight
+  const account = defaultMsalInstance.getAllAccounts()[0]
+  if (!account) throw new Error('No authenticated account')
+  _orgTokenInFlight = (async () => {
+    try {
+      const result = await defaultMsalInstance.acquireTokenSilent({ scopes: graphOrgScopes, account })
+      return result.accessToken
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        const result = await defaultMsalInstance.acquireTokenPopup({ scopes: graphOrgScopes, account })
+        return result.accessToken
+      }
+      throw e
+    }
+  })().finally(() => { _orgTokenInFlight = null })
+  return _orgTokenInFlight
+}
+
+export async function fetchSubscribedSkus(): Promise<SubscribedSku[]> {
+  const token = await getGraphOrgToken()
+  const res = await fetch(`${GRAPH_BASE}/subscribedSkus`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`SubscribedSkus fetch failed: ${res.status}`)
+  const json = await res.json() as { value: SubscribedSku[] }
+  return json.value ?? []
 }

@@ -8,12 +8,13 @@ import {
   OpenRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getOwnerFromProperties, getDisplayName, getEnvironmentName } from '../types'
+import { getResourceCategory, getOwnerFromProperties, getDisplayName } from '../types'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { EnvironmentBadge } from './EnvironmentBadge'
-import { ResourceDetailModal } from './ResourceDetailModal'
+import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
+import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
 
 export { getResourceCategory }
 
@@ -192,41 +193,6 @@ function resolveOwner(raw: string, ownerNames?: Map<string, string>): string {
   return GUID_RE.test(raw) ? (ownerNames?.get(raw) ?? raw) : raw
 }
 
-const ENV_IN_PATH_RE = /\/environments\/([^/]+)/i
-
-function extractEnvIdFromPath(id: string): string | undefined {
-  return ENV_IN_PATH_RE.exec(id)?.[1]
-}
-
-function envMapLookup(key: string, envMap: Map<string, string>): string | undefined {
-  return envMap.get(key) ?? envMap.get(key.toLowerCase())
-}
-
-function resolveEnvironmentName(item: ResourceItem, envMap: Map<string, string>): string {
-  // 1. Explicit top-level field
-  if (item.environmentId) {
-    const r = envMapLookup(item.environmentId, envMap)
-    if (r) return r
-  }
-  // 2. Extract environment GUID from the resource's own id path
-  //    e.g. /providers/Microsoft.PowerPlatform/environments/{envId}/apps/{appId}
-  const envIdFromPath = extractEnvIdFromPath(item.id)
-  if (envIdFromPath) {
-    const r = envMapLookup(envIdFromPath, envMap)
-    if (r) return r
-    // If envMap is empty (still loading) fall through to show the raw GUID
-    if (envMap.size === 0) return envIdFromPath
-  }
-  // 3. Properties-based candidates (may already be a display name)
-  const raw = getEnvironmentName(item)
-  if (raw) {
-    const r = envMapLookup(raw, envMap)
-    if (r) return r
-    return raw
-  }
-  return envIdFromPath ?? item.environmentId ?? '—'
-}
-
 function ResourceIcon({ type }: { type: string }) {
   const category = getResourceCategory(type)
   if (category === 'apps') return <PowerAppsIcon fontSize={16} />
@@ -243,23 +209,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
   const classes = useClasses()
   const { widths, getResizeProps } = useResizableColumns({ name: 260, type: 150, environment: 210, owner: 180, region: 110 })
 
-  const envMap = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const env of allEnvironments ?? []) {
-      const displayName = getDisplayName(env)
-      // Index by every plausible key format
-      m.set(env.id, displayName)
-      m.set(env.name, displayName)
-      // Last segment of the id path (e.g. "Default-abc" from "/providers/.../Default-abc")
-      const seg = env.id.split('/').pop()
-      if (seg) m.set(seg, displayName)
-      // Case-insensitive variants
-      m.set(env.id.toLowerCase(), displayName)
-      m.set(env.name.toLowerCase(), displayName)
-      if (seg) m.set(seg.toLowerCase(), displayName)
-    }
-    return m
-  }, [allEnvironments])
+  const envMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
 
   const isSystem = (r: ResourceItem) => {
     const raw = getOwnerFromProperties(r)
@@ -418,7 +368,11 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
       </div>
 
       {selected && (
-        <ResourceDetailModal resource={selected} onClose={() => setSelected(null)} />
+        <ResourceDetailPanel
+          resource={selected}
+          onClose={() => setSelected(null)}
+          allEnvironments={allEnvironments}
+        />
       )}
     </>
   )

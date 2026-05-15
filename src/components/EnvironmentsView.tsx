@@ -20,7 +20,7 @@ import { getDisplayName, getOwnerFromProperties, getEnvironmentIdFromPath } from
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { EnvironmentBadge } from './EnvironmentBadge'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
-import { ResourceDetailModal } from './ResourceDetailModal'
+import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { getResourceCategory } from '../types'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 
@@ -392,7 +392,7 @@ function EnvironmentResourcesView({
         </div>
       )}
 
-      {selected && <ResourceDetailModal resource={selected} onClose={() => setSelected(null)} />}
+      {selected && <ResourceDetailPanel resource={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

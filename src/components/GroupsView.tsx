@@ -27,7 +27,7 @@ import {
 } from '../types'
 import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
-import { ResourceDetailModal } from './ResourceDetailModal'
+import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
@@ -366,7 +366,7 @@ function EnvironmentTable({
         </div>
       </div>
 
-      {detailEnv && <ResourceDetailModal resource={detailEnv} onClose={() => setDetailEnv(null)} />}
+      {detailEnv && <ResourceDetailPanel resource={detailEnv} onClose={() => setDetailEnv(null)} />}
     </>
   )
 }
@@ -498,7 +498,7 @@ function EnvironmentResourcesView({
         </div>
       )}
 
-      {selected && <ResourceDetailModal resource={selected} onClose={() => setSelected(null)} />}
+      {selected && <ResourceDetailPanel resource={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

@@ -86,7 +86,7 @@ export function Filters({ filters, environments, onChange }: FiltersProps) {
           <Input
             className={classes.searchInput}
             contentBefore={<SearchRegular />}
-            placeholder="Search by name..."
+            placeholder="Search by name, environment, owner, or region..."
             value={filters.search}
             onChange={(_, d) => set({ search: d.value })}
           />

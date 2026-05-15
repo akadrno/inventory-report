@@ -14,7 +14,7 @@ import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory, getEnvironmentIdFromPath, getIsManagedEnvironment } from '../types'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
-import { ResourceDetailModal } from './ResourceDetailModal'
+import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { useEnvironmentCapacity } from '../hooks/useGovernance'
 import type { EnvironmentCapacity } from '../hooks/useGovernance'
@@ -382,7 +382,7 @@ function UserResourcesView({
         </div>
       </div>
 
-      {selected && <ResourceDetailModal resource={selected} onClose={() => setSelected(null)} />}
+      {selected && <ResourceDetailPanel resource={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

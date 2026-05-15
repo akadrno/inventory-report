@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchDLPPolicies, fetchTenantSettings, fetchEnvironmentCapacity, fetchBillingPolicies } from '../api/governanceApi'
 import type { DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy } from '../api/governanceApi'
+import { fetchSubscribedSkus } from '../api/graphApi'
+import type { SubscribedSku } from '../api/graphApi'
 
-export type { DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy }
+export type { DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy, SubscribedSku }
 
 export function useDLPPolicies() {
   return useQuery<DLPPolicy[], Error>({
@@ -35,6 +37,15 @@ export function useBillingPolicies() {
   return useQuery<BillingPolicy[], Error>({
     queryKey: ['billing-policies'],
     queryFn: fetchBillingPolicies,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useLicenses() {
+  return useQuery<SubscribedSku[], Error>({
+    queryKey: ['subscribed-skus'],
+    queryFn: fetchSubscribedSkus,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })

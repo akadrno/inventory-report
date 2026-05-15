@@ -23,6 +23,8 @@ import {
   TagMultipleRegular,
   TagRegular,
   BookmarkRegular,
+  CertificateRegular,
+  ChartMultipleRegular,
 } from '@fluentui/react-icons'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useMsal } from '@azure/msal-react'
@@ -30,7 +32,9 @@ import { useResources } from '../hooks/useResources'
 import { useEnvironmentGroups } from '../hooks/useEnvironmentGroups'
 import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
-import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
+import { useDLPPolicies, useTenantSettings, useLicenses } from '../hooks/useGovernance'
+import type { SubscribedSku } from '../hooks/useGovernance'
+import { isPowerPlatformSku } from '../api/graphApi'
 import { ResourceTable } from './ResourceTable'
 import { GroupsView } from './GroupsView'
 import { UsersView } from './UsersView'
@@ -38,6 +42,7 @@ import { EnvironmentsView } from './EnvironmentsView'
 import { ReportView, RecsTab, buildRecs } from './ReportView'
 import { MakerAnalyticsView } from './MakerAnalyticsView'
 import { RiskAssessmentView } from './RiskAssessmentView'
+import { UsageView } from './UsageView'
 import { ResourceTaggingView } from './ResourceTaggingView'
 import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
@@ -70,9 +75,10 @@ const STROKE1 = '#edebe9'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RailSection = 'home' | 'inventory' | 'governance' | 'tags'
+type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
+type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -258,12 +264,7 @@ function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: s
   return (
     <header className={classes.header}>
       <div className={classes.headerLeft} />
-      <div className={classes.headerCenter}>
-        <div style={{ width: '100%', maxWidth: '468px', height: '32px', backgroundColor: ACTIVE_BG, border: `1px solid #d1d1d1`, borderRadius: '4px', display: 'flex', alignItems: 'center', padding: '0 8px', gap: '6px', opacity: 0.7 }}>
-          <SearchRegular style={{ color: MUTED, fontSize: 16, flexShrink: 0 }} />
-          <span style={{ fontSize: '13px', color: MUTED }}>Search Power Platform Inventory…</span>
-        </div>
-      </div>
+      <div className={classes.headerCenter} />
       <div className={classes.headerRight}>
         <span style={{ fontSize: '13px', color: '#605e5c', marginRight: '4px' }}>{userName}</span>
         <div style={{ position: 'relative' }}>
@@ -519,6 +520,224 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
   )
 }
 
+// ── Licensing helpers ──────────────────────────────────────────────────────────
+
+type SkuCategory = 'power-apps' | 'power-automate' | 'copilot-studio'
+
+function categorizeSku(partNumber: string, servicePlans: { servicePlanName: string }[]): SkuCategory | null {
+  const p = partNumber.toLowerCase()
+  if (p.includes('powerapps') || p.includes('power_apps')) return 'power-apps'
+  if (p.includes('flow') || p.includes('power_automate') || p.includes('powerautomate')) return 'power-automate'
+  if (p.includes('copilot') || p.includes('virtual_agent') || p.includes('powervirtualagent') || p.includes('copilotstudio')) return 'copilot-studio'
+  // Check service plan names as fallback
+  for (const sp of servicePlans) {
+    const s = sp.servicePlanName.toLowerCase()
+    if (s.includes('powerapps') || s.includes('power_apps')) return 'power-apps'
+    if (s.includes('flow') || s.includes('power_automate')) return 'power-automate'
+    if (s.includes('copilot') || s.includes('virtual_agent') || s.includes('copilotstudio')) return 'copilot-studio'
+  }
+  return null
+}
+
+function formatSkuName(partNumber: string): string {
+  return partNumber.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+const LICENSING_LABELS: Record<LicensingView, string> = {
+  summary: 'Summary',
+  'power-apps': 'Power Apps',
+  'power-automate': 'Power Automate',
+  'copilot-studio': 'Copilot Studio',
+}
+
+// ── Licensing: Product page ───────────────────────────────────────────────────
+
+function LicensingProductPage({ product, skus }: { product: LicensingView; skus: SubscribedSku[] }) {
+  const classes = useClasses()
+
+  const productSkus = useMemo(() => {
+    if (product === 'summary') return skus
+    return skus.filter(s => categorizeSku(s.skuPartNumber, s.servicePlans) === product)
+  }, [skus, product])
+
+  const totalPurchased = productSkus.reduce((s, sk) => s + sk.prepaidUnits.enabled, 0)
+  const totalAssigned = productSkus.reduce((s, sk) => s + sk.consumedUnits, 0)
+
+  const productIcon = product === 'power-apps' ? <PowerAppsIcon fontSize={24} />
+    : product === 'power-automate' ? <PowerAutomateIcon fontSize={24} />
+    : product === 'copilot-studio' ? <CopilotStudioIcon fontSize={24} />
+    : <CertificateRegular fontSize={24} style={{ color: ACTIVE }} />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Product header */}
+      {product !== 'summary' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {productIcon}
+          <Text style={{ fontSize: '18px', fontWeight: 600, color: TEXT }}>{LICENSING_LABELS[product]}</Text>
+        </div>
+      )}
+
+      {/* Capacity summary */}
+      <div className={classes.sectionCard}>
+        <div className={classes.cardHead}>
+          <CertificateRegular fontSize={16} style={{ color: ACTIVE }} />
+          Capacity summary
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1 }}>
+          {/* Left: totals */}
+          <div style={{ padding: '16px 20px', borderRightWidth: '1px', borderRightStyle: 'solid', borderRightColor: STROKE1 }}>
+            <Caption1 style={{ color: MUTED, display: 'block', marginBottom: '12px' }}>License totals</Caption1>
+            <div style={{ display: 'flex', gap: '32px' }}>
+              <div>
+                <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: TEXT }}>{productSkus.length}</Text>
+                <Caption1 style={{ color: MUTED }}>SKUs</Caption1>
+              </div>
+              <div>
+                <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: TEXT }}>{totalPurchased.toLocaleString()}</Text>
+                <Caption1 style={{ color: MUTED }}>Purchased</Caption1>
+              </div>
+              <div>
+                <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: TEXT }}>{totalAssigned.toLocaleString()}</Text>
+                <Caption1 style={{ color: MUTED }}>Assigned</Caption1>
+              </div>
+            </div>
+          </div>
+          {/* Right: prepaid capacity table */}
+          <div style={{ padding: '0' }}>
+            <table className={classes.table}>
+              <thead>
+                <tr>
+                  <th className={classes.th}>License</th>
+                  <th className={classes.thR}>Purchased</th>
+                  <th className={classes.thR}>Assigned</th>
+                  <th className={classes.thR}>Consumed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productSkus.length === 0 ? (
+                  <tr>
+                    <td className={classes.td} colSpan={4}>
+                      <Caption1 style={{ color: MUTED }}>No licenses in this category</Caption1>
+                    </td>
+                  </tr>
+                ) : productSkus.map(sku => {
+                  const purchased = sku.prepaidUnits.enabled
+                  const consumed = sku.consumedUnits
+                  const over = consumed > purchased
+                  return (
+                    <tr key={sku.id}>
+                      <td className={classes.td}>
+                        <Text style={{ fontSize: '13px' }}>{formatSkuName(sku.skuPartNumber)}</Text>
+                      </td>
+                      <td className={classes.tdR}>{purchased.toLocaleString()}</td>
+                      <td className={classes.tdR}>{consumed.toLocaleString()}</td>
+                      <td className={classes.tdR}>
+                        {over ? (
+                          <span style={{ color: '#c50f1f', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                            <WarningRegular fontSize={14} />
+                            {consumed.toLocaleString()}
+                          </span>
+                        ) : consumed.toLocaleString()}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed SKU list */}
+      <div className={classes.sectionCard}>
+        <div className={classes.cardHead}>
+          <GridRegular fontSize={16} style={{ color: ACTIVE }} />
+          License details
+          <Badge appearance="tint" color="informative" size="small">{productSkus.length} SKU{productSkus.length !== 1 ? 's' : ''}</Badge>
+        </div>
+        <table className={classes.table}>
+          <thead>
+            <tr>
+              <th className={classes.th}>License</th>
+              <th className={classes.th}>Status</th>
+              <th className={classes.thR}>Available</th>
+              <th className={classes.thR}>Assigned</th>
+              <th className={classes.thR}>Utilization</th>
+            </tr>
+          </thead>
+          <tbody>
+            {productSkus.length === 0 ? (
+              <tr>
+                <td className={classes.td} colSpan={5}>
+                  <Caption1 style={{ color: MUTED }}>No licenses found for this product</Caption1>
+                </td>
+              </tr>
+            ) : productSkus.sort((a, b) => b.consumedUnits - a.consumedUnits).map(sku => {
+              const avail = sku.prepaidUnits.enabled
+              const used = sku.consumedUnits
+              const pct = avail > 0 ? Math.round((used / avail) * 100) : 0
+              const over = used > avail
+              return (
+                <tr key={sku.id}>
+                  <td className={classes.td}>
+                    <Text style={{ fontWeight: 600, fontSize: '13px', display: 'block' }}>{formatSkuName(sku.skuPartNumber)}</Text>
+                    <Caption1 style={{ color: MUTED }}>{sku.skuPartNumber}</Caption1>
+                  </td>
+                  <td className={classes.td}>
+                    <Badge
+                      appearance="tint"
+                      color={sku.capabilityStatus === 'Enabled' ? 'success' : sku.capabilityStatus === 'Warning' ? 'warning' : 'danger'}
+                      size="small"
+                    >
+                      {sku.capabilityStatus}
+                    </Badge>
+                  </td>
+                  <td className={classes.tdR}>{avail.toLocaleString()}</td>
+                  <td className={classes.tdR}>{used.toLocaleString()}</td>
+                  <td className={classes.tdR}>
+                    <span style={{ color: over ? '#c50f1f' : pct >= 90 ? '#e17800' : undefined }}>
+                      {avail > 0 ? `${pct}%` : '—'}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Licensing: Content wrapper ────────────────────────────────────────────────
+
+function LicensingContent({ licView }: { licView: LicensingView }) {
+  const classes = useClasses()
+  const { data, isLoading, isError } = useLicenses()
+
+  if (isLoading) return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading licenses…" /></div>
+  if (isError || !data) return (
+    <div className={classes.sectionCard}>
+      <div className={classes.permNotice}>
+        <LockClosedRegular fontSize={16} />
+        <Caption1>Requires Organization.Read.All permission on Microsoft Graph. Ensure the app registration has this scope and admin consent has been granted.</Caption1>
+      </div>
+    </div>
+  )
+
+  const ppSkus = data.filter(isPowerPlatformSku)
+
+  return (
+    <>
+      <div className={classes.contentHeader}>
+        <Text className={classes.pageTitle}>Licenses</Text>
+      </div>
+      <LicensingProductPage product={licView} skus={ppSkus} />
+    </>
+  )
+}
+
 // ── Inventory content header ───────────────────────────────────────────────────
 
 const INV_LABELS: Record<InvView, string> = {
@@ -532,6 +751,7 @@ export function Shell() {
   const [rail, setRail] = useState<RailSection>('home')
   const [invView, setInvView] = useState<InvView>('all')
   const [govView, setGovView] = useState<GovView>('overview')
+  const [licView, setLicView] = useState<LicensingView>('summary')
   const [tagView, setTagView] = useState<TagView>('browser')
   const [search, setSearch] = useState('')
   const [panelOpen, setPanelOpen] = useState(true)
@@ -701,6 +921,30 @@ export function Shell() {
         </>
       )
     }
+
+    if (rail === 'licensing') {
+      return <LicensingContent licView={licView} />
+    }
+
+    if (rail === 'usage') {
+      return (
+        <>
+          <div className={classes.contentHeader}>
+            <div>
+              <Text className={classes.pageTitle}>Usage</Text>
+              <Caption1 className={classes.pageSub}>
+                Adoption and activity across your Power Platform resources.
+              </Caption1>
+            </div>
+          </div>
+          <UsageView
+            allResources={nonSystemResources}
+            allEnvironments={allEnvironments}
+            ownerNames={ownerNames}
+          />
+        </>
+      )
+    }
   }
 
   return (
@@ -716,7 +960,9 @@ export function Shell() {
           <RailButton icon={<HomeRegular />} label="Home" active={rail === 'home'} onClick={() => handleRailClick('home')} />
           <RailButton icon={<ClipboardBulletListRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />
           <RailButton icon={<ShieldRegular />} label="Governance" active={rail === 'governance'} onClick={() => handleRailClick('governance')} />
+          <RailButton icon={<ChartMultipleRegular />} label="Usage" active={rail === 'usage'} onClick={() => handleRailClick('usage')} />
           <RailButton icon={<TagMultipleRegular />} label="Tagging" active={rail === 'tags'} onClick={() => handleRailClick('tags')} />
+          <RailButton icon={<CertificateRegular />} label="Licensing" active={rail === 'licensing'} onClick={() => handleRailClick('licensing')} />
         </nav>
 
         {/* Secondary panel */}
@@ -783,6 +1029,28 @@ export function Shell() {
             )}
             <NavItem icon={<TagRegular />} label="Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
             <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />
+          </div>
+        )}
+
+        {rail === 'licensing' && (
+          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
+            {panelOpen ? (
+              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ flex: 1 }}>Licensing</span>
+                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
+                  <ChevronLeftRegular fontSize={16} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
+                <ChevronRightRegular fontSize={16} />
+              </button>
+            )}
+            <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />
+            {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
+            <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />
+            <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />
+            <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Copilot Studio" active={licView === 'copilot-studio'} onClick={() => setLicView('copilot-studio')} collapsed={!panelOpen} />
           </div>
         )}
 

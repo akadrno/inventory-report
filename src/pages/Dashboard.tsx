@@ -16,6 +16,7 @@ import { ReportView } from '../components/ReportView'
 import { ErrorBanner } from '../components/ErrorBanner'
 import type { ResourceFilters } from '../types'
 import { getResourceCategory, getDisplayName, getEnvironmentName, getOwnerFromProperties } from '../types'
+import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 
 const useClasses = makeStyles({
   main: {
@@ -97,6 +98,40 @@ export function Dashboard() {
     return ids.size
   }, [allResources])
 
+  const envNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const env of allEnvironments) {
+      const name = getDisplayName(env)
+      m.set(env.id.toLowerCase(), name)
+      m.set(env.name.toLowerCase(), name)
+      const seg = env.id.split('/').pop()
+      if (seg) m.set(seg.toLowerCase(), name)
+    }
+    return m
+  }, [allEnvironments])
+
+  const ENV_IN_PATH_RE = /\/environments\/([^/]+)/i
+
+  const resolveEnvName = (r: typeof allResources[number]): string => {
+    if (r.environmentId) {
+      const n = envNameById.get(r.environmentId.toLowerCase())
+      if (n) return n
+    }
+    const pathEnv = ENV_IN_PATH_RE.exec(r.id)?.[1]
+    if (pathEnv) {
+      const n = envNameById.get(pathEnv.toLowerCase())
+      if (n) return n
+    }
+    return getEnvironmentName(r) ?? ''
+  }
+
+  const resolveOwnerName = (r: typeof allResources[number]): string => {
+    const raw = getOwnerFromProperties(r)
+    if (raw === '—') return ''
+    if (raw.startsWith(SYSTEM_PREFIX)) return 'system'
+    return GUID_RE.test(raw) ? (ownerNames?.get(raw) ?? raw) : raw
+  }
+
   const filtered = useMemo(() => {
     if (DRILLDOWN_TABS.has(filters.resourceTab)) return []
     let items = allResources
@@ -108,15 +143,20 @@ export function Dashboard() {
     }
     if (filters.search.trim()) {
       const q = filters.search.toLowerCase()
-      items = items.filter(r =>
-        getDisplayName(r).toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q) ||
-        (getEnvironmentName(r) ?? '').toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q),
-      )
+      items = items.filter(r => {
+        const region = (r.environmentRegion ?? r.location ?? '').toLowerCase()
+        return (
+          getDisplayName(r).toLowerCase().includes(q) ||
+          r.name.toLowerCase().includes(q) ||
+          resolveEnvName(r).toLowerCase().includes(q) ||
+          resolveOwnerName(r).toLowerCase().includes(q) ||
+          region.includes(q) ||
+          r.type.toLowerCase().includes(q)
+        )
+      })
     }
     return items
-  }, [allResources, filters])
+  }, [allResources, filters, envNameById, ownerNames])
 
   const isLoadingResources = resources.isLoading && allResources.length === 0
   const isLoadingGroups = groups.isLoading && allGroups.length === 0

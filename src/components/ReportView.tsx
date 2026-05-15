@@ -329,6 +329,7 @@ function OverviewTab({ allResources, allEnvironments }: ReportViewProps) {
           : cat === 'flows' ? 'Cloud Flows'
           : lower.includes('canvas') ? 'Canvas Apps'
           : lower.includes('model') ? 'Model-driven Apps'
+          : lower.includes('codeapp') ? 'Code Apps'
           : r.type.split('/').pop() ?? r.type
         counts.set(key, { label, count: 1, category: cat })
       }
