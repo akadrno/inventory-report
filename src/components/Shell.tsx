@@ -81,6 +81,9 @@ const STROKE1 = tokens.colorNeutralStroke2
 type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
 type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
+type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
+type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
+type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
 
@@ -308,6 +311,31 @@ function RailButton({
         <span style={{ fontSize: 24, color: active ? ACTIVE : MUTED, lineHeight: 1 }}>{icon}</span>
         <span style={{ fontSize: 10, color: active ? ACTIVE : MUTED, textAlign: 'center', maxWidth: 48, lineHeight: '14px' }}>{label}</span>
       </button>
+    </div>
+  )
+}
+
+// ── Sub-filter row (Inventory: distinguish flow / app / agent / env subtypes) ─
+
+function SubFilterRow<T extends string>({
+  value, onChange, options,
+}: {
+  value: T
+  onChange: (next: T) => void
+  options: { key: T; label: string }[]
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+      {options.map(opt => (
+        <Button
+          key={opt.key}
+          size="small"
+          appearance={value === opt.key ? 'primary' : 'subtle'}
+          onClick={() => onChange(opt.key)}
+        >
+          {opt.label}
+        </Button>
+      ))}
     </div>
   )
 }
@@ -765,6 +793,9 @@ export function Shell() {
   const [rail, setRail] = useState<RailSection>('home')
   const [invView, setInvView] = useState<InvView>('all')
   const [flowSubView, setFlowSubView] = useState<FlowSubView>('all')
+  const [appSubView, setAppSubView] = useState<AppSubView>('all')
+  const [agentSubView, setAgentSubView] = useState<AgentSubView>('all')
+  const [envSubView, setEnvSubView] = useState<EnvSubView>('all')
   const [govView, setGovView] = useState<GovView>('overview')
   const [licView, setLicView] = useState<LicensingView>('summary')
   const [tagView, setTagView] = useState<TagView>('browser')
@@ -805,6 +836,27 @@ export function Shell() {
         return !t.includes('agentflow')
       })
     }
+    if (invView === 'apps' && appSubView !== 'all') {
+      items = items.filter(r => {
+        const t = r.type.toLowerCase()
+        if (appSubView === 'canvas') return t.includes('canvas')
+        if (appSubView === 'modeldriven') return t.includes('modeldriven')
+        if (appSubView === 'code') return t.includes('codeapp')
+        // 'appbuilder' = microsoft.powerapps/apps (the generic /apps type slot)
+        return t === 'microsoft.powerapps/apps'
+      })
+    }
+    if (invView === 'agents' && agentSubView !== 'all') {
+      items = items.filter(r => {
+        const createdIn = String(
+          (r.properties?.['createdIn'] ?? r.properties?.['CreatedIn'] ?? '') as string,
+        ).toLowerCase()
+        const isM365Builder = createdIn.includes('agent builder') || createdIn.includes('microsoft 365')
+        if (agentSubView === 'm365builder') return isM365Builder
+        // 'copilotstudio' = everything that isn't explicitly M365 Agent Builder
+        return !isM365Builder
+      })
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       items = items.filter(r =>
@@ -814,7 +866,24 @@ export function Shell() {
       )
     }
     return items
-  }, [allResources, invView, flowSubView, search, hideSystemInv])
+  }, [allResources, invView, flowSubView, appSubView, agentSubView, search, hideSystemInv])
+
+  const filteredEnvironments = useMemo(() => {
+    if (envSubView === 'all') return allEnvironments
+    const targetMap: Record<Exclude<EnvSubView, 'all'>, string> = {
+      production: 'production',
+      default: 'default',
+      sandbox: 'sandbox',
+      trial: 'trial',
+      developer: 'developer',
+      teams: 'teams',
+    }
+    const target = targetMap[envSubView]
+    return allEnvironments.filter(env => {
+      const t = String(env.environmentType ?? env.properties?.['environmentType'] ?? '').toLowerCase()
+      return t.includes(target)
+    })
+  }, [allEnvironments, envSubView])
 
   const classes = useClasses()
 
@@ -881,23 +950,55 @@ export function Shell() {
           </div>
 
           {invView === 'flows' && (
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
-              {([
-                { key: 'all',        label: 'All Flows' },
-                { key: 'cloud',      label: 'Cloud Flows' },
-                { key: 'agent',      label: 'Agent Flows' },
-                { key: 'm365agent',  label: 'Workflow Agent Flows' },
-              ] as { key: FlowSubView; label: string }[]).map(opt => (
-                <Button
-                  key={opt.key}
-                  size="small"
-                  appearance={flowSubView === opt.key ? 'primary' : 'subtle'}
-                  onClick={() => setFlowSubView(opt.key)}
-                >
-                  {opt.label}
-                </Button>
-              ))}
-            </div>
+            <SubFilterRow
+              value={flowSubView}
+              onChange={setFlowSubView}
+              options={[
+                { key: 'all',       label: 'All Flows' },
+                { key: 'cloud',     label: 'Cloud Flows' },
+                { key: 'agent',     label: 'Agent Flows' },
+                { key: 'm365agent', label: 'Workflow Agent Flows' },
+              ]}
+            />
+          )}
+          {invView === 'apps' && (
+            <SubFilterRow
+              value={appSubView}
+              onChange={setAppSubView}
+              options={[
+                { key: 'all',         label: 'All Apps' },
+                { key: 'canvas',      label: 'Canvas Apps' },
+                { key: 'modeldriven', label: 'Model-driven Apps' },
+                { key: 'code',        label: 'Code Apps' },
+                { key: 'appbuilder',  label: 'App Builder' },
+              ]}
+            />
+          )}
+          {invView === 'agents' && (
+            <SubFilterRow
+              value={agentSubView}
+              onChange={setAgentSubView}
+              options={[
+                { key: 'all',           label: 'All Agents' },
+                { key: 'copilotstudio', label: 'Copilot Studio' },
+                { key: 'm365builder',   label: 'M365 Agent Builder' },
+              ]}
+            />
+          )}
+          {invView === 'environments' && (
+            <SubFilterRow
+              value={envSubView}
+              onChange={setEnvSubView}
+              options={[
+                { key: 'all',        label: 'All Environments' },
+                { key: 'production', label: 'Production' },
+                { key: 'default',    label: 'Default' },
+                { key: 'sandbox',    label: 'Sandbox' },
+                { key: 'trial',      label: 'Trial' },
+                { key: 'developer',  label: 'Developer' },
+                { key: 'teams',      label: 'Dataverse for Teams' },
+              ]}
+            />
           )}
 
           {resources.error && <ErrorBanner error={resources.error} onRetry={() => resources.refetch()} />}
@@ -907,7 +1008,7 @@ export function Shell() {
             : invView === 'users'
             ? <UsersView resources={nonSystemResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
             : invView === 'environments'
-            ? <EnvironmentsView environments={allEnvironments} allResources={nonSystemResources} ownerNames={ownerNames} />
+            ? <EnvironmentsView environments={filteredEnvironments} allResources={nonSystemResources} ownerNames={ownerNames} />
             : <ResourceTable key={invView} resources={filtered} isLoading={isLoadingResources} ownerNames={ownerNames} allEnvironments={allEnvironments} />
           }
         </>
