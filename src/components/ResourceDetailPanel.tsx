@@ -470,7 +470,7 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
                 </span>
               </Row>
             )}
-            {agentModel && <Row label="AI model">{agentModel}</Row>}
+            {agentModel && <Row label="Model">{agentModel}</Row>}
             {resourceGuid && <Row label="Resource GUID">{resourceGuid}</Row>}
             {agentId && <Row label="Agent ID">{agentId}</Row>}
             {resourceUrl && (
@@ -914,7 +914,7 @@ function buildOverviewText(resource: ResourceItem, allEnvironments: ResourceItem
   add('Status', getStatus(resource))
   const channels = getPublishedChannels(resource)
   if (channels.length) add('Published to', channels.join(', '))
-  add('AI model', getAgentModel(resource))
+  add('Model', getAgentModel(resource))
   add('Resource GUID', getResourceGuid(resource))
   add('Resource URL', getResourceUrl(resource))
   add('Environment', resolveEnvironmentName(resource, envMap))
