@@ -80,6 +80,7 @@ const STROKE1 = tokens.colorNeutralStroke2
 
 type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
+type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
 
@@ -497,7 +498,7 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
         <div className={classes.finding} style={{ backgroundColor: '#fde7e9', borderLeftColor: '#c50f1f' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ErrorCircleRegular fontSize={16} style={{ color: '#c50f1f' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px' }}>No DLP policies found — all connectors unrestricted</Text>
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>No DLP policies found — all connectors unrestricted</Text>
           </div>
           <Caption1 style={{ color: '#605e5c' }}>Without DLP policies, any connector can communicate with any other. Sensitive data can be exfiltrated with no audit trail.</Caption1>
         </div>
@@ -506,7 +507,7 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
         <div className={classes.finding} style={{ backgroundColor: '#fde7e9', borderLeftColor: '#c50f1f' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ErrorCircleRegular fontSize={16} style={{ color: '#c50f1f' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px' }}>All connectors in General — no data separation</Text>
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>All connectors in General — no data separation</Text>
           </div>
           <Caption1 style={{ color: '#605e5c' }}>Move sensitive connectors (Dataverse, SharePoint, SQL, Office 365) to the Confidential group.</Caption1>
         </div>
@@ -515,7 +516,7 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
         <div className={classes.finding} style={{ backgroundColor: '#fff4ce', borderLeftColor: '#e17800' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <WarningRegular fontSize={16} style={{ color: '#e17800' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px' }}>No connectors in the Blocked group</Text>
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>No connectors in the Blocked group</Text>
           </div>
           <Caption1 style={{ color: '#605e5c' }}>Block the HTTP connector and custom connectors to prevent arbitrary external data flows.</Caption1>
         </div>
@@ -763,6 +764,7 @@ const INV_LABELS: Record<InvView, string> = {
 export function Shell() {
   const [rail, setRail] = useState<RailSection>('home')
   const [invView, setInvView] = useState<InvView>('all')
+  const [flowSubView, setFlowSubView] = useState<FlowSubView>('all')
   const [govView, setGovView] = useState<GovView>('overview')
   const [licView, setLicView] = useState<LicensingView>('summary')
   const [tagView, setTagView] = useState<TagView>('browser')
@@ -794,6 +796,15 @@ export function Shell() {
     if (invView !== 'all' && invView !== 'environments' && invView !== 'groups' && invView !== 'users') {
       items = items.filter(r => getResourceCategory(r.type) === invView)
     }
+    if (invView === 'flows' && flowSubView !== 'all') {
+      items = items.filter(r => {
+        const t = r.type.toLowerCase()
+        if (flowSubView === 'm365agent') return t.includes('m365agentflow')
+        if (flowSubView === 'agent') return t.includes('agentflow') && !t.includes('m365agentflow')
+        // 'cloud' = flow category, but not agent or m365agent variants
+        return !t.includes('agentflow')
+      })
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       items = items.filter(r =>
@@ -803,7 +814,7 @@ export function Shell() {
       )
     }
     return items
-  }, [allResources, invView, search, hideSystemInv])
+  }, [allResources, invView, flowSubView, search, hideSystemInv])
 
   const classes = useClasses()
 
@@ -868,6 +879,26 @@ export function Shell() {
               />
             </div>
           </div>
+
+          {invView === 'flows' && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              {([
+                { key: 'all',        label: 'All Flows' },
+                { key: 'cloud',      label: 'Cloud Flows' },
+                { key: 'agent',      label: 'Agent Flows' },
+                { key: 'm365agent',  label: 'Workflow Agent Flows' },
+              ] as { key: FlowSubView; label: string }[]).map(opt => (
+                <Button
+                  key={opt.key}
+                  size="small"
+                  appearance={flowSubView === opt.key ? 'primary' : 'subtle'}
+                  onClick={() => setFlowSubView(opt.key)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          )}
 
           {resources.error && <ErrorBanner error={resources.error} onRetry={() => resources.refetch()} />}
 

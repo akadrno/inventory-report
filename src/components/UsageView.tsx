@@ -3,6 +3,7 @@ import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
 import { ChartMultipleRegular } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getResourceCategory, getOwnerFromProperties } from '../types'
+import { useThemeMode } from '../context/ThemeContext'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
@@ -475,10 +476,17 @@ export function UsageView({ allResources, allEnvironments, ownerNames }: UsageVi
   const classes = useClasses()
   const envMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
   const [selected, setSelected] = useState<ResourceItem | null>(null)
+  const { mode } = useThemeMode()
+  // In dark mode the banner's light-blue pastel is replaced with a very light
+  // blue text on a deeper blue background so it reads clearly against the
+  // dark chrome (per request).
+  const introNoteStyle = mode === 'dark'
+    ? { backgroundColor: '#0a2540', borderColor: '#1e3a5f', color: '#cfe4fa' }
+    : undefined
 
   return (
     <div className={classes.root}>
-      <div className={classes.introNote}>
+      <div className={classes.introNote} style={introNoteStyle}>
         <ChartMultipleRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
         <span>
           Telemetry-grade usage data (users, runs, sessions) isn't exposed by the Power Platform inventory API.
