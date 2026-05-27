@@ -785,7 +785,7 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
     <div className={classes.root}>
       {/* Hero */}
       <div className={classes.hero}>
-        <Text size={600} weight="bold" className={classes.heroTitle}>Power Platform Inventory Report</Text>
+        <Text size={600} weight="bold" className={classes.heroTitle}>Inventory and Governance Report</Text>
         <Caption1 className={classes.heroSub}>
           Live data from your tenant · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
         </Caption1>
@@ -847,7 +847,7 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
       {tab === 'recommendations' && <RecsTab allEnvironments={allEnvironments} />}
 
       <div style={{ textAlign: 'center', padding: tokens.spacingVerticalL, color: tokens.colorNeutralForeground3, borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: tokens.colorNeutralStroke2, marginTop: tokens.spacingVerticalL }}>
-        <Caption1>Power Platform Inventory Report · Generated {new Date().toLocaleString()}</Caption1>
+        <Caption1>Inventory and Governance Report · Generated {new Date().toLocaleString()}</Caption1>
       </div>
     </div>
   )

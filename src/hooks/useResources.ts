@@ -18,14 +18,28 @@ export function useResources() {
         onDebug: addEntry,
       }),
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) => lastPage.skipToken,
+    // Continue paginating as long as the API hands us a continuation token.
+    // We deliberately ignore `resultTruncated` here — only the absence of a
+    // skipToken signals the true end of the result set.
+    getNextPageParam: (lastPage) => lastPage.skipToken ?? undefined,
   })
 
+  const pagesLoaded = query.data?.pages.length ?? 0
+  const lastPage = query.data?.pages[pagesLoaded - 1]
+
+  // Auto-chain page fetches until exhausted. We include `pagesLoaded` so the
+  // effect retriggers after every successful page (otherwise hasNextPage may
+  // stay `true` across renders and React skips the re-run).
   useEffect(() => {
-    if (query.hasNextPage && !query.isFetchingNextPage) {
+    if (query.hasNextPage && !query.isFetchingNextPage && !query.isError) {
       query.fetchNextPage()
     }
-  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage])
+    // Surface the rare case where the API reports more data without giving
+    // us a way to fetch it — otherwise we'd silently under-report counts.
+    if (lastPage && lastPage.resultTruncated && !lastPage.skipToken) {
+      console.warn('useResources: page reports truncated results without a skipToken; cannot continue pagination', lastPage)
+    }
+  }, [query.hasNextPage, query.isFetchingNextPage, query.isError, query.fetchNextPage, pagesLoaded, lastPage])
 
   return query
 }

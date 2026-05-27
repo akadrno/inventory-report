@@ -182,10 +182,16 @@ export async function fetchAllResources(
   const all: ResourceItem[] = []
   let skipToken: string | undefined
 
+  // Drive pagination off the continuation token alone. Some response shapes
+  // set `resultTruncated` to 0 even when a skipToken is present, so we only
+  // stop when the API explicitly omits the token.
   do {
-    const result = await queryResources(token, { top: 100, skipToken })
+    const result = await queryResources(token, { top: 500, skipToken })
     all.push(...result.data)
-    skipToken = result.resultTruncated === 0 ? result.skipToken : undefined
+    if (result.resultTruncated && !result.skipToken) {
+      console.warn('fetchAllResources: API reports truncated results but provided no continuation token; pagination cannot continue')
+    }
+    skipToken = result.skipToken
   } while (skipToken)
 
   return all
