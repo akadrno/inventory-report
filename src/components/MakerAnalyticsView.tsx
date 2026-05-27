@@ -31,8 +31,8 @@ const useClasses = makeStyles({
     gap: '12px',
   },
   summaryCard: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #edebe9',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: '4px',
     padding: '16px',
     display: 'flex',
@@ -40,8 +40,8 @@ const useClasses = makeStyles({
     gap: '12px',
   },
   card: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #edebe9',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: '4px',
     overflow: 'hidden',
     flexShrink: 0,
@@ -53,10 +53,10 @@ const useClasses = makeStyles({
     padding: '12px 16px 10px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     fontSize: '14px',
     fontWeight: 600,
-    color: '#323130',
+    color: tokens.colorNeutralForeground1,
   },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' as const },
   th: {
@@ -64,11 +64,11 @@ const useClasses = makeStyles({
     textAlign: 'left',
     fontWeight: 600,
     fontSize: '11px',
-    color: '#605e5c',
-    backgroundColor: '#faf9f8',
+    color: tokens.colorNeutralForeground3,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
@@ -80,11 +80,11 @@ const useClasses = makeStyles({
     textAlign: 'right',
     fontWeight: 600,
     fontSize: '11px',
-    color: '#605e5c',
-    backgroundColor: '#faf9f8',
+    color: tokens.colorNeutralForeground3,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
@@ -95,7 +95,7 @@ const useClasses = makeStyles({
     padding: '10px 16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     verticalAlign: 'middle',
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden' as const,
@@ -106,7 +106,7 @@ const useClasses = makeStyles({
     textAlign: 'right',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     fontVariantNumeric: 'tabular-nums',
     fontWeight: 600,
     whiteSpace: 'nowrap' as const,
@@ -128,7 +128,7 @@ const useClasses = makeStyles({
     padding: '10px 16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     ':last-child': { borderBottom: 'none' },
   },
   connBadges: {
@@ -273,16 +273,16 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
       {/* Summary */}
       <div className={classes.summaryGrid}>
         {[
-          { icon: <PersonRegular fontSize={24} style={{ color: '#004578' }} />, value: makers.length, label: 'Unique Makers' },
-          { icon: <GlobeRegular fontSize={24} style={{ color: '#004578' }} />, value: allEnvironments.length, label: 'Environments' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: makers.length, label: 'Unique Makers' },
+          { icon: <GlobeRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: allEnvironments.length, label: 'Environments' },
           { icon: <PersonRegular fontSize={24} style={{ color: '#e17800' }} />, value: unmanagedMakers.length, label: 'In Unmanaged Envs' },
           { icon: <PersonRegular fontSize={24} style={{ color: '#8764b8' }} />, value: avgResources, label: 'Avg Resources/Maker' },
         ].map(s => (
           <div key={s.label} className={classes.summaryCard}>
             {s.icon}
             <div>
-              <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{s.value}</Text>
-              <Caption1 style={{ color: '#737373' }}>{s.label}</Caption1>
+              <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: tokens.colorNeutralForeground1 }}>{s.value}</Text>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{s.label}</Caption1>
             </div>
           </div>
         ))}
@@ -303,7 +303,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
               <WarningRegular fontSize={14} style={{ color: '#e17800', flexShrink: 0, marginTop: 2 }} />
               <div>
                 <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>{m.displayName}</Text>
-                <Caption1 style={{ color: '#605e5c' }}>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                   Has {m.total} resource{m.total !== 1 ? 's' : ''} in unmanaged environment{m.environmentIds.size !== 1 ? 's' : ''} — these environments lack admin oversight and usage insights.
                 </Caption1>
               </div>
@@ -314,7 +314,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
               <GlobeRegular fontSize={14} style={{ color: '#8764b8', flexShrink: 0, marginTop: 2 }} />
               <div>
                 <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>{m.displayName}</Text>
-                <Caption1 style={{ color: '#605e5c' }}>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                   Resources span {m.environmentIds.size} environments — wide spread can indicate ungoverned development or shadow IT.
                 </Caption1>
               </div>
@@ -326,12 +326,12 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
       {/* Maker leaderboard */}
       <div className={classes.card}>
         <div className={classes.cardHead}>
-          <PersonRegular fontSize={16} style={{ color: '#004578' }} />
+          <PersonRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />
           Maker Leaderboard
           <Badge appearance="tint" color="subtle" size="small">{makers.length} maker{makers.length !== 1 ? 's' : ''}</Badge>
         </div>
         {makers.length === 0 ? (
-          <div style={{ padding: '16px' }}><Caption1 style={{ color: '#737373' }}>No maker data available from loaded resources.</Caption1></div>
+          <div style={{ padding: '16px' }}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No maker data available from loaded resources.</Caption1></div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className={classes.table}>
@@ -362,7 +362,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
                   <tr key={m.id}>
                     <td className={classes.td}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <PersonRegular fontSize={14} style={{ color: '#004578', flexShrink: 0 }} />
+                        <PersonRegular fontSize={14} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
                         <Text style={{ fontSize: '13px', fontWeight: 600 }}>{m.displayName}</Text>
                       </div>
                     </td>
@@ -427,7 +427,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
         <div className={classes.card}>
           <div className={classes.cardHead}>Connector Usage</div>
           <div style={{ padding: '16px' }}>
-            <Caption1 style={{ color: '#737373' }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
               Connector details are not included in the resource inventory query. Connection references are available in individual app/flow manifests via the Power Apps API.
             </Caption1>
           </div>

@@ -26,6 +26,8 @@ import {
   getCreatedBy, getModifiedBy, getPublishedBy,
   getCreatedDate, getModifiedDate, getPublishedDate,
   getOwnerPerson, getAgentId, getAgentModel,
+  getAgentOrchestration, getAgentAuthentication, getAgentCreatedIn, getAgentSchemaName,
+  getIsQuarantined, getFlowWorkflowEntityId, getAppModuleId, getAppLogicalName,
   getEnvironmentGroupId, getEnvironmentGroupName,
   getConnectors, getSharing, getResourceSharingCounts, hasAnySharingCount,
   getAgentKnowledge, getAgentTools, getAgentConnectedAgents,
@@ -424,6 +426,14 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
   const resourceUrl = getResourceUrl(resource)
   const agentId = getAgentId(resource)
   const agentModel = getAgentModel(resource)
+  const agentOrchestration = getAgentOrchestration(resource)
+  const agentAuthentication = getAgentAuthentication(resource)
+  const agentCreatedIn = getAgentCreatedIn(resource)
+  const agentSchemaName = getAgentSchemaName(resource)
+  const isQuarantined = getIsQuarantined(resource)
+  const flowWorkflowEntityId = getFlowWorkflowEntityId(resource)
+  const appModuleId = getAppModuleId(resource)
+  const appLogicalName = getAppLogicalName(resource)
 
   const envName = resolveEnvironmentName(resource, envMap)
   const region = resource.environmentRegion ?? resource.location
@@ -456,9 +466,12 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
               <ProductIconFor productKey={made.productKey} />
               <span>{made.label}</span>
             </Row>
-            {status && (
+            {(status || isQuarantined) && (
               <Row label="Status">
-                <Badge appearance="tint" color="informative" size="small">{status}</Badge>
+                <span style={{ display: 'inline-flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {status && <Badge appearance="tint" color="informative" size="small">{status}</Badge>}
+                  {isQuarantined && <Badge appearance="tint" color="danger" size="small">Quarantined</Badge>}
+                </span>
               </Row>
             )}
             {channels.length > 0 && (
@@ -471,8 +484,15 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
               </Row>
             )}
             {agentModel && <Row label="Model">{agentModel}</Row>}
+            {agentOrchestration && <Row label="Orchestration">{agentOrchestration}</Row>}
+            {agentAuthentication && <Row label="Authentication">{agentAuthentication}</Row>}
+            {agentCreatedIn && <Row label="Created in">{agentCreatedIn}</Row>}
             {resourceGuid && <Row label="Resource GUID">{resourceGuid}</Row>}
             {agentId && <Row label="Agent ID">{agentId}</Row>}
+            {agentSchemaName && <Row label="Schema name">{agentSchemaName}</Row>}
+            {appModuleId && <Row label="App module ID">{appModuleId}</Row>}
+            {appLogicalName && <Row label="Logical name">{appLogicalName}</Row>}
+            {flowWorkflowEntityId && <Row label="Workflow entity ID">{flowWorkflowEntityId}</Row>}
             {resourceUrl && (
               <Row label="Resource URL">
                 <Link href={resourceUrl} target="_blank" rel="noreferrer">{resourceUrl}</Link>
@@ -914,8 +934,16 @@ function buildOverviewText(resource: ResourceItem, allEnvironments: ResourceItem
   add('Status', getStatus(resource))
   const channels = getPublishedChannels(resource)
   if (channels.length) add('Published to', channels.join(', '))
+  if (getIsQuarantined(resource)) add('Quarantined', 'Yes')
   add('Model', getAgentModel(resource))
+  add('Orchestration', getAgentOrchestration(resource))
+  add('Authentication', getAgentAuthentication(resource))
+  add('Created in', getAgentCreatedIn(resource))
   add('Resource GUID', getResourceGuid(resource))
+  add('Schema name', getAgentSchemaName(resource))
+  add('App module ID', getAppModuleId(resource))
+  add('Logical name', getAppLogicalName(resource))
+  add('Workflow entity ID', getFlowWorkflowEntityId(resource))
   add('Resource URL', getResourceUrl(resource))
   add('Environment', resolveEnvironmentName(resource, envMap))
   add('Environment type', resource.environmentType)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { makeStyles, Text, Caption1 } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
 import { ChartMultipleRegular } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getResourceCategory, getOwnerFromProperties } from '../types'
@@ -47,14 +47,19 @@ const PRODUCT_META: Record<Category, {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const STROKE1 = '#edebe9'
-const MUTED = '#605e5c'
-const TEXT = '#242424'
+const STROKE1 = tokens.colorNeutralStroke2
+const MUTED = tokens.colorNeutralForeground3
+const TEXT = tokens.colorNeutralForeground1
+const CARD_BG = tokens.colorNeutralBackground1
+const TH_BG = tokens.colorNeutralBackground3
+const ACTIVE_BLUE = tokens.colorBrandForeground1
+const HOVER_BG = tokens.colorSubtleBackgroundHover
+const BADGE_BG = tokens.colorNeutralBackground3
 
 const useClasses = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: '16px' },
   introNote: {
-    backgroundColor: '#f3f9fd',
+    backgroundColor: HOVER_BG,
     border: `1px solid #cfe4fa`,
     borderRadius: '4px',
     padding: '10px 14px',
@@ -69,7 +74,7 @@ const useClasses = makeStyles({
     '@media (max-width: 960px)': { gridTemplateColumns: '1fr' },
   },
   productCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: CARD_BG,
     border: `1px solid ${STROKE1}`,
     borderRadius: '8px',
     padding: '16px',
@@ -105,13 +110,13 @@ const useClasses = makeStyles({
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     gap: '8px',
     cursor: 'pointer',
-    ':hover': { backgroundColor: '#f3f9fd' },
+    ':hover': { backgroundColor: HOVER_BG },
   },
   topItemBody: { minWidth: 0, flex: 1 },
   topItemName: { fontSize: '13px', fontWeight: 600, color: TEXT, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   topItemSub: { fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' },
   topItemBadge: {
-    backgroundColor: '#f3f2f1',
+    backgroundColor: BADGE_BG,
     color: TEXT,
     border: `1px solid ${STROKE1}`,
     borderRadius: '999px',
@@ -121,7 +126,7 @@ const useClasses = makeStyles({
     flexShrink: 0,
   },
   tableCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: CARD_BG,
     border: `1px solid ${STROKE1}`,
     borderRadius: '8px',
     overflow: 'hidden',
@@ -142,9 +147,9 @@ const useClasses = makeStyles({
   tabButtonActive: {
     border: 'none', background: 'transparent',
     padding: '10px 14px',
-    fontSize: '13px', fontWeight: 600, color: '#004578',
+    fontSize: '13px', fontWeight: 600, color: ACTIVE_BLUE,
     cursor: 'pointer',
-    borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: '#004578',
+    borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: ACTIVE_BLUE,
     marginBottom: '-1px',
   },
   tableCaption: {
@@ -155,7 +160,7 @@ const useClasses = makeStyles({
   th: {
     padding: '8px 16px', textAlign: 'left',
     fontWeight: 600, fontSize: '12px', color: TEXT,
-    backgroundColor: '#faf9f8',
+    backgroundColor: TH_BG,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
     whiteSpace: 'nowrap',
   },
@@ -173,7 +178,7 @@ const useClasses = makeStyles({
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
   rowHover: {
-    ':hover td': { backgroundColor: '#f3f9fd' },
+    ':hover td': { backgroundColor: HOVER_BG },
   },
   emptyRow: {
     padding: '32px 16px',
@@ -251,7 +256,7 @@ function TrendsChart({ values, labels, color }: { values: number[]; labels: stri
         const y = height - (t / max) * height
         return (
           <g key={i}>
-            <line x1={28} y1={y} x2={width + 28} y2={y} stroke="#f3f2f1" strokeWidth={1} />
+            <line x1={28} y1={y} x2={width + 28} y2={y} stroke={tokens.colorNeutralStroke2} strokeWidth={1} />
             <text x={24} y={y + 3} fontSize="9" fill={MUTED} textAnchor="end">{t}</text>
           </g>
         )

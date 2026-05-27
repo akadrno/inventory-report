@@ -12,9 +12,12 @@ export function friendlyType(type: string, kind?: string): string {
   if (kind) return kind
   if (lower.includes('modeldriven')) return 'Model Driven'
   if (lower.includes('codeapp') || lower.includes('codeapps')) return 'Code App'
-  if (lower.includes('canvasapp') || lower.includes('/apps')) return 'Canvas App'
+  if (lower.includes('canvasapp')) return 'Canvas App'
+  if (lower.includes('m365agentflow')) return 'Workflow Agent Flow'
+  if (lower.includes('agentflow')) return 'Agent Flow'
   if (lower.includes('flow') || lower.includes('logic')) return 'Cloud Flow'
   if (lower.includes('bot') || lower.includes('agent') || lower.includes('copilot')) return 'Agent'
+  if (lower.includes('/apps')) return 'App Builder'
   const parts = type.split('/')
   return parts[parts.length - 1] ?? type
 }

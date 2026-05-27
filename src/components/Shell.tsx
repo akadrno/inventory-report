@@ -370,8 +370,8 @@ function GovOverviewPage({
         >
           <ErrorCircleRegular fontSize={28} style={{ color: '#c50f1f', flexShrink: 0 }} />
           <div>
-            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: TEXT }}>{criticalCount}</Text>
-            <Caption1 style={{ color: MUTED }}>Critical</Caption1>
+            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{criticalCount}</Text>
+            <Caption1 style={{ color: '#605e5c' }}>Critical</Caption1>
           </div>
         </div>
         <div className={classes.summaryCard}
@@ -380,8 +380,8 @@ function GovOverviewPage({
         >
           <WarningRegular fontSize={28} style={{ color: '#e17800', flexShrink: 0 }} />
           <div>
-            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: TEXT }}>{warningCount}</Text>
-            <Caption1 style={{ color: MUTED }}>Warnings</Caption1>
+            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{warningCount}</Text>
+            <Caption1 style={{ color: '#605e5c' }}>Warnings</Caption1>
           </div>
         </div>
         <div className={classes.summaryCard}

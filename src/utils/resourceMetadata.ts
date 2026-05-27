@@ -71,6 +71,61 @@ export function getAgentModel(r: ResourceItem): string | undefined {
   ])
 }
 
+// Orchestration mode of a Copilot Studio agent ("Classic" | "Generative").
+export function getAgentOrchestration(r: ResourceItem): string | undefined {
+  if (getResourceCategory(r.type) !== 'agents') return undefined
+  return pickString(r.properties, ['orchestration', 'Orchestration', 'orchestrationMode'])
+}
+
+// Authentication mode of a Copilot Studio agent ("None" | "Microsoft Entra" | "Generic OAuth 2.0").
+export function getAgentAuthentication(r: ResourceItem): string | undefined {
+  if (getResourceCategory(r.type) !== 'agents') return undefined
+  return pickString(r.properties, ['authentication', 'Authentication', 'authMode', 'authenticationMode'])
+}
+
+// Authoring tool the agent was created in ("Copilot Studio" | "Microsoft 365 Copilot Agent Builder").
+export function getAgentCreatedIn(r: ResourceItem): string | undefined {
+  if (getResourceCategory(r.type) !== 'agents') return undefined
+  return pickString(r.properties, ['createdIn', 'CreatedIn'])
+}
+
+// Dataverse schema name of an agent (e.g. "cr5e3_agentName").
+export function getAgentSchemaName(r: ResourceItem): string | undefined {
+  if (getResourceCategory(r.type) !== 'agents') return undefined
+  return pickString(r.properties, ['schemaName', 'SchemaName'])
+}
+
+// True if a resource is currently quarantined. Apps and agents support this flag.
+export function getIsQuarantined(r: ResourceItem): boolean | undefined {
+  const p = r.properties
+  if (!p) return undefined
+  const v = p['isQuarantined'] ?? p['IsQuarantined']
+  if (typeof v === 'boolean') return v
+  if (v === 'true') return true
+  if (v === 'false') return false
+  return undefined
+}
+
+// Dataverse workflow entity ID for a flow (cloud / agent / m365 agent).
+export function getFlowWorkflowEntityId(r: ResourceItem): string | undefined {
+  if (getResourceCategory(r.type) !== 'flows') return undefined
+  return pickString(r.properties, ['workflowEntityId', 'WorkflowEntityId'])
+}
+
+// Dataverse app module ID for a model-driven app.
+export function getAppModuleId(r: ResourceItem): string | undefined {
+  const t = r.type.toLowerCase()
+  if (!t.includes('modeldriven')) return undefined
+  return pickString(r.properties, ['appModuleId', 'AppModuleId'])
+}
+
+// Dataverse logical name for a model-driven app.
+export function getAppLogicalName(r: ResourceItem): string | undefined {
+  const t = r.type.toLowerCase()
+  if (!t.includes('modeldriven')) return undefined
+  return pickString(r.properties, ['logicalName', 'LogicalName'])
+}
+
 // Inventory `type`/`kind` mapped to the "Made in" product label shown in the
 // header. We mirror the labels used by the Power Platform admin portal.
 export function getMadeInProduct(r: ResourceItem): { label: string; productKey: 'apps' | 'flows' | 'agents' | 'other' } {
@@ -79,13 +134,23 @@ export function getMadeInProduct(r: ResourceItem): { label: string; productKey: 
   const cat = getResourceCategory(r.type)
 
   if (cat === 'apps') {
-    if (t.includes('codeapp')) return { label: 'Power Apps (Code App)', productKey: 'apps' }
+    if (t.includes('codeapp')) {
+      const sub = pickString(r.properties, ['subType', 'SubType'])
+      if (sub === 'vibeApp') return { label: 'Power Apps (Vibe App)', productKey: 'apps' }
+      return { label: 'Power Apps (Code App)', productKey: 'apps' }
+    }
     if (t.includes('modeldriven') || k.includes('modeldriven')) return { label: 'Power Apps (Model Driven)', productKey: 'apps' }
     if (t.includes('canvas') || k.includes('canvas')) return { label: 'Power Apps (Canvas)', productKey: 'apps' }
+    // microsoft.powerapps/apps with subType=appBuilderApp is the new App Builder
+    if (t === 'microsoft.powerapps/apps') {
+      const sub = pickString(r.properties, ['subType', 'SubType'])
+      if (sub === 'appBuilderApp') return { label: 'Power Apps (App Builder)', productKey: 'apps' }
+    }
     return { label: 'Power Apps', productKey: 'apps' }
   }
   if (cat === 'flows') {
     if (t.includes('logic')) return { label: 'Logic Apps', productKey: 'flows' }
+    if (t.includes('m365agentflow')) return { label: 'Power Automate (Workflow Agent Flow)', productKey: 'flows' }
     if (t.includes('agentflow')) return { label: 'Power Automate (Agent Flow)', productKey: 'flows' }
     return { label: 'Power Automate', productKey: 'flows' }
   }
@@ -194,7 +259,7 @@ export function getCreatedDate(r: ResourceItem): Date | undefined {
 }
 
 export function getModifiedDate(r: ResourceItem): Date | undefined {
-  return pickDate(r.properties, ['lastModifiedTime', 'modifiedOn', 'lastModifiedDateTime', 'modifiedTime', 'updatedTime'])
+  return pickDate(r.properties, ['lastModifiedAt', 'lastModifiedTime', 'modifiedOn', 'lastModifiedDateTime', 'modifiedTime', 'updatedTime'])
 }
 
 export function getPublishedDate(r: ResourceItem): Date | undefined {
@@ -648,8 +713,8 @@ export const HANDLED_PROPERTY_KEYS = new Set<string>([
   'lastModifiedBy', 'lastModifiedByUser', 'modifiedBy', 'modifiedByUser', 'updatedBy',
   'lastPublishedBy', 'publishedBy',
   'createdTime', 'createdOn', 'createdAt', 'createdDateTime',
-  'lastModifiedTime', 'modifiedOn', 'lastModifiedDateTime', 'modifiedTime', 'updatedTime',
-  'lastPublishedTime', 'publishedTime', 'lastPublishDateTime',
+  'lastModifiedTime', 'modifiedOn', 'lastModifiedDateTime', 'modifiedTime', 'updatedTime', 'lastModifiedAt',
+  'lastPublishedTime', 'publishedTime', 'lastPublishDateTime', 'lastPublishedAt',
   'state', 'status', 'lifecycleState', 'appType', 'publishingState', 'provisioningState',
   'publishedChannels', 'channels', 'enabledChannels',
   'environmentGroupId', 'environmentGroup', 'parentEnvironmentGroupId',
@@ -673,7 +738,17 @@ export const HANDLED_PROPERTY_KEYS = new Set<string>([
   'entraAgentId', 'EntraAgentId', 'aadAgentId', 'AADAgentId',
   'agentId', 'AgentId', 'aadObjectId', 'AADObjectId',
   'entraObjectId', 'objectId', 'botId', 'BotId',
+  'entraAppId', 'EntraAppId', 'entraAgentBlueprintId', 'EntraAgentBlueprintId',
   'model', 'Model', 'aiModel', 'AIModel', 'aiModelName',
   'generativeAIModel', 'generativeAiModel',
   'modelName', 'ModelName', 'llm', 'LLM',
+  'orchestration', 'Orchestration', 'orchestrationMode',
+  'authentication', 'Authentication', 'authMode', 'authenticationMode',
+  'createdIn', 'CreatedIn', 'schemaName', 'SchemaName',
+  'isQuarantined', 'IsQuarantined', 'quarantinedAt',
+  'workflowEntityId', 'WorkflowEntityId',
+  'appModuleId', 'AppModuleId', 'logicalName', 'LogicalName',
+  'subType', 'SubType',
+  'isWebSearchEnabledForKnowledge', 'IsWebSearchEnabledForKnowledge',
+  'capabilitiesCounts',
 ])

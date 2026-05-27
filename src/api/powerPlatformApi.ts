@@ -41,6 +41,7 @@ const DEFAULT_CLAUSES: WhereClause[] = [
       "'microsoft.powerapps/codeapps'",
       "'microsoft.powerautomate/cloudflows'",
       "'microsoft.powerautomate/agentflows'",
+      "'microsoft.powerautomate/m365agentflows'",
       "'microsoft.copilotstudio/agents'",
       // Legacy type names from earlier API versions
       "'microsoft.powerapps/apps'",

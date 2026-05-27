@@ -50,6 +50,7 @@ export const RESOURCE_TYPES = {
     'microsoft.powerapps/flows',
     'microsoft.powerautomate/cloudflows',
     'microsoft.powerautomate/agentflows',
+    'microsoft.powerautomate/m365agentflows',
     'microsoft.logic/workflows',
   ],
   agents: [
