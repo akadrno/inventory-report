@@ -321,16 +321,21 @@ function OverviewTab({ allResources, allEnvironments }: ReportViewProps) {
     const counts = new Map<string, { label: string; count: number; category: string }>()
     for (const r of allResources) {
       const cat = getResourceCategory(r.type)
-      const key = cat + '|' + r.type
+      const lower = r.type.toLowerCase()
+      const label = cat === 'agents' ? 'Copilot Agents'
+        : lower.includes('m365agentflow') ? 'Workflow Agent Flows'
+        : lower.includes('agentflow') ? 'Agent Flows'
+        : lower.includes('logic') ? 'Logic Apps'
+        : cat === 'flows' ? 'Cloud Flows'
+        : lower.includes('canvas') ? 'Canvas Apps'
+        : lower.includes('model') ? 'Model-driven Apps'
+        : lower.includes('codeapp') ? 'Code Apps'
+        : r.type.split('/').pop() ?? r.type
+      // Key on the user-facing label so e.g. legacy + current cloud-flow
+      // types collapse into a single "Cloud Flows" row.
+      const key = cat + '|' + label
       const existing = counts.get(key)
       if (existing) { existing.count++ } else {
-        const lower = r.type.toLowerCase()
-        let label = cat === 'agents' ? 'Copilot Agents'
-          : cat === 'flows' ? 'Cloud Flows'
-          : lower.includes('canvas') ? 'Canvas Apps'
-          : lower.includes('model') ? 'Model-driven Apps'
-          : lower.includes('codeapp') ? 'Code Apps'
-          : r.type.split('/').pop() ?? r.type
         counts.set(key, { label, count: 1, category: cat })
       }
     }
