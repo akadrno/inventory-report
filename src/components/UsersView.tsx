@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
-import { makeStyles, tokens, Text, Caption1, Button, Badge } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Button, Badge, Input } from '@fluentui/react-components'
 import {
   ArrowLeftRegular,
   PersonRegular,
@@ -9,6 +9,7 @@ import {
   ChevronDownRegular,
   ArrowSortRegular,
   GlobeRegular,
+  SearchRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getOwnerFromProperties, getResourceCategory, getEnvironmentIdFromPath, getIsManagedEnvironment } from '../types'
@@ -289,6 +290,7 @@ function UserResourcesView({
 }) {
   const [sort, setSort] = useState<{ field: ResSortField; dir: SortDir }>({ field: 'name', dir: 'asc' })
   const [selected, setSelected] = useState<ResourceItem | null>(null)
+  const [search, setSearch] = useState('')
   const classes = useClasses()
   const capacityQuery = useEnvironmentCapacity()
 
@@ -309,7 +311,18 @@ function UserResourcesView({
     return r.environmentId ? (envMap.get(r.environmentId) ?? r.environmentId) : '—'
   }
 
-  const sorted = [...user.resources].sort((a, b) => {
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return user.resources
+    return user.resources.filter(r =>
+      getDisplayName(r).toLowerCase().includes(q) ||
+      r.type.toLowerCase().includes(q) ||
+      (r.kind ?? '').toLowerCase().includes(q) ||
+      resolveEnv(r).toLowerCase().includes(q),
+    )
+  }, [user.resources, search, envMap])
+
+  const sorted = [...filtered].sort((a, b) => {
     let av = '', bv = ''
     if (sort.field === 'name') { av = getDisplayName(a); bv = getDisplayName(b) }
     else if (sort.field === 'type') { av = a.type; bv = b.type }
@@ -344,6 +357,28 @@ function UserResourcesView({
       />
 
       <div className={classes.tableWrapper}>
+        <div style={{
+          padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+          borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+          backgroundColor: tokens.colorNeutralBackground3,
+          display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap',
+        }}>
+          <Text size={200} weight="semibold">Resources</Text>
+          <Badge appearance="tint" color="subtle" size="small">
+            {search.trim()
+              ? `${sorted.length} of ${user.resources.length}`
+              : `${user.resources.length}`}
+          </Badge>
+          <div style={{ flex: 1 }} />
+          <Input
+            contentBefore={<SearchRegular />}
+            placeholder="Search by name, type, or environment…"
+            value={search}
+            onChange={(_, d) => setSearch(d.value)}
+            size="small"
+            style={{ width: '280px', maxWidth: '100%' }}
+          />
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table className={classes.table}>
             <thead className={classes.thead}>
@@ -360,7 +395,7 @@ function UserResourcesView({
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={3} className={classes.emptyState}><Caption1>No resources</Caption1></td></tr>
+                <tr><td colSpan={3} className={classes.emptyState}><Caption1>{search.trim() ? 'No resources match your search.' : 'No resources'}</Caption1></td></tr>
               ) : sorted.map(item => (
                 <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
                   <td className={classes.td}>
