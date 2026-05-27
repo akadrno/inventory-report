@@ -19,6 +19,7 @@ import {
   formatPropertyValueAsText, formatPrimitive,
 } from '../utils/format'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
+import { formatRegion } from '../utils/regions'
 import { getConnectorInfo, findConnectorIdByDisplayName } from '../utils/connectors'
 import {
   getDescription, getResourceGuid, getResourceUrl, getMadeInProduct,
@@ -436,7 +437,7 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
   const appLogicalName = getAppLogicalName(resource)
 
   const envName = resolveEnvironmentName(resource, envMap)
-  const region = resource.environmentRegion ?? resource.location
+  const region = formatRegion(resource.environmentRegion ?? resource.location)
   const managed = resource.isManagedEnvironment != null
     ? (resource.isManagedEnvironment ? 'Yes' : 'No')
     : undefined
@@ -947,7 +948,7 @@ function buildOverviewText(resource: ResourceItem, allEnvironments: ResourceItem
   add('Resource URL', getResourceUrl(resource))
   add('Environment', resolveEnvironmentName(resource, envMap))
   add('Environment type', resource.environmentType)
-  add('Region', resource.environmentRegion ?? resource.location)
+  add('Region', formatRegion(resource.environmentRegion ?? resource.location))
   add('Environment ID', resource.environmentId)
   add('Environment group ID', getEnvironmentGroupId(resource))
   const created = getCreatedDate(resource)

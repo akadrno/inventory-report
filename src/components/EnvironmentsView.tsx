@@ -21,6 +21,7 @@ import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { EnvironmentBadge } from './EnvironmentBadge'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { ResourceDetailPanel } from './ResourceDetailPanel'
+import { formatRegion } from '../utils/regions'
 import { getResourceCategory } from '../types'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 
@@ -271,7 +272,7 @@ function EnvironmentMetadataModal({ env, onClose }: { env: ResourceItem; onClose
             <div>
               <Field label="Environment ID" value={env.name} />
               <Field label="Type" value={envType} />
-              <Field label="Region" value={env.environmentRegion ?? env.location} />
+              <Field label="Region" value={formatRegion(env.environmentRegion ?? env.location)} />
               <Field label="Status" value={status} />
               <Field label="Is Default" value={isDefault} />
               <Field label="Managed Environment" value={env.isManagedEnvironment} />
@@ -423,7 +424,7 @@ function EnvironmentListTable({
     let av: string | number = '', bv: string | number = ''
     if (sort.field === 'name') { av = getDisplayName(a); bv = getDisplayName(b) }
     else if (sort.field === 'type') { av = getEnvTypeName(a) ?? ''; bv = getEnvTypeName(b) ?? '' }
-    else if (sort.field === 'region') { av = a.environmentRegion ?? a.location ?? ''; bv = b.environmentRegion ?? b.location ?? '' }
+    else if (sort.field === 'region') { av = formatRegion(a.environmentRegion ?? a.location); bv = formatRegion(b.environmentRegion ?? b.location) }
     else { av = resourceCounts.get(a.name) ?? 0; bv = resourceCounts.get(b.name) ?? 0 }
     const c = typeof av === 'number' ? av - (bv as number) : (av as string).localeCompare(bv as string)
     return sort.dir === 'asc' ? c : -c
@@ -480,7 +481,7 @@ function EnvironmentListTable({
               {pageItems.map(env => {
                 const name = getDisplayName(env)
                 const envType = getEnvTypeName(env)
-                const region = env.environmentRegion ?? env.location
+                const region = formatRegion(env.environmentRegion ?? env.location)
                 const count = resourceCounts.get(env.name) ?? 0
                 return (
                   <tr key={env.id} className={classes.tr} onClick={() => onEnvClick(env)}>
@@ -507,7 +508,7 @@ function EnvironmentListTable({
                       <EnvironmentBadge name={envType} type={envType} />
                     </td>
                     <td className={classes.td}>
-                      {region && <Text style={{ color: tokens.colorNeutralForeground2, textTransform: 'capitalize' }}>{region}</Text>}
+                      {region && <Text style={{ color: tokens.colorNeutralForeground2 }}>{region}</Text>}
                     </td>
                     <td className={classes.td}>
                       <Badge appearance="tint" color="subtle" size="small">{count}</Badge>

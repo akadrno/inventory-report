@@ -15,6 +15,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
+import { formatRegion } from '../utils/regions'
 
 export { getResourceCategory }
 
@@ -230,7 +231,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
       av = resolveOwner(getOwnerFromProperties(a), ownerNames)
       bv = resolveOwner(getOwnerFromProperties(b), ownerNames)
     }
-    else if (sort.field === 'region') { av = a.environmentRegion ?? a.location ?? ''; bv = b.environmentRegion ?? b.location ?? '' }
+    else if (sort.field === 'region') { av = formatRegion(a.environmentRegion ?? a.location); bv = formatRegion(b.environmentRegion ?? b.location) }
     const cmp = av.localeCompare(bv)
     return sort.dir === 'asc' ? cmp : -cmp
   })
@@ -290,7 +291,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
                     const envName = resolveEnvironmentName(item, envMap)
                     const rawOwner = getOwnerFromProperties(item)
                     const owner = resolveOwner(rawOwner, ownerNames)
-                    const region = item.environmentRegion ?? item.location ?? '—'
+                    const region = formatRegion(item.environmentRegion ?? item.location) || '—'
                     return (
                       <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
                         <td className={classes.td}>
