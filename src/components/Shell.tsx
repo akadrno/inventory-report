@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { makeStyles, Text, Caption1, Button, Badge, Spinner, Input } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Button, Badge, Spinner, Input } from '@fluentui/react-components'
 import {
   HomeRegular,
   ClipboardBulletListRegular,
@@ -25,7 +25,10 @@ import {
   BookmarkRegular,
   CertificateRegular,
   ChartMultipleRegular,
+  WeatherMoonRegular,
+  WeatherSunnyRegular,
 } from '@fluentui/react-icons'
+import { useThemeMode } from '../context/ThemeContext'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useMsal } from '@azure/msal-react'
 import { useResources } from '../hooks/useResources'
@@ -61,17 +64,17 @@ import {
 import type { InsightKey } from './GovernanceView'
 import type { DLPPolicy } from '../hooks/useGovernance'
 
-// ── Design constants ──────────────────────────────────────────────────────────
+// ── Design constants (Fluent v9 tokens — auto-adapt to light/dark theme) ─────
 
-const RAIL_BG = '#F0F0F0'
-const PANEL_BG = '#F5F5F5'
-const CONTENT_BG = '#faf9f8'
-const ACTIVE = '#004578'
-const ACTIVE_BG = '#ffffff'
-const HOVER = '#EBEBEB'
-const TEXT = '#242424'
-const MUTED = '#737373'
-const STROKE1 = '#edebe9'
+const RAIL_BG = tokens.colorNeutralBackground4
+const PANEL_BG = tokens.colorNeutralBackground3
+const CONTENT_BG = tokens.colorNeutralBackground2
+const ACTIVE = tokens.colorBrandForeground1
+const ACTIVE_BG = tokens.colorNeutralBackground1
+const HOVER = tokens.colorSubtleBackgroundHover
+const TEXT = tokens.colorNeutralForeground1
+const MUTED = tokens.colorNeutralForeground3
+const STROKE1 = tokens.colorNeutralStroke2
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,7 +104,7 @@ const useClasses = makeStyles({
   railBtnActive: {
     width: '52px', height: '48px',
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px',
-    border: `1px solid #d1d1d1`, backgroundColor: ACTIVE_BG, cursor: 'pointer', borderRadius: '12px',
+    border: `1px solid ${tokens.colorNeutralStroke1}`, backgroundColor: ACTIVE_BG, cursor: 'pointer', borderRadius: '12px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.14), 0 0 2px rgba(0,0,0,0.12)',
   },
   panel: {
@@ -197,7 +200,7 @@ const useClasses = makeStyles({
     display: 'flex', alignItems: 'center', gap: '8px',
     padding: '12px 16px 10px',
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
-    fontSize: '14px', fontWeight: 600, color: '#323130',
+    fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1,
   },
   summaryGrid: {
     display: 'grid',
@@ -225,15 +228,15 @@ const useClasses = makeStyles({
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
   th: {
     padding: '8px 16px', textAlign: 'left',
-    fontWeight: 600, fontSize: '12px', color: '#323130',
-    backgroundColor: '#faf9f8',
+    fontWeight: 600, fontSize: '12px', color: tokens.colorNeutralForeground1,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
     whiteSpace: 'nowrap',
   },
   thR: {
     padding: '8px 16px', textAlign: 'right',
-    fontWeight: 600, fontSize: '12px', color: '#323130',
-    backgroundColor: '#faf9f8',
+    fontWeight: 600, fontSize: '12px', color: tokens.colorNeutralForeground1,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
     whiteSpace: 'nowrap',
   },
@@ -259,14 +262,24 @@ const useClasses = makeStyles({
 function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: string }) {
   const classes = useClasses()
   const { isOpen, setIsOpen, entries } = useDebug()
+  const { mode, toggleMode } = useThemeMode()
   const errorCount = entries.filter(e => e.error || (e.status !== undefined && e.status >= 400)).length
+  const isDark = mode === 'dark'
 
   return (
     <header className={classes.header}>
       <div className={classes.headerLeft} />
       <div className={classes.headerCenter} />
       <div className={classes.headerRight}>
-        <span style={{ fontSize: '13px', color: '#605e5c', marginRight: '4px' }}>{userName}</span>
+        <Button
+          appearance="subtle"
+          icon={isDark ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
+          size="small"
+          onClick={toggleMode}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        />
+        <span style={{ fontSize: '13px', color: tokens.colorNeutralForeground3, marginRight: '4px' }}>{userName}</span>
         <div style={{ position: 'relative' }}>
           <Button appearance="subtle" icon={<SettingsRegular />} size="small" onClick={() => setIsOpen(!isOpen)} title="Debug panel" />
           {errorCount > 0 && !isOpen && (

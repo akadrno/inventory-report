@@ -2,9 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MsalProvider } from '@azure/msal-react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { FluentProvider, webLightTheme } from '@fluentui/react-components'
+import { FluentProvider, webLightTheme, webDarkTheme } from '@fluentui/react-components'
 import { msalInstance } from './auth/msalConfig'
 import { DebugProvider } from './context/DebugContext'
+import { ThemeProvider, useThemeMode } from './context/ThemeContext'
 import App from './App'
 import './index.css'
 
@@ -14,9 +15,10 @@ const queryClient = new QueryClient({
   },
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <FluentProvider theme={webLightTheme}>
+function ThemedApp() {
+  const { mode } = useThemeMode()
+  return (
+    <FluentProvider theme={mode === 'dark' ? webDarkTheme : webLightTheme}>
       <MsalProvider instance={msalInstance}>
         <QueryClientProvider client={queryClient}>
           <DebugProvider>
@@ -25,5 +27,13 @@ createRoot(document.getElementById('root')!).render(
         </QueryClientProvider>
       </MsalProvider>
     </FluentProvider>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
   </StrictMode>,
 )
