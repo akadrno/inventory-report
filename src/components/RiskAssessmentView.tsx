@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useResizableColumns, RESIZE_HANDLE_STYLE } from '../hooks/useResizableColumns'
 import {
-  makeStyles, Text, Caption1, Badge, Button, Input, Spinner, Textarea,
+  makeStyles, tokens, Text, Caption1, Badge, Button, Input, Spinner, Textarea,
   OverlayDrawer, DrawerHeader, DrawerHeaderTitle, DrawerBody, DrawerFooter,
 } from '@fluentui/react-components'
 import {
@@ -68,8 +68,8 @@ const useClasses = makeStyles({
     gap: '12px',
   },
   summaryCard: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #edebe9',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: '4px',
     padding: '14px 16px',
     display: 'flex',
@@ -79,8 +79,8 @@ const useClasses = makeStyles({
     ':hover': { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
   },
   card: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #edebe9',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: '4px',
     overflow: 'hidden',
   },
@@ -91,10 +91,10 @@ const useClasses = makeStyles({
     padding: '12px 16px 10px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     fontSize: '14px',
     fontWeight: 600,
-    color: '#323130',
+    color: tokens.colorNeutralForeground1,
   },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' as const },
   th: {
@@ -102,11 +102,11 @@ const useClasses = makeStyles({
     textAlign: 'left',
     fontWeight: 600,
     fontSize: '11px',
-    color: '#605e5c',
-    backgroundColor: '#faf9f8',
+    color: tokens.colorNeutralForeground3,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     whiteSpace: 'nowrap',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
@@ -117,7 +117,7 @@ const useClasses = makeStyles({
     padding: '10px 16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#edebe9',
+    borderBottomColor: tokens.colorNeutralStroke2,
     verticalAlign: 'middle',
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden' as const,
@@ -246,14 +246,14 @@ function AssessmentSidePanel({
   }
 
   const lbl: React.CSSProperties = {
-    fontSize: '10px', fontWeight: 600, color: '#737373',
+    fontSize: '10px', fontWeight: 600, color: tokens.colorNeutralForeground3,
     textTransform: 'uppercase', letterSpacing: '0.5px',
     display: 'block', marginBottom: '3px',
   }
 
   return (
     <OverlayDrawer open position="end" size="medium" onOpenChange={(_, d) => { if (!d.open) onClose() }}>
-      <DrawerHeader style={{ borderBottom: '1px solid #edebe9', paddingBottom: '10px' }}>
+      <DrawerHeader style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}`, paddingBottom: '10px' }}>
         <DrawerHeaderTitle
           action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />}
         >
@@ -264,7 +264,7 @@ function AssessmentSidePanel({
             </span>
           </div>
         </DrawerHeaderTitle>
-        <Caption1 style={{ color: '#737373', marginTop: '2px', paddingLeft: '2px' }}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3, marginTop: '2px', paddingLeft: '2px' }}>
           {resource.type.split('/').pop()}{owner !== '—' ? ` · ${owner}` : ''}
         </Caption1>
       </DrawerHeader>
@@ -285,7 +285,7 @@ function AssessmentSidePanel({
                 {assessment.lastUpdated && (
                   <div>
                     <span style={lbl}>Last Reviewed</span>
-                    <Text style={{ fontSize: '12px', color: '#323130' }}>
+                    <Text style={{ fontSize: '12px', color: tokens.colorNeutralForeground1 }}>
                       {new Date(assessment.lastUpdated).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </Text>
                   </div>
@@ -293,22 +293,22 @@ function AssessmentSidePanel({
                 {assessment.updatedBy && (
                   <div>
                     <span style={lbl}>Reviewed By</span>
-                    <Text style={{ fontSize: '12px', color: '#323130' }}>{assessment.updatedBy}</Text>
+                    <Text style={{ fontSize: '12px', color: tokens.colorNeutralForeground1 }}>{assessment.updatedBy}</Text>
                   </div>
                 )}
               </div>
               {(assessment.riskNotes || assessment.notes) && (
-                <div style={{ borderTop: '1px solid #edebe9', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ borderTop: `1px solid ${tokens.colorNeutralStroke2}`, paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {assessment.riskNotes && (
                     <div>
                       <span style={lbl}>Risk Notes</span>
-                      <Text style={{ fontSize: '12px', color: '#323130', lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.riskNotes}</Text>
+                      <Text style={{ fontSize: '12px', color: tokens.colorNeutralForeground1, lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.riskNotes}</Text>
                     </div>
                   )}
                   {assessment.notes && (
                     <div>
                       <span style={lbl}>Admin Notes</span>
-                      <Text style={{ fontSize: '12px', color: '#323130', lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.notes}</Text>
+                      <Text style={{ fontSize: '12px', color: tokens.colorNeutralForeground1, lineHeight: '18px', whiteSpace: 'pre-wrap' }}>{assessment.notes}</Text>
                     </div>
                   )}
                 </div>
@@ -316,14 +316,14 @@ function AssessmentSidePanel({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '24px 0' }}>
-              <ShieldRegular fontSize={28} style={{ color: '#737373' }} />
-              <Text style={{ fontSize: '13px', color: '#737373' }}>No assessment recorded for this resource.</Text>
+              <ShieldRegular fontSize={28} style={{ color: tokens.colorNeutralForeground3 }} />
+              <Text style={{ fontSize: '13px', color: tokens.colorNeutralForeground3 }}>No assessment recorded for this resource.</Text>
             </div>
           )
         ) : (
           <div>
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Level <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Level <span style={{ color: '#c50f1f' }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {RISK_LEVELS.map(level => {
                   const active = form.riskLevel === level
@@ -332,9 +332,9 @@ function AssessmentSidePanel({
                     <button key={level} onClick={() => setForm(f => ({ ...f, riskLevel: level }))} style={{
                       padding: '4px 12px', borderRadius: '10px', fontSize: '12px',
                       fontWeight: active ? 700 : 400, cursor: 'pointer',
-                      border: `2px solid ${active ? c.color : '#edebe9'}`,
-                      backgroundColor: active ? c.bg : '#ffffff',
-                      color: active ? c.color : '#323130', transition: 'all 0.1s',
+                      border: `2px solid ${active ? c.color : tokens.colorNeutralStroke2}`,
+                      backgroundColor: active ? c.bg : tokens.colorNeutralBackground1,
+                      color: active ? c.color : tokens.colorNeutralForeground1, transition: 'all 0.1s',
                     }}>{level}</button>
                   )
                 })}
@@ -345,7 +345,7 @@ function AssessmentSidePanel({
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Compliance Status <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Compliance Status <span style={{ color: '#c50f1f' }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {COMPLIANCE_STATUSES.map(status => {
                   const active = form.complianceStatus === status
@@ -354,9 +354,9 @@ function AssessmentSidePanel({
                     <button key={status} onClick={() => setForm(f => ({ ...f, complianceStatus: status }))} style={{
                       padding: '4px 10px', borderRadius: '10px', fontSize: '11px',
                       fontWeight: active ? 700 : 400, cursor: 'pointer',
-                      border: `2px solid ${active ? c.color : '#edebe9'}`,
-                      backgroundColor: active ? c.bg : '#ffffff',
-                      color: active ? c.color : '#323130', transition: 'all 0.1s',
+                      border: `2px solid ${active ? c.color : tokens.colorNeutralStroke2}`,
+                      backgroundColor: active ? c.bg : tokens.colorNeutralBackground1,
+                      color: active ? c.color : tokens.colorNeutralForeground1, transition: 'all 0.1s',
                     }}>{status}</button>
                   )
                 })}
@@ -367,7 +367,7 @@ function AssessmentSidePanel({
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Risk Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
               <Textarea value={form.riskNotes} onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
                 placeholder="Document specific risk findings, vulnerabilities, or compliance gaps…" resize="vertical" rows={3} />
               {submitAttempted && !form.riskNotes.trim() && (
@@ -376,7 +376,7 @@ function AssessmentSidePanel({
             </div>
 
             <div className={classes.formField} style={{ marginBottom: isApp ? '14px' : 0 }}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>Admin Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Admin Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
               <Textarea value={form.notes} onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
                 placeholder="General notes, remediation steps, or context for this resource…" resize="vertical" rows={3} />
               {submitAttempted && !form.notes.trim() && (
@@ -385,9 +385,9 @@ function AssessmentSidePanel({
             </div>
 
             {isApp && (
-              <div style={{ borderTop: '1px solid #edebe9', paddingTop: '12px' }}>
+              <div style={{ borderTop: `1px solid ${tokens.colorNeutralStroke2}`, paddingTop: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <Text style={{ fontSize: '12px', fontWeight: 600, color: '#323130' }}>App Sharing</Text>
+                  <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>App Sharing</Text>
                   {sharing === null && (
                     <Button size="small" appearance="subtle" onClick={loadSharing} disabled={loadingSharing}>
                       {loadingSharing ? 'Loading…' : 'Load permissions'}
@@ -395,14 +395,14 @@ function AssessmentSidePanel({
                   )}
                 </div>
                 {sharing !== null && sharing.length === 0 && (
-                  <Caption1 style={{ color: '#737373' }}>No sharing permissions found, or permissions API unavailable for this app.</Caption1>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No sharing permissions found, or permissions API unavailable for this app.</Caption1>
                 )}
                 {sharing !== null && sharing.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {sharing.slice(0, 12).map((p, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                        <PersonRegular fontSize={12} style={{ color: '#605e5c', flexShrink: 0 }} />
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#242424' }}>
+                        <PersonRegular fontSize={12} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: tokens.colorNeutralForeground1 }}>
                           {p.principalDisplayName || p.principalEmail || p.principalObjectId || 'Unknown'}
                         </span>
                         <span style={{
@@ -412,7 +412,7 @@ function AssessmentSidePanel({
                         }}>{p.roleName}</span>
                       </div>
                     ))}
-                    {sharing.length > 12 && <Caption1 style={{ color: '#737373' }}>…and {sharing.length - 12} more</Caption1>}
+                    {sharing.length > 12 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>…and {sharing.length - 12} more</Caption1>}
                   </div>
                 )}
               </div>
@@ -421,7 +421,7 @@ function AssessmentSidePanel({
         )}
       </DrawerBody>
 
-      <DrawerFooter style={{ borderTop: '1px solid #edebe9', padding: '12px 16px', display: 'flex', gap: '8px' }}>
+      <DrawerFooter style={{ borderTop: `1px solid ${tokens.colorNeutralStroke2}`, padding: '12px 16px', display: 'flex', gap: '8px' }}>
         {mode === 'view' ? (
           <>
             <Button appearance="primary" onClick={onEditMode}>{assessment ? 'Edit Assessment' : 'Add Assessment'}</Button>
@@ -526,14 +526,14 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
   }
 
   if (assessmentsLoading) {
-    return <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px' }}><Spinner size="small" /><Caption1 style={{ color: '#737373' }}>Loading assessments…</Caption1></div>
+    return <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: '12px' }}><Spinner size="small" /><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading assessments…</Caption1></div>
   }
 
   if (assessmentsError) {
     return (
       <div style={{ padding: '16px', backgroundColor: '#fde7e9', border: '1px solid #c50f1f', borderRadius: '4px' }}>
         <Text style={{ fontSize: '13px', fontWeight: 600, color: '#c50f1f' }}>Failed to load assessments from Azure Table Storage</Text>
-        <Caption1 style={{ display: 'block', color: '#605e5c', marginTop: '4px' }}>{assessmentsError.message}</Caption1>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>{assessmentsError.message}</Caption1>
       </div>
     )
   }
@@ -555,7 +555,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
   ]
 
   const sectionLabel: React.CSSProperties = {
-    fontSize: '11px', fontWeight: 600, color: '#605e5c',
+    fontSize: '11px', fontWeight: 600, color: tokens.colorNeutralForeground3,
     textTransform: 'uppercase', letterSpacing: '0.4px',
   }
 
@@ -593,8 +593,8 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
             >
               {icon}
               <div>
-                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{count}</Text>
-                <Caption1 style={{ color: '#737373' }}>{label}</Caption1>
+                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: tokens.colorNeutralForeground1 }}>{count}</Text>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{label}</Caption1>
               </div>
             </div>
           ))}
@@ -618,8 +618,8 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
             >
               {icon}
               <div>
-                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{count}</Text>
-                <Caption1 style={{ color: '#737373' }}>{label}</Caption1>
+                <Text style={{ display: 'block', fontSize: '26px', fontWeight: 700, lineHeight: 1, color: tokens.colorNeutralForeground1 }}>{count}</Text>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{label}</Caption1>
               </div>
             </div>
           ))}
@@ -682,9 +682,9 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
           )}
         </div>
         {visibleResources.length === 0 && allResources.length === 0 ? (
-          <div style={{ padding: '16px' }}><Caption1 style={{ color: '#737373' }}>No resources loaded. Load inventory data first.</Caption1></div>
+          <div style={{ padding: '16px' }}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No resources loaded. Load inventory data first.</Caption1></div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '16px' }}><Caption1 style={{ color: '#737373' }}>No resources match the current filters.</Caption1></div>
+          <div style={{ padding: '16px' }}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No resources match the current filters.</Caption1></div>
         ) : (
           <>
           <div style={{ overflowX: 'auto' }}>
@@ -729,12 +729,12 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                             >
                               {getDisplayName(r)}
                             </button>
-                            <Caption1 style={{ color: '#737373' }}>{r.type.split('/').pop()}</Caption1>
+                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{r.type.split('/').pop()}</Caption1>
                           </div>
                         </div>
                       </td>
                       <td className={classes.td}>
-                        <Caption1 style={{ color: '#605e5c' }}>{resolveOwner(getOwnerFromProperties(r), ownerNames)}</Caption1>
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{resolveOwner(getOwnerFromProperties(r), ownerNames)}</Caption1>
                       </td>
                       <td className={classes.td}>
                         <RiskBadge level={a?.riskLevel ?? 'None'} />
@@ -743,12 +743,12 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                         <ComplianceBadge status={a?.complianceStatus ?? 'Not Reviewed'} />
                       </td>
                       <td className={classes.td}>
-                        <Caption1 style={{ color: '#737373' }}>
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                           {a?.lastUpdated ? new Date(a.lastUpdated).toLocaleDateString() : '—'}
                         </Caption1>
                       </td>
                       <td className={classes.td}>
-                        <Caption1 style={{ color: '#737373' }}>{a?.updatedBy ?? '—'}</Caption1>
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{a?.updatedBy ?? '—'}</Caption1>
                       </td>
                       <td className={classes.td}>
                         <Button size="small" appearance="subtle" onClick={() => openPanel(r, 'edit')}>Edit</Button>
@@ -760,11 +760,11 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
             </table>
           </div>
           <div style={{
-            padding: '8px 16px', borderTop: '1px solid #edebe9',
+            padding: '8px 16px', borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
             display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
-            backgroundColor: '#faf9f8',
+            backgroundColor: tokens.colorNeutralBackground3,
           }}>
-            <Caption1 style={{ color: '#737373', flex: 1, whiteSpace: 'nowrap' }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, flex: 1, whiteSpace: 'nowrap' }}>
               {filtered.length === 0
                 ? 'No resources'
                 : `Showing ${displayStart}–${displayEnd} of ${filtered.length} resource${filtered.length !== 1 ? 's' : ''}`
@@ -776,7 +776,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                 disabled={safeCurrentPage <= 1}
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               >← Prev</Button>
-              <Caption1 style={{ color: '#605e5c', whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center' }}>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center' }}>
                 Page {safeCurrentPage} of {totalPages}
               </Caption1>
               <Button
@@ -789,7 +789,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                 onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                 style={{
                   fontSize: '12px', padding: '4px 8px', borderRadius: '4px',
-                  border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff',
+                  border: `1px solid ${tokens.colorNeutralStroke1}`, color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1,
                   cursor: 'pointer', marginLeft: '4px',
                 }}
               >
