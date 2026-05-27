@@ -52,7 +52,11 @@ import { ErrorBanner } from './ErrorBanner'
 import { DebugPanel } from './DebugPanel'
 import { useDebug } from '../context/DebugContext'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getDisplayName, getIsManagedEnvironment } from '../types'
+import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerFromProperties } from '../types'
+import { GUID_RE } from '../hooks/useOwnerNames'
+import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
+import { formatRegion } from '../utils/regions'
+import { friendlyType } from './ResourceTypeBadge'
 import {
   computeInsights,
   countTenantWarnings,
@@ -821,6 +825,9 @@ export function Shell() {
   const isLoadingGroups = groups.isLoading && allGroups.length === 0
   const isRefreshing = resources.isLoading || groups.isLoading
 
+  // Cached env name map so the search filter doesn't rebuild it per item.
+  const searchEnvMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
+
   const filtered = useMemo(() => {
     let items = allResources
     if (hideSystemInv) items = items.filter(r => !isSystemResource(r))
@@ -858,15 +865,34 @@ export function Shell() {
       })
     }
     if (search.trim()) {
-      const q = search.toLowerCase()
-      items = items.filter(r =>
-        getDisplayName(r).toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q)
-      )
+      const q = search.trim().toLowerCase()
+      items = items.filter(r => {
+        // Name
+        if (getDisplayName(r).toLowerCase().includes(q)) return true
+        if (r.name.toLowerCase().includes(q)) return true
+        // Type (raw + friendly label, so "Cloud Flow", "Canvas App" etc. match)
+        if (r.type.toLowerCase().includes(q)) return true
+        if (friendlyType(r.type, r.kind).toLowerCase().includes(q)) return true
+        // Environment name
+        const envName = resolveEnvironmentName(r, searchEnvMap)
+        if (envName && envName.toLowerCase().includes(q)) return true
+        // Region (raw slug + friendly DisplayName)
+        const rawRegion = (r.environmentRegion ?? r.location ?? '').toLowerCase()
+        if (rawRegion.includes(q)) return true
+        const friendlyRegion = formatRegion(r.environmentRegion ?? r.location).toLowerCase()
+        if (friendlyRegion.includes(q)) return true
+        // Owner (raw value + resolved display name when the raw is a GUID)
+        const rawOwner = getOwnerFromProperties(r)
+        if (rawOwner && rawOwner !== '—' && rawOwner.toLowerCase().includes(q)) return true
+        if (rawOwner && GUID_RE.test(rawOwner)) {
+          const resolved = ownerNames.get(rawOwner)
+          if (resolved && resolved.toLowerCase().includes(q)) return true
+        }
+        return false
+      })
     }
     return items
-  }, [allResources, invView, flowSubView, appSubView, agentSubView, search, hideSystemInv])
+  }, [allResources, invView, flowSubView, appSubView, agentSubView, search, hideSystemInv, ownerNames, searchEnvMap])
 
   const filteredEnvironments = useMemo(() => {
     if (envSubView === 'all') return allEnvironments
@@ -925,10 +951,10 @@ export function Shell() {
               {showTable && (
                 <Input
                   contentBefore={<SearchRegular />}
-                  placeholder="Search…"
+                  placeholder="Search name, type, environment, owner, region…"
                   value={search}
                   onChange={(_, d) => setSearch(d.value)}
-                  style={{ width: '220px' }}
+                  style={{ width: '320px' }}
                 />
               )}
               {showTable && (
