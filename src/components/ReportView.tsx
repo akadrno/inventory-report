@@ -33,7 +33,7 @@ const useClasses = makeStyles({
     overflow: 'hidden',
   },
   heroTitle: {
-    color: tokens.colorNeutralForegroundInverted,
+    color: '#ffffff',
     display: 'block',
     marginBottom: tokens.spacingVerticalXS,
   },
@@ -58,7 +58,7 @@ const useClasses = makeStyles({
   },
   statValue: {
     display: 'block',
-    color: tokens.colorNeutralForegroundInverted,
+    color: '#ffffff',
     fontWeight: tokens.fontWeightBold,
     fontVariantNumeric: 'tabular-nums',
   },
