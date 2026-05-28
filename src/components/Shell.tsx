@@ -46,6 +46,7 @@ import { ReportView, RecsTab, buildRecs } from './ReportView'
 import { MakerAnalyticsView } from './MakerAnalyticsView'
 import { RiskAssessmentView } from './RiskAssessmentView'
 import { UsageView } from './UsageView'
+import { UsageHeatmap } from './UsageHeatmap'
 import { ResourceTaggingView } from './ResourceTaggingView'
 import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
@@ -90,6 +91,7 @@ type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
 type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
+type UsageSubView = 'overview' | 'heatmap'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -803,6 +805,7 @@ export function Shell() {
   const [govView, setGovView] = useState<GovView>('overview')
   const [licView, setLicView] = useState<LicensingView>('summary')
   const [tagView, setTagView] = useState<TagView>('browser')
+  const [usageView, setUsageView] = useState<UsageSubView>('overview')
   const [search, setSearch] = useState('')
   const [panelOpen, setPanelOpen] = useState(true)
   const [hideSystemInv, setHideSystemInv] = useState(true)
@@ -1098,21 +1101,26 @@ export function Shell() {
     }
 
     if (rail === 'usage') {
+      const title = usageView === 'heatmap' ? 'Usage Heatmap' : 'Usage Overview'
+      const sub = usageView === 'heatmap'
+        ? 'Where users are signing in to Power Platform resources (Entra sign-in logs).'
+        : 'Adoption and activity across your Power Platform resources.'
       return (
         <>
           <div className={classes.contentHeader}>
             <div>
-              <Text className={classes.pageTitle}>Usage</Text>
-              <Caption1 className={classes.pageSub}>
-                Adoption and activity across your Power Platform resources.
-              </Caption1>
+              <Text className={classes.pageTitle}>{title}</Text>
+              <Caption1 className={classes.pageSub}>{sub}</Caption1>
             </div>
           </div>
-          <UsageView
-            allResources={nonSystemResources}
-            allEnvironments={allEnvironments}
-            ownerNames={ownerNames}
-          />
+          {usageView === 'heatmap'
+            ? <UsageHeatmap allResources={nonSystemResources} />
+            : <UsageView
+                allResources={nonSystemResources}
+                allEnvironments={allEnvironments}
+                ownerNames={ownerNames}
+              />
+          }
         </>
       )
     }
@@ -1181,6 +1189,25 @@ export function Shell() {
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
             <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
             <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />
+          </div>
+        )}
+
+        {rail === 'usage' && (
+          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
+            {panelOpen ? (
+              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ flex: 1 }}>Usage</span>
+                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
+                  <ChevronLeftRegular fontSize={16} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
+                <ChevronRightRegular fontSize={16} />
+              </button>
+            )}
+            <NavItem icon={<ChartMultipleRegular />} label="Overview" active={usageView === 'overview'} onClick={() => setUsageView('overview')} collapsed={!panelOpen} />
+            <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />
           </div>
         )}
 
