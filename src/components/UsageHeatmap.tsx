@@ -343,7 +343,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
   }, [buckets])
 
   const topUsers = useMemo(
-    () => aggregateByField(filteredRecords, r => r.userPrincipalName || r.userDisplayName, 'Unknown'),
+    () => aggregateByField(filteredRecords, r => r.userDisplayName || r.userPrincipalName, 'Unknown'),
     [filteredRecords],
   )
   const topApps = useMemo(

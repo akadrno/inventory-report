@@ -172,7 +172,13 @@ export function diagnoseSignIns(records: SignInRecord[]): SignInDiagnostics {
 }
 
 export function aggregateByLocation(records: SignInRecord[]): LocationBucket[] {
-  const map = new Map<string, LocationBucket & { userSet: Set<string>; appSet: Set<string> }>()
+  // Track unique users by UPN (canonical identity) but display the friendly
+  // name in the popup. Falls back to UPN when displayName is missing.
+  const map = new Map<string, LocationBucket & {
+    upnSet: Set<string>
+    nameByUpn: Map<string, string>
+    appSet: Set<string>
+  }>()
   for (const r of records) {
     const loc = r.location
     const lat = loc?.geoCoordinates?.latitude
@@ -184,25 +190,36 @@ export function aggregateByLocation(records: SignInRecord[]): LocationBucket[] {
     // bucket (Entra's IP→geo can vary by ~0.01 deg for the same metro).
     const key = `${country}|${city}|${lat.toFixed(2)}|${lng.toFixed(2)}`.toLowerCase()
     const upn = (r.userPrincipalName ?? '').toLowerCase()
+    const displayName = r.userDisplayName?.trim() || r.userPrincipalName || ''
     const app = r.appDisplayName ?? ''
     let entry = map.get(key)
     if (!entry) {
       entry = {
         key, city, country, lat, lng,
         count: 0, uniqueUsers: 0, users: [], apps: [],
-        userSet: new Set<string>(), appSet: new Set<string>(),
+        upnSet: new Set<string>(),
+        nameByUpn: new Map<string, string>(),
+        appSet: new Set<string>(),
       }
       map.set(key, entry)
     }
     entry.count += 1
-    if (upn) entry.userSet.add(upn)
+    if (upn) {
+      entry.upnSet.add(upn)
+      // First non-empty display name wins; later records that lack it don't clobber.
+      if (displayName && !entry.nameByUpn.has(upn)) entry.nameByUpn.set(upn, displayName)
+    } else if (displayName) {
+      // No UPN — fall back to using the display name as both identity + label.
+      entry.upnSet.add(displayName.toLowerCase())
+      entry.nameByUpn.set(displayName.toLowerCase(), displayName)
+    }
     if (app) entry.appSet.add(app)
   }
   return [...map.values()].map(b => ({
     key: b.key, city: b.city, country: b.country, lat: b.lat, lng: b.lng,
     count: b.count,
-    uniqueUsers: b.userSet.size,
-    users: [...b.userSet].slice(0, 10),
+    uniqueUsers: b.upnSet.size,
+    users: [...b.upnSet].slice(0, 10).map(upn => b.nameByUpn.get(upn) ?? upn),
     apps: [...b.appSet].slice(0, 10),
   })).sort((a, b) => b.count - a.count)
 }
