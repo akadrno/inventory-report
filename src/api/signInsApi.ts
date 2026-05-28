@@ -1,4 +1,4 @@
-import { IPublicClientApplication } from '@azure/msal-browser'
+import { IPublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser'
 import { graphAuditLogScopes } from '../auth/msalConfig'
 
 // Minimal shape we need from Microsoft Graph's signIn entity.
@@ -40,11 +40,21 @@ const GRAPH = 'https://graph.microsoft.com/v1.0/auditLogs/signIns'
 async function getGraphToken(msal: IPublicClientApplication): Promise<string> {
   const accounts = msal.getAllAccounts()
   if (!accounts.length) throw new Error('No authenticated account found')
-  const res = await msal.acquireTokenSilent({
-    scopes: graphAuditLogScopes,
-    account: accounts[0],
-  })
-  return res.accessToken
+  const account = accounts[0]
+  try {
+    const res = await msal.acquireTokenSilent({ scopes: graphAuditLogScopes, account })
+    return res.accessToken
+  } catch (e) {
+    // First time the user hits this feature the scope hasn't been consented.
+    // MSAL surfaces that as InteractionRequiredAuthError (wrapping AADSTS65001
+    // or AADSTS50079). Fall back to a popup so the user can grant consent
+    // without an admin having to pre-consent the whole tenant.
+    if (e instanceof InteractionRequiredAuthError) {
+      const res = await msal.acquireTokenPopup({ scopes: graphAuditLogScopes, account })
+      return res.accessToken
+    }
+    throw e
+  }
 }
 
 function buildInitialUrl(opts: FetchSignInsOptions): string {
