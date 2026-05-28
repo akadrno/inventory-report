@@ -7,8 +7,11 @@ export interface SignInRecord {
   id: string
   createdDateTime: string
   userPrincipalName?: string
+  userDisplayName?: string
   appId?: string
   appDisplayName?: string
+  clientAppUsed?: string
+  ipAddress?: string
   location?: {
     city?: string
     state?: string
@@ -33,6 +36,8 @@ export interface FetchSignInsResult {
   records: SignInRecord[]
   truncated: boolean
   totalFetched: number
+  /** Number of pages fetched from Graph (for debugging). */
+  pagesFetched: number
 }
 
 const GRAPH = 'https://graph.microsoft.com/v1.0/auditLogs/signIns'
@@ -45,10 +50,6 @@ async function getGraphToken(msal: IPublicClientApplication): Promise<string> {
     const res = await msal.acquireTokenSilent({ scopes: graphAuditLogScopes, account })
     return res.accessToken
   } catch (e) {
-    // First time the user hits this feature the scope hasn't been consented.
-    // MSAL surfaces that as InteractionRequiredAuthError (wrapping AADSTS65001
-    // or AADSTS50079). Fall back to a popup so the user can grant consent
-    // without an admin having to pre-consent the whole tenant.
     if (e instanceof InteractionRequiredAuthError) {
       const res = await msal.acquireTokenPopup({ scopes: graphAuditLogScopes, account })
       return res.accessToken
@@ -66,7 +67,14 @@ function buildInitialUrl(opts: FetchSignInsOptions): string {
   const params = new URLSearchParams({
     $top: '999',
     $filter: filters.join(' and '),
-    $select: 'id,createdDateTime,userPrincipalName,appId,appDisplayName,location,status',
+    // Pull richer fields so we can surface app names, IPs, success/fail in
+    // the UI without re-fetching.
+    $select: [
+      'id', 'createdDateTime',
+      'userPrincipalName', 'userDisplayName',
+      'appId', 'appDisplayName', 'clientAppUsed',
+      'ipAddress', 'location', 'status',
+    ].join(','),
   })
   return `${GRAPH}?${params.toString()}`
 }
@@ -80,20 +88,22 @@ export async function fetchSignIns(
   const records: SignInRecord[] = []
   let url: string | undefined = buildInitialUrl(opts)
   let truncated = false
+  let pagesFetched = 0
 
   while (url && records.length < maxRecords) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       signal: opts.signal,
     })
+    pagesFetched++
     if (!res.ok) {
-      // Surface a sharper error for the common "permission missing" case so
-      // the UI can render a useful banner instead of a generic 4xx string.
       if (res.status === 403 || res.status === 401) {
         const body = await res.text().catch(() => '')
         throw new Error(
-          `Sign-in logs unavailable (HTTP ${res.status}). The app needs AuditLog.Read.All ` +
-          `Graph permission with admin consent. ${body.slice(0, 200)}`,
+          `Sign-in logs unavailable (HTTP ${res.status}). The signed-in user needs ` +
+          `the AuditLog.Read.All Graph permission AND an Entra role that can read ` +
+          `audit logs (Reports Reader, Security Reader, Global Reader, or Global Admin). ` +
+          `${body.slice(0, 200)}`,
         )
       }
       throw new Error(`Graph signIns query failed: ${res.status} ${res.statusText}`)
@@ -107,13 +117,13 @@ export async function fetchSignIns(
     if (!truncated && !url) break
   }
 
-  return { records, truncated, totalFetched: records.length }
+  return { records, truncated, totalFetched: records.length, pagesFetched }
 }
 
 // ─── Aggregation ───────────────────────────────────────────────────────────────
 
 export interface LocationBucket {
-  /** Lower-cased city|country key so we de-dupe consistently. */
+  /** Lower-cased "country|city|lat|lng" key so we de-dupe consistently. */
   key: string
   city: string
   country: string
@@ -121,10 +131,48 @@ export interface LocationBucket {
   lng: number
   count: number
   uniqueUsers: number
+  users: string[]   // up to first 10, for popup display
+  apps: string[]    // up to first 10 distinct app display names
+}
+
+export interface CountBucket {
+  label: string
+  count: number
+}
+
+export interface SignInDiagnostics {
+  totalRecords: number
+  withGeo: number
+  withoutGeo: number
+  successful: number
+  failed: number
+  distinctUsers: number
+  distinctApps: number
+}
+
+export function diagnoseSignIns(records: SignInRecord[]): SignInDiagnostics {
+  const users = new Set<string>()
+  const apps = new Set<string>()
+  let withGeo = 0, withoutGeo = 0, successful = 0, failed = 0
+  for (const r of records) {
+    const lat = r.location?.geoCoordinates?.latitude
+    const lng = r.location?.geoCoordinates?.longitude
+    if (typeof lat === 'number' && typeof lng === 'number') withGeo++
+    else withoutGeo++
+    if ((r.status?.errorCode ?? 0) === 0) successful++
+    else failed++
+    if (r.userPrincipalName) users.add(r.userPrincipalName.toLowerCase())
+    if (r.appDisplayName) apps.add(r.appDisplayName)
+  }
+  return {
+    totalRecords: records.length,
+    withGeo, withoutGeo, successful, failed,
+    distinctUsers: users.size, distinctApps: apps.size,
+  }
 }
 
 export function aggregateByLocation(records: SignInRecord[]): LocationBucket[] {
-  const buckets = new Map<string, LocationBucket & { users: Set<string> }>()
+  const map = new Map<string, LocationBucket & { userSet: Set<string>; appSet: Set<string> }>()
   for (const r of records) {
     const loc = r.location
     const lat = loc?.geoCoordinates?.latitude
@@ -132,38 +180,44 @@ export function aggregateByLocation(records: SignInRecord[]): LocationBucket[] {
     if (typeof lat !== 'number' || typeof lng !== 'number') continue
     const city = loc?.city ?? ''
     const country = loc?.countryOrRegion ?? ''
+    // Use coarser precision so nearby IPs in the same city collapse to one
+    // bucket (Entra's IP→geo can vary by ~0.01 deg for the same metro).
     const key = `${country}|${city}|${lat.toFixed(2)}|${lng.toFixed(2)}`.toLowerCase()
     const upn = (r.userPrincipalName ?? '').toLowerCase()
-    let entry = buckets.get(key)
+    const app = r.appDisplayName ?? ''
+    let entry = map.get(key)
     if (!entry) {
       entry = {
-        key, city, country, lat, lng, count: 0, uniqueUsers: 0,
-        users: new Set<string>(),
+        key, city, country, lat, lng,
+        count: 0, uniqueUsers: 0, users: [], apps: [],
+        userSet: new Set<string>(), appSet: new Set<string>(),
       }
-      buckets.set(key, entry)
+      map.set(key, entry)
     }
     entry.count += 1
-    if (upn) entry.users.add(upn)
+    if (upn) entry.userSet.add(upn)
+    if (app) entry.appSet.add(app)
   }
-  return [...buckets.values()].map(b => ({
+  return [...map.values()].map(b => ({
     key: b.key, city: b.city, country: b.country, lat: b.lat, lng: b.lng,
-    count: b.count, uniqueUsers: b.users.size,
+    count: b.count,
+    uniqueUsers: b.userSet.size,
+    users: [...b.userSet].slice(0, 10),
+    apps: [...b.appSet].slice(0, 10),
   })).sort((a, b) => b.count - a.count)
 }
 
-export function aggregateByCountry(buckets: LocationBucket[]): { country: string; count: number; uniqueUsers: number }[] {
-  const m = new Map<string, { country: string; count: number; users: Set<string> }>()
-  // We don't have the user set per-country in LocationBucket, so we approximate
-  // uniqueUsers by summing per-bucket uniques — overcounts users that signed in
-  // from multiple cities within one country.
-  for (const b of buckets) {
-    const c = b.country || 'Unknown'
-    const e = m.get(c) ?? { country: c, count: 0, users: new Set<string>() }
-    e.count += b.count
-    // approximate
-    for (let i = 0; i < b.uniqueUsers; i++) e.users.add(`${c}|${b.key}|${i}`)
-    m.set(c, e)
+export function aggregateByField(
+  records: SignInRecord[],
+  pick: (r: SignInRecord) => string | undefined,
+  fallback = 'Unknown',
+): CountBucket[] {
+  const m = new Map<string, number>()
+  for (const r of records) {
+    const v = pick(r)?.trim() || fallback
+    m.set(v, (m.get(v) ?? 0) + 1)
   }
-  return [...m.values()].map(e => ({ country: e.country, count: e.count, uniqueUsers: e.users.size }))
+  return [...m.entries()]
+    .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count)
 }
