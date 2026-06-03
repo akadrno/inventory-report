@@ -20,7 +20,8 @@ import {
 } from '../utils/format'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
 import { formatRegion } from '../utils/regions'
-import { getConnectorInfo, findConnectorIdByDisplayName } from '../utils/connectors'
+import { getConnectorInfo, findConnectorIdByDisplayName, normalizeConnectorId } from '../utils/connectors'
+import { useConnectorMetadata, type ConnectorMetadata } from '../hooks/useConnectorMetadata'
 import {
   getDescription, getResourceGuid, getResourceUrl, getMadeInProduct,
   getItemTypeLabel, getStatus, getPublishedChannels,
@@ -30,11 +31,13 @@ import {
   getAgentOrchestration, getAgentAuthentication, getAgentCreatedIn, getAgentSchemaName,
   getIsQuarantined, getFlowWorkflowEntityId, getAppModuleId, getAppLogicalName,
   getEnvironmentGroupId, getEnvironmentGroupName,
-  getConnectors, getSharing, getResourceSharingCounts, hasAnySharingCount,
+  getConnectorsWithOperations, getFlowTrigger,
+  getSharing, getResourceSharingCounts, hasAnySharingCount,
   getAgentKnowledge, getAgentTools, getAgentConnectedAgents,
   getAgentTopics, getAgentFlows, getAgentChannels,
   HANDLED_PROPERTY_KEYS,
   type PersonRef, type SharingCounts, type ResourceSharingCounts, type NamedItem,
+  type ConnectorWithOperations,
 } from '../utils/resourceMetadata'
 import { getResourceCategory } from '../types'
 
@@ -433,6 +436,7 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
   const agentSchemaName = getAgentSchemaName(resource)
   const isQuarantined = getIsQuarantined(resource)
   const flowWorkflowEntityId = getFlowWorkflowEntityId(resource)
+  const flowTrigger = getFlowTrigger(resource)
   const appModuleId = getAppModuleId(resource)
   const appLogicalName = getAppLogicalName(resource)
 
@@ -481,6 +485,21 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
                   {channels.map(c => (
                     <Badge key={c} appearance="tint" color="subtle" size="small">{c}</Badge>
                   ))}
+                </span>
+              </Row>
+            )}
+            {flowTrigger && (
+              <Row label="Trigger">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {flowTrigger.trigger && (
+                    <>
+                      <ConnectorChip connectorId={flowTrigger.trigger} />
+                      <span>{getConnectorInfo(flowTrigger.trigger).displayName}</span>
+                    </>
+                  )}
+                  {flowTrigger.triggerOperation && (
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{flowTrigger.triggerOperation}</Caption1>
+                  )}
                 </span>
               </Row>
             )}
@@ -614,7 +633,14 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
   const isAgent = category === 'agents'
 
   // Extract everything once so we know which sections have data.
-  const connectorIds = useMemo(() => isAgent ? [] : getConnectors(resource), [resource, isAgent])
+  const connectors = useMemo(() => isAgent ? [] : getConnectorsWithOperations(resource), [resource, isAgent])
+
+  // Enrich apps/flows connectors with tier / publisher / display name from the
+  // PowerApps catalog. Best-effort: disabled for agents or when there's nothing
+  // to enrich, and failures fall back to the static connector lookup.
+  const connectorMeta = useConnectorMetadata(
+    !isAgent && connectors.length > 0 ? resource.environmentId : undefined,
+  )
   const sharing = useMemo(() => getSharing(resource), [resource])
   const sharingCounts = useMemo(() => getResourceSharingCounts(resource), [resource])
   const knowledge = useMemo(() => isAgent ? getAgentKnowledge(resource)       : [], [resource, isAgent])
@@ -628,7 +654,7 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
   // (no "Connector actions" — connectors are surfaced via Tools and Knowledge instead).
   const sections: { key: ConfigSection; label: string; count: number }[] = []
   if (!isAgent) {
-    sections.push({ key: 'connectors', label: 'Connectors', count: connectorIds.length })
+    sections.push({ key: 'connectors', label: 'Connectors', count: connectors.length })
   } else {
     sections.push(
       { key: 'knowledge', label: 'Knowledge', count: knowledge.length },
@@ -677,7 +703,7 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
         </div>
 
         {active === 'connectors' && (
-          <ConnectorsSection ids={connectorIds} search={search} />
+          <ConnectorsSection connectors={connectors} search={search} meta={connectorMeta.data} />
         )}
         {active === 'knowledge'  && <NamedItemsSection items={knowledge}       search={search} empty="No knowledge sources reported by inventory." nameMap={nameMap} />}
         {active === 'tools'      && <NamedItemsSection items={tools}           search={search} empty="No tool / capability data in inventory." nameMap={nameMap} />}
@@ -691,33 +717,98 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
   )
 }
 
-function ConnectorsSection({ ids, search }: { ids: string[]; search: string }) {
+function ConnectorsSection({ connectors, search, meta }: {
+  connectors: ConnectorWithOperations[]
+  search: string
+  meta?: Record<string, ConnectorMetadata>
+}) {
   const classes = useClasses()
+
+  // Resolve the enriched view for one connector: prefer the live catalog's
+  // display name/tier/publisher, falling back to the static lookup.
+  const enrich = (connectorId: string) => {
+    const info = getConnectorInfo(connectorId)
+    const m = meta?.[normalizeConnectorId(connectorId)]
+    return {
+      displayName: m?.displayName || info.displayName,
+      tier: m?.tier,
+      publisher: m?.publisher,
+      isCustom: m?.isCustom,
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return ids.filter(id => {
-      if (!q) return true
-      const info = getConnectorInfo(id)
-      return info.displayName.toLowerCase().includes(q) || id.toLowerCase().includes(q)
+    if (!q) return connectors
+    return connectors.filter(c => {
+      const e = enrich(c.connectorId)
+      return e.displayName.toLowerCase().includes(q)
+        || c.connectorId.toLowerCase().includes(q)
+        || (e.publisher ?? '').toLowerCase().includes(q)
+        || c.operations.some(op => op.toLowerCase().includes(q))
     })
-  }, [ids, search])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectors, search, meta])
 
-  if (ids.length === 0) {
+  const counts = useMemo(() => {
+    let premium = 0, custom = 0
+    for (const c of connectors) {
+      const m = meta?.[normalizeConnectorId(c.connectorId)]
+      if (m?.tier?.toLowerCase() === 'premium') premium++
+      if (m?.isCustom) custom++
+    }
+    return { premium, custom }
+  }, [connectors, meta])
+
+  if (connectors.length === 0) {
     return <EmptyState message="No connectors reported in inventory for this resource." />
   }
 
   return (
     <div className={classes.itemList}>
-      <div className={classes.listHeader} style={{ gridTemplateColumns: '32px minmax(0, 1fr)' }}>
-        <span />
-        <span>Connector name</span>
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', padding: '4px 0 8px' }}>
+        <Badge appearance="tint" color="informative" size="small">{connectors.length} connector{connectors.length === 1 ? '' : 's'}</Badge>
+        {counts.premium > 0 && <Badge appearance="tint" color="brand" size="small">{counts.premium} premium</Badge>}
+        {counts.custom > 0 && <Badge appearance="tint" color="warning" size="small">{counts.custom} custom</Badge>}
+        {!meta && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Tier &amp; publisher unavailable</Caption1>}
       </div>
-      {filtered.map(id => {
-        const info = getConnectorInfo(id)
+      {filtered.map(c => {
+        const e = enrich(c.connectorId)
         return (
-          <div key={id} className={classes.itemRow} style={{ gridTemplateColumns: '32px minmax(0, 1fr)' }}>
-            <ConnectorChip connectorId={id} />
-            <span className={classes.ellipsis} title={info.displayName}>{info.displayName}</span>
+          <div key={c.connectorId} className={classes.itemRowSimple} style={{ alignItems: 'flex-start' }}>
+            <ConnectorChip connectorId={c.connectorId} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <Body1Strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.displayName}>
+                  {e.displayName}
+                </Body1Strong>
+                {e.tier && (
+                  <Badge appearance={e.tier.toLowerCase() === 'premium' ? 'filled' : 'tint'} color={e.tier.toLowerCase() === 'premium' ? 'brand' : 'subtle'} size="small">
+                    {e.tier}
+                  </Badge>
+                )}
+                {e.isCustom && <Badge appearance="outline" color="warning" size="small">Custom</Badge>}
+              </div>
+              {e.publisher && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>by {e.publisher}</Caption1>
+              )}
+              {c.operations.length > 0 ? (
+                <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {c.operations.map(op => (
+                    <Badge key={op} appearance="outline" color="subtle" size="small">{op}</Badge>
+                  ))}
+                </div>
+              ) : (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>
+                  No actions reported — used as a data source
+                </Caption1>
+              )}
+            </div>
+            {c.operations.length > 0 && (
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }}>
+                {c.operations.length} action{c.operations.length === 1 ? '' : 's'}
+              </Caption1>
+            )}
           </div>
         )
       })}
@@ -945,6 +1036,11 @@ function buildOverviewText(resource: ResourceItem, allEnvironments: ResourceItem
   add('App module ID', getAppModuleId(resource))
   add('Logical name', getAppLogicalName(resource))
   add('Workflow entity ID', getFlowWorkflowEntityId(resource))
+  const trigger = getFlowTrigger(resource)
+  if (trigger) {
+    const triggerName = trigger.trigger ? getConnectorInfo(trigger.trigger).displayName : undefined
+    add('Trigger', [triggerName, trigger.triggerOperation].filter(Boolean).join(' · ') || undefined)
+  }
   add('Resource URL', getResourceUrl(resource))
   add('Environment', resolveEnvironmentName(resource, envMap))
   add('Environment type', resource.environmentType)

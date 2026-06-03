@@ -18,6 +18,7 @@ import {
   ArrowClockwiseRegular,
   GridRegular,
   LightbulbRegular,
+  PlugConnectedRegular,
   ChevronRightRegular,
   ChevronLeftRegular,
   TagMultipleRegular,
@@ -35,7 +36,10 @@ import { useResources } from '../hooks/useResources'
 import { useEnvironmentGroups } from '../hooks/useEnvironmentGroups'
 import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
-import { useDLPPolicies, useTenantSettings, useLicenses } from '../hooks/useGovernance'
+import {
+  useDLPPolicies, useTenantSettings, useLicenses,
+  useCrossTenantConnectionReport, useAdvisorRecommendations, useConnections,
+} from '../hooks/useGovernance'
 import type { SubscribedSku } from '../hooks/useGovernance'
 import { isPowerPlatformSku } from '../api/graphApi'
 import { ResourceTable } from './ResourceTable'
@@ -65,6 +69,10 @@ import {
   DLPSection,
   DLPPolicyDetail,
   EnvironmentDrillDown,
+  CrossTenantSection,
+  ConnectionsSection,
+  RecommendationsSection,
+  RecommendationDetail,
 } from './GovernanceView'
 import type { InsightKey } from './GovernanceView'
 import type { DLPPolicy } from '../hooks/useGovernance'
@@ -89,7 +97,7 @@ type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
 type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
 type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
-type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
+type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'cross-tenant' | 'connections' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
 type UsageSubView = 'overview' | 'heatmap'
 
@@ -564,6 +572,115 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
         </div>
         <DLPSection policies={data} onPolicyClick={setSelectedPolicy} />
       </div>
+    </div>
+  )
+}
+
+// ── Governance: Cross Tenant Connections page ────────────────────────────────
+
+function GovPermNotice({ message }: { message: string }) {
+  const classes = useClasses()
+  return (
+    <div className={classes.sectionCard}>
+      <div className={classes.permNotice}>
+        <LockClosedRegular fontSize={16} />
+        <Caption1>{message}</Caption1>
+      </div>
+    </div>
+  )
+}
+
+function GovCrossTenantPage() {
+  const classes = useClasses()
+  // Navigating to this page is the explicit signal to generate/fetch the report.
+  const query = useCrossTenantConnectionReport(true)
+
+  if (query.isError) {
+    return <GovPermNotice message="Requires Power Platform admin permissions. Cross-tenant connection reports are read from the governance API." />
+  }
+  if (query.isLoading || (!query.data && query.isFetching)) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Generating cross-tenant connection report…" /></div>
+  }
+  if (!query.data) return null
+
+  return (
+    <div className={classes.sectionCard}>
+      <div className={classes.cardHead}>
+        <GlobeRegular fontSize={16} style={{ color: ACTIVE }} />
+        Cross Tenant Connections
+      </div>
+      <CrossTenantSection
+        report={query.data}
+        onRefresh={() => query.refetch()}
+        isFetching={query.isFetching}
+      />
+    </div>
+  )
+}
+
+// ── Governance: Connections page ─────────────────────────────────────────────
+
+function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
+  const classes = useClasses()
+  const envIds = useMemo(() => allEnvironments.map(e => e.name).filter(Boolean), [allEnvironments])
+  const query = useConnections(envIds, true)
+
+  if (query.isError) {
+    return <GovPermNotice message="Requires Power Platform admin permissions to enumerate connections across environments." />
+  }
+  if (query.isLoading) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Scanning environments for connections…" /></div>
+  }
+  if (!query.data) return null
+
+  return (
+    <div className={classes.sectionCard}>
+      <div className={classes.cardHead}>
+        <PlugConnectedRegular fontSize={16} style={{ color: ACTIVE }} />
+        Connections
+      </div>
+      <ConnectionsSection result={query.data} />
+    </div>
+  )
+}
+
+// ── Governance: Recommendations page (Advisor + computed) ────────────────────
+
+function GovRecommendationsPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
+  const classes = useClasses()
+  const [scenario, setScenario] = useState<string | null>(null)
+  const advisor = useAdvisorRecommendations(true)
+
+  // The drill-down takes over the whole page (its own breadcrumb back-nav).
+  if (scenario) {
+    return <RecommendationDetail scenario={scenario} onBack={() => setScenario(null)} />
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Advisor (security & governance) recommendations from the analytics API */}
+      <div className={classes.sectionCard}>
+        <div className={classes.cardHead}>
+          <LightbulbRegular fontSize={16} style={{ color: ACTIVE }} />
+          Advisor Recommendations
+          {advisor.data && advisor.data.length > 0 && (
+            <Badge appearance="tint" color="informative" size="small">{advisor.data.length}</Badge>
+          )}
+        </div>
+        {advisor.isError ? (
+          <div className={classes.permNotice}>
+            <LockClosedRegular fontSize={16} />
+            <Caption1>Advisor recommendations require Managed Environments and Power Platform admin permissions.</Caption1>
+          </div>
+        ) : advisor.isLoading ? (
+          <div style={{ padding: '16px' }}><Spinner size="extra-small" label="Loading Advisor recommendations…" /></div>
+        ) : (
+          <RecommendationsSection recommendations={advisor.data ?? []} onScenarioClick={setScenario} />
+        )}
+      </div>
+
+      {/* The app's own computed recommendations from inventory + tenant settings */}
+      <RecsTab allEnvironments={allEnvironments} />
     </div>
   )
 }
@@ -1069,7 +1186,7 @@ export function Shell() {
     }
 
     if (rail === 'governance') {
-      const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
+      const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', 'cross-tenant': 'Cross Tenant Connections', connections: 'Connections', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
       return (
         <>
           <div className={classes.contentHeader}>
@@ -1085,7 +1202,9 @@ export function Shell() {
           )}
           {govView === 'tenant-settings' && <GovTenantSettingsPage />}
           {govView === 'dlp' && <GovDLPPage allEnvironments={allEnvironments} />}
-          {govView === 'recommendations' && <RecsTab allEnvironments={allEnvironments} />}
+          {govView === 'cross-tenant' && <GovCrossTenantPage />}
+          {govView === 'connections' && <GovConnectionsPage allEnvironments={allEnvironments} />}
+          {govView === 'recommendations' && <GovRecommendationsPage allEnvironments={allEnvironments} />}
           {govView === 'maker-analytics' && (
             <MakerAnalyticsView allResources={allResources} allEnvironments={allEnvironments} ownerNames={ownerNames} />
           )}
@@ -1186,6 +1305,8 @@ export function Shell() {
             <NavItem icon={<ShieldCheckmarkRegular />} label="Overview" active={govView === 'overview'} onClick={() => setGovView('overview')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />
             <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />
+            <NavItem icon={<GlobeRegular />} label="Cross Tenant Connections" active={govView === 'cross-tenant'} onClick={() => setGovView('cross-tenant')} collapsed={!panelOpen} />
+            <NavItem icon={<PlugConnectedRegular />} label="Connections" active={govView === 'connections'} onClick={() => setGovView('connections')} collapsed={!panelOpen} />
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
             <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
             <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />

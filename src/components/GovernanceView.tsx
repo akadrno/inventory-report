@@ -27,11 +27,24 @@ import {
   ArrowLeftRegular,
   DatabaseRegular,
   TagRegular,
+  LightbulbRegular,
+  PlugConnectedRegular,
+  ArrowSyncRegular,
+  ArrowDownloadRegular,
+  ArrowUploadRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
-import { useDLPPolicies, useTenantSettings, useEnvironmentCapacity, useBillingPolicies } from '../hooks/useGovernance'
-import type { DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy } from '../hooks/useGovernance'
+import {
+  useDLPPolicies, useTenantSettings, useEnvironmentCapacity, useBillingPolicies,
+  useCrossTenantConnectionReport, useAdvisorRecommendations, useRecommendationResources, useConnections,
+} from '../hooks/useGovernance'
+import type {
+  DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
+  CrossTenantConnectionReport, AdvisorRecommendation, ConnectionsResult,
+} from '../hooks/useGovernance'
+import { getConnectorInfo } from '../utils/connectors'
+import { formatLocalDateTime } from '../utils/format'
 
 interface GovernanceViewProps {
   allResources: ResourceItem[]
@@ -776,6 +789,349 @@ function BillingPoliciesSection({
   )
 }
 
+// ── Cross-Tenant Connections Section ─────────────────────────────────────────
+
+interface ForeignTenant {
+  tenantId: string
+  count: number
+}
+
+function groupForeignTenants(report: CrossTenantConnectionReport, direction: 'Inbound' | 'Outbound'): ForeignTenant[] {
+  const m = new Map<string, number>()
+  for (const c of report.connections) {
+    if (c.connectionType !== direction) continue
+    m.set(c.tenantId, (m.get(c.tenantId) ?? 0) + 1)
+  }
+  return [...m.entries()].map(([tenantId, count]) => ({ tenantId, count })).sort((a, b) => b.count - a.count)
+}
+
+export function CrossTenantSection({
+  report,
+  onRefresh,
+  isFetching,
+}: {
+  report: CrossTenantConnectionReport
+  onRefresh: () => void
+  isFetching: boolean
+}) {
+  const classes = useClasses()
+  const inbound = useMemo(() => groupForeignTenants(report, 'Inbound'), [report])
+  const outbound = useMemo(() => groupForeignTenants(report, 'Outbound'), [report])
+  const generating = report.status === 'InProgress' || report.status === 'Received'
+
+  const directionBlock = (
+    label: string,
+    icon: React.ReactNode,
+    tenants: ForeignTenant[],
+    hint: string,
+  ) => (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalXS }}>
+        {icon}
+        <Text size={300} weight="semibold">{label}</Text>
+        <Badge appearance="tint" color={tenants.length > 0 ? 'warning' : 'success'} size="small">
+          {tenants.length} tenant{tenants.length !== 1 ? 's' : ''}
+        </Badge>
+      </div>
+      {tenants.length === 0 ? (
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{hint}</Caption1>
+      ) : (
+        tenants.map(t => (
+          <div key={t.tenantId} className={classes.row}>
+            <div className={classes.rowLeft}>
+              <GlobeRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+              <Text size={200} style={{ fontFamily: 'Consolas, monospace' }}>{t.tenantId}</Text>
+            </div>
+            <Badge appearance="tint" color="subtle" size="small">{t.count} connection{t.count !== 1 ? 's' : ''}</Badge>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  return (
+    <div className={classes.sectionBody}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' }}>
+        <Badge
+          appearance="tint"
+          color={report.status === 'Completed' ? 'success' : report.status === 'Failed' ? 'danger' : 'informative'}
+          size="small"
+        >
+          {report.status ?? 'Unknown'}
+        </Badge>
+        {report.startDate && report.endDate && (
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            {formatLocalDateTime(report.startDate)} – {formatLocalDateTime(report.endDate)}
+          </Caption1>
+        )}
+        <Button
+          appearance="subtle"
+          icon={<ArrowSyncRegular />}
+          size="small"
+          disabled={isFetching}
+          onClick={onRefresh}
+          style={{ marginLeft: 'auto' }}
+        >
+          {isFetching ? 'Refreshing…' : 'Refresh'}
+        </Button>
+      </div>
+
+      {generating ? (
+        <div className={classes.permissionNotice}>
+          <Spinner size="extra-tiny" />
+          <Caption1>The report is still generating on the service. Use Refresh in a moment to pull the latest results.</Caption1>
+        </div>
+      ) : report.connections.length === 0 ? (
+        <div className={classes.permissionNotice} style={{ backgroundColor: tokens.colorPaletteGreenBackground1 }}>
+          <CheckmarkCircleRegular fontSize={16} style={{ color: tokens.colorPaletteGreenForeground1 }} />
+          <Caption1 style={{ color: tokens.colorPaletteGreenForeground2 }}>
+            No cross-tenant connections detected in the report window.
+          </Caption1>
+        </div>
+      ) : (
+        <>
+          {directionBlock(
+            'Outbound (your tenant → external)',
+            <ArrowUploadRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />,
+            outbound,
+            'No outbound connections to external tenants.',
+          )}
+          {directionBlock(
+            'Inbound (external → your tenant)',
+            <ArrowDownloadRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />,
+            inbound,
+            'No inbound connections from external tenants.',
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Advisor Recommendations Section ──────────────────────────────────────────
+
+// Scenario names arrive as machine identifiers (camelCase / dotted). Turn them
+// into a readable title for display.
+export function humanizeScenario(s: string): string {
+  const words = s
+    .replace(/[._-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!words) return s
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+export function RecommendationsSection({
+  recommendations,
+  onScenarioClick,
+}: {
+  recommendations: AdvisorRecommendation[]
+  onScenarioClick: (scenario: string) => void
+}) {
+  const classes = useClasses()
+
+  if (recommendations.length === 0) {
+    return (
+      <div className={classes.sectionBody}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+          No Advisor recommendations available. Advisor evaluates Managed Environments; results appear once it has run.
+        </Caption1>
+      </div>
+    )
+  }
+
+  const sorted = [...recommendations].sort((a, b) => (b.resourceCount ?? 0) - (a.resourceCount ?? 0))
+
+  return (
+    <div className={classes.sectionBody}>
+      <Badge appearance="tint" color="informative" size="small" style={{ alignSelf: 'flex-start' }}>
+        {recommendations.length} recommendation{recommendations.length !== 1 ? 's' : ''}
+      </Badge>
+      {sorted.map(rec => {
+        const count = rec.resourceCount ?? 0
+        return (
+          <div key={rec.scenario} className={classes.insightRowClickable} onClick={() => onScenarioClick(rec.scenario)}>
+            <LightbulbRegular fontSize={16} style={{ color: count > 0 ? tokens.colorPaletteMarigoldForeground2 : tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text size={200} weight="semibold" style={{ display: 'block' }}>{humanizeScenario(rec.scenario)}</Text>
+              <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, marginTop: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <Badge appearance="tint" color={count > 0 ? 'warning' : 'success'} size="small">
+                  {count} resource{count !== 1 ? 's' : ''}
+                </Badge>
+                {rec.lastRefreshedTimestamp && (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    Refreshed {formatLocalDateTime(rec.lastRefreshedTimestamp)}
+                  </Caption1>
+                )}
+              </div>
+            </div>
+            <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, marginTop: '2px' }} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Recommendation drill-down (resources for one scenario) ───────────────────
+
+export function RecommendationDetail({
+  scenario,
+  onBack,
+}: {
+  scenario: string
+  onBack: () => void
+}) {
+  const classes = useClasses()
+  const { data, isLoading, isError } = useRecommendationResources(scenario)
+
+  return (
+    <div className={classes.drillRoot}>
+      <div className={classes.breadcrumb}>
+        <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={onBack}>
+          Recommendations
+        </Button>
+        <Text style={{ color: tokens.colorNeutralForeground3 }}>/</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
+          <LightbulbRegular style={{ color: tokens.colorBrandForeground2, fontSize: '16px' }} />
+          <Text weight="semibold">{humanizeScenario(scenario)}</Text>
+        </div>
+        {data && <Badge appearance="tint" color="subtle" size="small">{data.length} resource{data.length !== 1 ? 's' : ''}</Badge>}
+      </div>
+
+      <div className={classes.sectionCard}>
+        {isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : isLoading ? (
+          <div className={classes.sectionBody}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading affected resources…</Caption1></div>
+        ) : !data || data.length === 0 ? (
+          <div className={classes.sectionBody}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No resources are currently flagged for this recommendation.</Caption1></div>
+        ) : (
+          <div style={{ padding: `0 ${tokens.spacingHorizontalL}` }}>
+            {data.map(r => (
+              <div key={r.resourceId} className={classes.envRow}>
+                <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                  <DatabaseRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <Text size={200} weight="semibold" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.resourceName || r.resourceId}
+                    </Text>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      {[r.resourceType, r.environmentName, r.resourceOwner].filter(Boolean).join(' · ') || '—'}
+                    </Caption1>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: '2px' }}>
+                  {typeof r.resourceUsage === 'number' && (
+                    <Badge appearance="tint" color="subtle" size="small">{r.resourceUsage} user{r.resourceUsage === 1 ? '' : 's'}/30d</Badge>
+                  )}
+                  {r.lastAccessedDate && (
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Last used {formatLocalDateTime(r.lastAccessedDate)}</Caption1>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Connections (live connection instances + owners) Section ─────────────────
+
+function InlineConnectorChip({ connectorId }: { connectorId: string }) {
+  const info = getConnectorInfo(connectorId)
+  return (
+    <span
+      title={info.displayName}
+      style={{
+        width: '22px', height: '22px', borderRadius: '5px',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', fontSize: '11px', fontWeight: 700, lineHeight: 1,
+        backgroundColor: info.color, flexShrink: 0,
+      }}
+    >
+      {info.letter}
+    </span>
+  )
+}
+
+interface ConnectorGroup {
+  connectorId: string
+  displayName: string
+  count: number
+  owners: number
+}
+
+export function ConnectionsSection({ result }: { result: ConnectionsResult }) {
+  const classes = useClasses()
+
+  const groups = useMemo<ConnectorGroup[]>(() => {
+    const m = new Map<string, { count: number; owners: Set<string> }>()
+    for (const c of result.connections) {
+      const entry = m.get(c.connectorId) ?? { count: 0, owners: new Set<string>() }
+      entry.count++
+      const ownerKey = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
+      if (ownerKey) entry.owners.add(ownerKey)
+      m.set(c.connectorId, entry)
+    }
+    return [...m.entries()]
+      .map(([connectorId, v]) => ({
+        connectorId,
+        displayName: getConnectorInfo(connectorId).displayName,
+        count: v.count,
+        owners: v.owners.size,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [result])
+
+  const distinctOwners = useMemo(() => {
+    const s = new Set<string>()
+    for (const c of result.connections) {
+      const k = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
+      if (k) s.add(k)
+    }
+    return s.size
+  }, [result])
+
+  if (result.connections.length === 0) {
+    return (
+      <div className={classes.sectionBody}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+          No connections found across the environments scanned.
+        </Caption1>
+      </div>
+    )
+  }
+
+  return (
+    <div className={classes.sectionBody}>
+      <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap', marginBottom: tokens.spacingVerticalXS }}>
+        <Badge appearance="tint" color="informative" size="small">{result.connections.length} connections</Badge>
+        <Badge appearance="tint" color="subtle" size="small">{groups.length} connectors</Badge>
+        <Badge appearance="tint" color="subtle" size="small">{distinctOwners} owners</Badge>
+        {result.truncated && (
+          <Badge appearance="tint" color="warning" size="small">Partial — first 60 environments scanned</Badge>
+        )}
+      </div>
+      {groups.map(g => (
+        <div key={g.connectorId} className={classes.row}>
+          <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+            <InlineConnectorChip connectorId={g.connectorId} />
+            <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.displayName}</Text>
+          </div>
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
+            <Badge appearance="tint" color="subtle" size="small">{g.count} conn.</Badge>
+            <Badge appearance="tint" color="subtle" size="small">{g.owners} owner{g.owners !== 1 ? 's' : ''}</Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Collapsible section wrapper ──────────────────────────────────────────────
 
 function CollapsibleSection({
@@ -783,23 +1139,33 @@ function CollapsibleSection({
   title,
   warnCount,
   loading,
+  onOpenChange,
   children,
 }: {
   icon: React.ReactNode
   title: string
   warnCount?: number
   loading?: boolean
+  onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const classes = useClasses()
   const hasWarn = !!warnCount && warnCount > 0
 
+  const toggle = () => {
+    setOpen(o => {
+      const next = !o
+      onOpenChange?.(next)
+      return next
+    })
+  }
+
   return (
     <div className={hasWarn ? classes.sectionCardWarn : classes.sectionCard}>
       <div
         className={open ? classes.sectionHeaderClickableOpen : classes.sectionHeaderClickable}
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
       >
         {icon}
         <Text weight="semibold" style={{ flex: 1 }}>{title}</Text>
@@ -829,6 +1195,18 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
   const billingQuery = useBillingPolicies()
   const [drillDown, setDrillDown] = useState<InsightKey | null>(null)
   const [selectedPolicy, setSelectedPolicy] = useState<DLPPolicy | null>(null)
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
+
+  // Lazy-load the heavier / side-effecting sections only after they're opened.
+  const [crossTenantOpened, setCrossTenantOpened] = useState(false)
+  const [advisorOpened, setAdvisorOpened] = useState(false)
+  const [connectionsOpened, setConnectionsOpened] = useState(false)
+
+  const envIds = useMemo(() => allEnvironments.map(e => e.name).filter(Boolean), [allEnvironments])
+
+  const crossTenantQuery = useCrossTenantConnectionReport(crossTenantOpened)
+  const advisorQuery = useAdvisorRecommendations(advisorOpened)
+  const connectionsQuery = useConnections(envIds, connectionsOpened)
 
   const insights = useMemo(
     () => computeInsights(allResources, allEnvironments),
@@ -857,6 +1235,15 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
         allEnvironments={allEnvironments}
         allResources={allResources}
         onBack={() => setDrillDown(null)}
+      />
+    )
+  }
+
+  if (selectedScenario) {
+    return (
+      <RecommendationDetail
+        scenario={selectedScenario}
+        onBack={() => setSelectedScenario(null)}
       />
     )
   }
@@ -994,6 +1381,64 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
           </div>
         ) : billingQuery.data ? (
           <BillingPoliciesSection policies={billingQuery.data} allEnvironments={allEnvironments} />
+        ) : null}
+      </CollapsibleSection>
+
+      {/* Cross Tenant Connections */}
+      <CollapsibleSection
+        icon={<GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+        title="Cross Tenant Connections"
+        loading={crossTenantQuery.isFetching}
+        onOpenChange={(open) => { if (open) setCrossTenantOpened(true) }}
+      >
+        {crossTenantQuery.isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : crossTenantQuery.isLoading || (!crossTenantQuery.data && crossTenantQuery.isFetching) ? (
+          <div className={classes.sectionBody}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Generating cross-tenant connection report…</Caption1>
+          </div>
+        ) : crossTenantQuery.data ? (
+          <CrossTenantSection
+            report={crossTenantQuery.data}
+            onRefresh={() => crossTenantQuery.refetch()}
+            isFetching={crossTenantQuery.isFetching}
+          />
+        ) : null}
+      </CollapsibleSection>
+
+      {/* Recommendations (Advisor) */}
+      <CollapsibleSection
+        icon={<LightbulbRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+        title="Recommendations"
+        loading={advisorQuery.isLoading}
+        onOpenChange={(open) => { if (open) setAdvisorOpened(true) }}
+      >
+        {advisorQuery.isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : advisorQuery.isLoading ? (
+          <div className={classes.sectionBody}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading Advisor recommendations…</Caption1>
+          </div>
+        ) : advisorQuery.data ? (
+          <RecommendationsSection recommendations={advisorQuery.data} onScenarioClick={setSelectedScenario} />
+        ) : null}
+      </CollapsibleSection>
+
+      {/* Connections */}
+      <CollapsibleSection
+        icon={<PlugConnectedRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+        title="Connections"
+        loading={connectionsQuery.isLoading}
+        onOpenChange={(open) => { if (open) setConnectionsOpened(true) }}
+      >
+        {connectionsQuery.isError ? (
+          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+        ) : connectionsQuery.isLoading ? (
+          <div className={classes.sectionBody}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Scanning environments for connections…</Caption1>
+          </div>
+        ) : connectionsQuery.data ? (
+          <ConnectionsSection result={connectionsQuery.data} />
         ) : null}
       </CollapsibleSection>
 

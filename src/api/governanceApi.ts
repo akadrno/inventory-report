@@ -1,5 +1,7 @@
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
-import { msalInstance, bapScopes, powerPlatformScopes } from '../auth/msalConfig'
+import { msalInstance, bapScopes, powerPlatformScopes, powerAppsScopes } from '../auth/msalConfig'
+
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 // Singleton promise so concurrent callers share one popup instead of racing.
 let _inFlight: Promise<string> | null = null
@@ -303,4 +305,249 @@ export async function fetchTenantSettings(): Promise<TenantSettings> {
   )
   if (!res.ok) throw new Error(`Tenant settings fetch failed: ${res.status}`)
   return res.json() as Promise<TenantSettings>
+}
+
+// ─── Cross-tenant connection reports (governance namespace, preview) ──────────
+// Surfaces inbound/outbound connections to *other* Azure AD tenants — a key
+// data-exfiltration / -infiltration signal. The report is generated async:
+// POST "generate or fetch" returns an existing recent report (200) or starts a
+// new one (202); we then poll GET {reportId} until it reaches a terminal state.
+
+const CROSS_TENANT_BASE = 'https://api.powerplatform.com/governance/crossTenantConnectionReports'
+const PP_API_VERSION = 'api-version=2024-10-01'
+
+export interface CrossTenantConnection {
+  connectionType: 'Inbound' | 'Outbound'
+  tenantId: string
+}
+
+export interface CrossTenantConnectionReport {
+  reportId?: string
+  status?: 'Completed' | 'Failed' | 'InProgress' | 'Received'
+  startDate?: string
+  endDate?: string
+  requestDate?: string
+  tenantId?: string
+  connections: CrossTenantConnection[]
+}
+
+export async function fetchCrossTenantConnectionReport(
+  signal?: AbortSignal,
+): Promise<CrossTenantConnectionReport> {
+  const token = await getPowerPlatformToken()
+  const auth = { Authorization: `Bearer ${token}` }
+
+  const post = await fetch(`${CROSS_TENANT_BASE}?${PP_API_VERSION}`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: '{}',
+    signal,
+  })
+  if (post.status === 403) throw new Error('403: Insufficient permissions to generate cross-tenant connection reports')
+  if (!post.ok && post.status !== 202) throw new Error(`Cross-tenant report request failed: ${post.status}`)
+  let report = (await post.json()) as CrossTenantConnectionReport & { '@odata.nextLink'?: string }
+
+  // Poll the report until it finishes generating (bounded so we never hang).
+  let attempts = 0
+  while (report.reportId && (report.status === 'InProgress' || report.status === 'Received') && attempts < 5) {
+    await delay(3000)
+    attempts++
+    const get = await fetch(`${CROSS_TENANT_BASE}/${report.reportId}?${PP_API_VERSION}`, { headers: auth, signal })
+    if (!get.ok) break
+    report = (await get.json()) as typeof report
+  }
+
+  // The connections list itself can be paged via @odata.nextLink.
+  const connections: CrossTenantConnection[] = [...(report.connections ?? [])]
+  let next = report['@odata.nextLink']
+  let guard = 0
+  while (next && guard < 50) {
+    const res = await fetch(next, { headers: auth, signal })
+    if (!res.ok) break
+    const page = (await res.json()) as { connections?: CrossTenantConnection[]; '@odata.nextLink'?: string }
+    connections.push(...(page.connections ?? []))
+    next = page['@odata.nextLink']
+    guard++
+  }
+
+  return { ...report, connections }
+}
+
+// ─── Advisor recommendations (analytics namespace) ───────────────────────────
+// Power Platform Advisor — proactive governance/security recommendations
+// (inactive resources, over-shared apps, etc.). Each scenario rolls up a count
+// of affected resources; drill into /{scenario}/resources for the detail rows.
+
+const ADVISOR_BASE = 'https://api.powerplatform.com/analytics/advisorRecommendations'
+
+export interface AdvisorRecommendation {
+  scenario: string
+  resourceCount?: number
+  lastRefreshedTimestamp?: string
+  expectedNextRefreshTimestamp?: string
+}
+
+export interface RecommendationResource {
+  resourceId: string
+  resourceName: string
+  resourceType?: string
+  resourceSubType?: string
+  resourceDescription?: string
+  environmentId?: string
+  environmentName?: string
+  resourceOwner?: string
+  resourceOwnerId?: string
+  lastAccessedDate?: string
+  lastModifiedDate?: string
+  resourceUsage?: number
+  resourceActionStatus?: string
+}
+
+interface RawAdvisorRecommendation {
+  scenario: string
+  details?: {
+    resourceCount?: number
+    lastRefreshedTimestamp?: string
+    expectedNextRefreshTimestamp?: string
+  }
+}
+
+export async function fetchAdvisorRecommendations(signal?: AbortSignal): Promise<AdvisorRecommendation[]> {
+  const token = await getPowerPlatformToken()
+  const out: AdvisorRecommendation[] = []
+  let url: string | undefined = `${ADVISOR_BASE}?${PP_API_VERSION}`
+  let guard = 0
+  while (url && guard < 20) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+    if (res.status === 403) throw new Error('403: Insufficient permissions to read Advisor recommendations')
+    if (!res.ok) throw new Error(`Advisor recommendations fetch failed: ${res.status}`)
+    const json = (await res.json()) as { value?: RawAdvisorRecommendation[]; nextLink?: string }
+    for (const r of json.value ?? []) {
+      out.push({
+        scenario: r.scenario,
+        resourceCount: r.details?.resourceCount,
+        lastRefreshedTimestamp: r.details?.lastRefreshedTimestamp,
+        expectedNextRefreshTimestamp: r.details?.expectedNextRefreshTimestamp,
+      })
+    }
+    url = json.nextLink
+    guard++
+  }
+  return out
+}
+
+export async function fetchRecommendationResources(
+  scenario: string,
+  signal?: AbortSignal,
+): Promise<RecommendationResource[]> {
+  const token = await getPowerPlatformToken()
+  const out: RecommendationResource[] = []
+  let url: string | undefined = `${ADVISOR_BASE}/${encodeURIComponent(scenario)}/resources?${PP_API_VERSION}`
+  let guard = 0
+  while (url && guard < 40) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+    if (!res.ok) {
+      if (guard === 0) throw new Error(`Recommendation resources fetch failed: ${res.status}`)
+      break
+    }
+    const json = (await res.json()) as { value?: RecommendationResource[]; nextLink?: string }
+    out.push(...(json.value ?? []))
+    url = json.nextLink
+    guard++
+  }
+  return out
+}
+
+// ─── Connections + owner identity (PowerApps admin API) ──────────────────────
+// Lists the live connection instances per environment and *who owns them* — the
+// runtime counterpart to the connector inventory. Aggregated across environments
+// with bounded concurrency so a large tenant doesn't fan out unbounded.
+
+let _paInFlight: Promise<string> | null = null
+
+async function getPowerAppsToken(): Promise<string> {
+  if (_paInFlight) return _paInFlight
+  const account = msalInstance.getAllAccounts()[0]
+  _paInFlight = (async () => {
+    try {
+      const result = await msalInstance.acquireTokenSilent({ scopes: powerAppsScopes, account })
+      return result.accessToken
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        const result = await msalInstance.acquireTokenPopup({ scopes: powerAppsScopes, account })
+        return result.accessToken
+      }
+      throw e
+    }
+  })().finally(() => { _paInFlight = null })
+  return _paInFlight
+}
+
+export interface PowerConnection {
+  id: string
+  displayName: string
+  connectorId: string
+  owner?: { id?: string; displayName?: string; email?: string }
+  createdTime?: string
+  environmentId: string
+  status?: string
+}
+
+async function fetchEnvironmentConnections(
+  envId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<PowerConnection[]> {
+  const res = await fetch(
+    `https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/${encodeURIComponent(envId)}/connections?api-version=2016-11-01`,
+    { headers: { Authorization: `Bearer ${token}` }, signal },
+  )
+  // Surface auth failures (so the section shows a permission notice); treat any
+  // other per-environment error as "no connections" rather than failing the lot.
+  if (res.status === 401 || res.status === 403) throw new Error(`${res.status}: insufficient permissions to read connections`)
+  if (!res.ok) return []
+  const json = await res.json()
+  const raw: Record<string, unknown>[] = json.value ?? []
+  return raw.map(c => {
+    const props = (c['properties'] as Record<string, unknown>) ?? {}
+    const createdBy = (props['createdBy'] as Record<string, unknown>) ?? {}
+    const statuses = props['statuses'] as Array<Record<string, unknown>> | undefined
+    return {
+      id: (c['name'] as string) ?? (c['id'] as string) ?? '',
+      displayName: (props['displayName'] as string) ?? '',
+      connectorId: (props['apiId'] as string) ?? '',
+      owner: {
+        id: createdBy['id'] as string | undefined,
+        displayName: createdBy['displayName'] as string | undefined,
+        email: (createdBy['email'] ?? createdBy['userPrincipalName']) as string | undefined,
+      },
+      createdTime: props['createdTime'] as string | undefined,
+      environmentId: envId,
+      status: statuses?.[0]?.['status'] as string | undefined,
+    }
+  })
+}
+
+export interface ConnectionsResult {
+  connections: PowerConnection[]
+  truncated: boolean
+}
+
+export async function fetchConnections(
+  envIds: string[],
+  signal?: AbortSignal,
+): Promise<ConnectionsResult> {
+  const token = await getPowerAppsToken()
+  // Cap the environment fan-out so very large tenants stay responsive.
+  const CAP = 60
+  const targets = envIds.slice(0, CAP)
+  const truncated = envIds.length > CAP
+  const all: PowerConnection[] = []
+  const CONCURRENCY = 6
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY)
+    const results = await Promise.all(batch.map(id => fetchEnvironmentConnections(id, token, signal)))
+    for (const r of results) all.push(...r)
+  }
+  return { connections: all, truncated }
 }

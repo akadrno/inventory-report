@@ -112,6 +112,24 @@ export function getFlowWorkflowEntityId(r: ResourceItem): string | undefined {
   return pickString(r.properties, ['workflowEntityId', 'WorkflowEntityId'])
 }
 
+// Connector inventory (preview): the connector + operation that initiate a flow.
+// `trigger` is the connector id (for example, "sharepointonline"); empty when the
+// trigger isn't connector-based (recurrence / manual). `triggerOperation` is the
+// operation id (for example, "GetOnNewItems"). Applies to cloud, agent, and
+// workflow agent flows.
+export interface FlowTrigger {
+  trigger?: string
+  triggerOperation?: string
+}
+
+export function getFlowTrigger(r: ResourceItem): FlowTrigger | undefined {
+  if (getResourceCategory(r.type) !== 'flows') return undefined
+  const trigger = pickString(r.properties, ['trigger', 'Trigger'])
+  const triggerOperation = pickString(r.properties, ['triggerOperation', 'TriggerOperation'])
+  if (!trigger && !triggerOperation) return undefined
+  return { trigger, triggerOperation }
+}
+
 // Dataverse app module ID for a model-driven app.
 export function getAppModuleId(r: ResourceItem): string | undefined {
   const t = r.type.toLowerCase()
@@ -338,6 +356,38 @@ export function getConnectors(r: ResourceItem): string[] {
     for (const action of getConnectorActions(r)) push(action.connectorId)
   }
   return out
+}
+
+// ─── Connector inventory (preview): connectors + their operations ────────────
+
+// One connector and the operations (actions) a resource invokes on it, per the
+// documented `properties.powerPlatformConnectors[]` schema:
+//   { connectorId: "shared_sharepointonline",
+//     operations: [{ operationId: "GetItems" }, { operationId: "PostItem" }] }
+// Tabular/data-source connectors (SharePoint, Dataverse, SQL, Excel) appear with
+// an empty `operations` array.
+export interface ConnectorWithOperations {
+  connectorId: string
+  operations: string[]
+}
+
+export function getConnectorsWithOperations(r: ResourceItem): ConnectorWithOperations[] {
+  const ppcs = readPowerPlatformConnectors(r.properties)
+  if (ppcs.length > 0) {
+    // Merge any duplicate connector entries and de-dup their operation ids.
+    const map = new Map<string, Set<string>>()
+    for (const c of ppcs) {
+      const ops = map.get(c.connectorId) ?? new Set<string>()
+      for (const op of c.operations) {
+        const id = pickString(op, ['operationId', 'operationName', 'name'])
+        if (id) ops.add(id)
+      }
+      map.set(c.connectorId, ops)
+    }
+    return [...map.entries()].map(([connectorId, ops]) => ({ connectorId, operations: [...ops] }))
+  }
+  // Older inventory shapes expose connector ids without operations.
+  return getConnectors(r).map(connectorId => ({ connectorId, operations: [] }))
 }
 
 // ─── Connector actions ───────────────────────────────────────────────────────
@@ -747,6 +797,7 @@ export const HANDLED_PROPERTY_KEYS = new Set<string>([
   'createdIn', 'CreatedIn', 'schemaName', 'SchemaName',
   'isQuarantined', 'IsQuarantined', 'quarantinedAt',
   'workflowEntityId', 'WorkflowEntityId',
+  'trigger', 'Trigger', 'triggerOperation', 'TriggerOperation',
   'appModuleId', 'AppModuleId', 'logicalName', 'LogicalName',
   'subType', 'SubType',
   'isWebSearchEnabledForKnowledge', 'IsWebSearchEnabledForKnowledge',
