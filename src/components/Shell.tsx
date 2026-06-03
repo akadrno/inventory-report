@@ -20,6 +20,7 @@ import {
   LightbulbRegular,
   PlugConnectedRegular,
   ChevronRightRegular,
+  ChevronDownRegular,
   ChevronLeftRegular,
   TagMultipleRegular,
   TagRegular,
@@ -38,7 +39,7 @@ import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
 import {
   useDLPPolicies, useTenantSettings, useLicenses,
-  useCrossTenantConnectionReport, useAdvisorRecommendations, useConnections,
+  useCrossTenantConnections, useAdvisorRecommendations, useConnections,
 } from '../hooks/useGovernance'
 import type { SubscribedSku } from '../hooks/useGovernance'
 import { isPowerPlatformSku } from '../api/graphApi'
@@ -592,16 +593,23 @@ function GovPermNotice({ message }: { message: string }) {
 
 function GovCrossTenantPage() {
   const classes = useClasses()
-  // Navigating to this page is the explicit signal to generate/fetch the report.
-  const query = useCrossTenantConnectionReport(true)
+  // Reads the cached report from Azure Storage (fast); auto-populates an empty
+  // cache and lets Refresh regenerate it. Falls back to a live fetch when
+  // storage isn't configured.
+  const state = useCrossTenantConnections(true)
 
-  if (query.isError) {
-    return <GovPermNotice message="Requires Power Platform admin permissions. Cross-tenant connection reports are read from the governance API." />
+  if (state.isLoading) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading cross-tenant connection report…" /></div>
   }
-  if (query.isLoading || (!query.data && query.isFetching)) {
+  if (!state.report && state.isUpdating) {
     return <div style={{ padding: '24px' }}><Spinner size="small" label="Generating cross-tenant connection report…" /></div>
   }
-  if (!query.data) return null
+  if (!state.report && state.isError) {
+    return <GovPermNotice message="Requires Power Platform admin permissions. Cross-tenant connection reports are read from the governance API." />
+  }
+  if (!state.report) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Preparing cross-tenant connection report…" /></div>
+  }
 
   return (
     <div className={classes.sectionCard}>
@@ -610,9 +618,10 @@ function GovCrossTenantPage() {
         Cross Tenant Connections
       </div>
       <CrossTenantSection
-        report={query.data}
-        onRefresh={() => query.refetch()}
-        isFetching={query.isFetching}
+        report={state.report}
+        onRefresh={state.refresh}
+        isUpdating={state.isUpdating}
+        cachedAt={state.cachedAt}
       />
     </div>
   )
@@ -644,6 +653,40 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
   )
 }
 
+// ── Collapsible card (clickable header toggles the body) ─────────────────────
+
+function CollapsibleCard({
+  icon, title, badge, defaultOpen = true, children,
+}: {
+  icon: React.ReactNode
+  title: string
+  badge?: React.ReactNode
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const classes = useClasses()
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={classes.sectionCard}>
+      <div
+        className={classes.cardHead}
+        style={{ cursor: 'pointer', userSelect: 'none', borderBottom: open ? undefined : 'none' }}
+        onClick={() => setOpen(o => !o)}
+        role="button"
+        aria-expanded={open}
+      >
+        {icon}
+        <span style={{ flex: 1 }}>{title}</span>
+        {badge}
+        {open
+          ? <ChevronDownRegular fontSize={16} style={{ color: MUTED }} />
+          : <ChevronRightRegular fontSize={16} style={{ color: MUTED }} />}
+      </div>
+      {open && children}
+    </div>
+  )
+}
+
 // ── Governance: Recommendations page (Advisor + computed) ────────────────────
 
 function GovRecommendationsPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
@@ -659,14 +702,13 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Advisor (security & governance) recommendations from the analytics API */}
-      <div className={classes.sectionCard}>
-        <div className={classes.cardHead}>
-          <LightbulbRegular fontSize={16} style={{ color: ACTIVE }} />
-          Advisor Recommendations
-          {advisor.data && advisor.data.length > 0 && (
-            <Badge appearance="tint" color="informative" size="small">{advisor.data.length}</Badge>
-          )}
-        </div>
+      <CollapsibleCard
+        icon={<LightbulbRegular fontSize={16} style={{ color: ACTIVE }} />}
+        title="Advisor Recommendations"
+        badge={advisor.data && advisor.data.length > 0
+          ? <Badge appearance="tint" color="informative" size="small">{advisor.data.length}</Badge>
+          : undefined}
+      >
         {advisor.isError ? (
           <div className={classes.permNotice}>
             <LockClosedRegular fontSize={16} />
@@ -677,10 +719,17 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
         ) : (
           <RecommendationsSection recommendations={advisor.data ?? []} onScenarioClick={setScenario} />
         )}
-      </div>
+      </CollapsibleCard>
 
       {/* The app's own computed recommendations from inventory + tenant settings */}
-      <RecsTab allEnvironments={allEnvironments} />
+      <CollapsibleCard
+        icon={<ShieldRegular fontSize={16} style={{ color: ACTIVE }} />}
+        title="Recommended Actions"
+      >
+        <div style={{ padding: '12px 16px' }}>
+          <RecsTab allEnvironments={allEnvironments} />
+        </div>
+      </CollapsibleCard>
     </div>
   )
 }

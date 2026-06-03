@@ -808,11 +808,13 @@ function groupForeignTenants(report: CrossTenantConnectionReport, direction: 'In
 export function CrossTenantSection({
   report,
   onRefresh,
-  isFetching,
+  isUpdating,
+  cachedAt,
 }: {
   report: CrossTenantConnectionReport
   onRefresh: () => void
-  isFetching: boolean
+  isUpdating: boolean
+  cachedAt?: string
 }) {
   const classes = useClasses()
   const inbound = useMemo(() => groupForeignTenants(report, 'Inbound'), [report])
@@ -864,24 +866,33 @@ export function CrossTenantSection({
             {formatLocalDateTime(report.startDate)} – {formatLocalDateTime(report.endDate)}
           </Caption1>
         )}
+        {cachedAt && (
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>· Cached {formatLocalDateTime(cachedAt)}</Caption1>
+        )}
         <Button
           appearance="subtle"
           icon={<ArrowSyncRegular />}
           size="small"
-          disabled={isFetching}
+          disabled={isUpdating}
           onClick={onRefresh}
           style={{ marginLeft: 'auto' }}
         >
-          {isFetching ? 'Refreshing…' : 'Refresh'}
+          {isUpdating ? 'Updating…' : 'Refresh'}
         </Button>
       </div>
 
-      {generating ? (
-        <div className={classes.permissionNotice}>
+      {(isUpdating || generating) && (
+        <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966' }}>
           <Spinner size="extra-tiny" />
-          <Caption1>The report is still generating on the service. Use Refresh in a moment to pull the latest results.</Caption1>
+          <Caption1 style={{ color: '#003966' }}>
+            {isUpdating
+              ? 'The cross-tenant connection report is being updated…'
+              : 'The report is still generating on the service. Use Refresh in a moment to pull the latest results.'}
+          </Caption1>
         </div>
-      ) : report.connections.length === 0 ? (
+      )}
+
+      {report.connections.length === 0 && !generating ? (
         <div className={classes.permissionNotice} style={{ backgroundColor: tokens.colorPaletteGreenBackground1 }}>
           <CheckmarkCircleRegular fontSize={16} style={{ color: tokens.colorPaletteGreenForeground1 }} />
           <Caption1 style={{ color: tokens.colorPaletteGreenForeground2 }}>
@@ -1401,7 +1412,7 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
           <CrossTenantSection
             report={crossTenantQuery.data}
             onRefresh={() => crossTenantQuery.refetch()}
-            isFetching={crossTenantQuery.isFetching}
+            isUpdating={crossTenantQuery.isFetching}
           />
         ) : null}
       </CollapsibleSection>

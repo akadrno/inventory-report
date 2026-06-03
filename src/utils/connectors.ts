@@ -192,6 +192,21 @@ const CONNECTORS: Record<string, Omit<ConnectorInfo, 'id'>> = {
   compose:                        { displayName: 'Data Operation',                          color: '#605E5C', letter: 'D' },
   logicflows:                     { displayName: 'Workflows',                               color: '#0066FF', letter: 'W' },
 
+  // ── Dynamics 365 family ──────────────────────────────────────────────────
+  dynamicssmbsaas:                { displayName: 'Dynamics 365 Business Central',           color: '#002050', letter: 'D' },
+  customerinsights:               { displayName: 'Dynamics 365 Customer Insights',          color: '#002050', letter: 'D' },
+  microsoftformspro:              { displayName: 'Dynamics 365 Customer Voice',             color: '#176A2C', letter: 'C' },
+  uiflow:                         { displayName: 'Desktop flows',                           color: '#0066FF', letter: 'D' },
+
+  // ── Other common third-party connectors ──────────────────────────────────
+  trello:                         { displayName: 'Trello',                                  color: '#0079BF', letter: 'T' },
+  notion:                         { displayName: 'Notion',                                  color: '#000000', letter: 'N' },
+  confluence:                     { displayName: 'Confluence',                              color: '#172B4D', letter: 'C' },
+  twilio:                         { displayName: 'Twilio',                                  color: '#F22F46', letter: 'T' },
+  sendgrid:                       { displayName: 'SendGrid',                                color: '#1A82E2', letter: 'S' },
+  surveymonkey:                   { displayName: 'SurveyMonkey',                            color: '#00BF6F', letter: 'S' },
+  cloudconvert:                   { displayName: 'CloudConvert',                            color: '#1A82E2', letter: 'C' },
+
   // ── Other widely used ────────────────────────────────────────────────────
   buffer:                         { displayName: 'Buffer',                                  color: '#000000', letter: 'B' },
   bulksms:                        { displayName: 'BulkSMS',                                 color: '#0078D4', letter: 'B' },

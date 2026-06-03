@@ -40,7 +40,10 @@ function entityUrl(rowKey?: string): string {
 
 export async function loadAllAssessments(): Promise<Record<string, ResourceAssessment>> {
   if (!tableStorageConfigured) return {}
-  const res = await fetch(entityUrl(), { headers: JSON_HEADERS })
+  // Scope to the assessment partition so cache rows (govcache partition, below)
+  // sharing this table aren't mistaken for assessments.
+  const url = `${entityUrl()}&$filter=${encodeURIComponent("PartitionKey eq '" + PARTITION_KEY + "'")}`
+  const res = await fetch(url, { headers: JSON_HEADERS })
   if (!res.ok) throw new Error(`Table Storage load failed: ${res.status} ${res.statusText}`)
   const json = (await res.json()) as { value: Record<string, unknown>[] }
   const result: Record<string, ResourceAssessment> = {}
@@ -262,4 +265,66 @@ export async function upsertResourceTag(tag: ResourceTag): Promise<void> {
 
 export async function deleteResourceTag(resourceId: string, termId: string): Promise<void> {
   await deleteTagEntity(RESOURCE_TAGS_TABLE, encodeRowKey(resourceId), termId)
+}
+
+// ── Governance JSON-blob cache ───────────────────────────────────────────────
+// Caches expensive/async governance payloads (e.g. the cross-tenant connection
+// report) so the page loads instantly from storage instead of regenerating the
+// report each visit. Reuses the existing `assessments` table under a separate
+// partition so no new table — and no table-create permission — is needed.
+
+const CACHE_PARTITION = 'govcache'
+// Table Storage caps a single string property at 32K UTF-16 chars; chunk under
+// that and reassemble on read. Entity total is capped at 1 MB (~32 chunks).
+const CACHE_CHUNK = 28000
+
+export interface CachedBlob<T> {
+  data: T
+  cachedAt: string
+}
+
+function cacheEntityUrl(rowKey: string): string {
+  const base = `https://${ACCOUNT}.table.core.windows.net/${TABLE}`
+  return `${base}(PartitionKey='${encodeURIComponent(CACHE_PARTITION)}',RowKey='${encodeURIComponent(rowKey)}')?${SAS}`
+}
+
+export async function loadGovernanceCache<T>(rowKey: string): Promise<CachedBlob<T> | null> {
+  if (!tableStorageConfigured) return null
+  const res = await fetch(cacheEntityUrl(rowKey), { headers: JSON_HEADERS })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Governance cache load failed: ${res.status} ${res.statusText}`)
+  const e = (await res.json()) as Record<string, unknown>
+  const chunks: string[] = []
+  for (let i = 0; i < 32; i++) {
+    const c = e[`data${i}`]
+    if (typeof c !== 'string') break
+    chunks.push(c)
+  }
+  if (!chunks.length) return null
+  try {
+    return { data: JSON.parse(chunks.join('')) as T, cachedAt: (e['cachedAt'] as string) ?? '' }
+  } catch {
+    return null
+  }
+}
+
+export async function saveGovernanceCache<T>(rowKey: string, data: T): Promise<string> {
+  if (!tableStorageConfigured) return ''
+  const cachedAt = new Date().toISOString()
+  const json = JSON.stringify(data)
+  const body: Record<string, unknown> = { PartitionKey: CACHE_PARTITION, RowKey: rowKey, cachedAt }
+  let idx = 0
+  for (let i = 0; i < json.length; i += CACHE_CHUNK, idx++) {
+    body[`data${idx}`] = json.slice(i, i + CACHE_CHUNK)
+  }
+  if (idx > 32) throw new Error('Governance cache payload too large to store')
+  // PUT fully replaces the entity, so stale chunks from a larger prior payload
+  // are dropped automatically.
+  const res = await fetch(cacheEntityUrl(rowKey), {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Governance cache save failed: ${res.status} ${res.statusText}`)
+  return cachedAt
 }

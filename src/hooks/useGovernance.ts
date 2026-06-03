@@ -1,9 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchDLPPolicies, fetchTenantSettings, fetchEnvironmentCapacity, fetchBillingPolicies,
   fetchCrossTenantConnectionReport, fetchAdvisorRecommendations, fetchRecommendationResources,
   fetchConnections,
 } from '../api/governanceApi'
+import {
+  tableStorageConfigured, loadGovernanceCache, saveGovernanceCache,
+} from '../api/tableStorageApi'
+import type { CachedBlob } from '../api/tableStorageApi'
 import type {
   DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
   CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult,
@@ -71,6 +76,99 @@ export function useCrossTenantConnectionReport(enabled: boolean) {
     retry: false,
     staleTime: 10 * 60 * 1000,
   })
+}
+
+const CROSS_TENANT_CACHE_ROW = 'crossTenantReport'
+
+export interface CrossTenantState {
+  report?: CrossTenantConnectionReport
+  cachedAt?: string
+  isLoading: boolean      // initial cache read
+  isUpdating: boolean     // live regeneration in flight
+  isError: boolean
+  error: Error | null
+  cached: boolean         // whether storage-backed caching is in effect
+  refresh: () => void
+}
+
+// Cache-backed cross-tenant report. When Azure Table Storage is configured the
+// page loads instantly from the cached report; an empty cache auto-populates,
+// and Refresh regenerates the live report and rewrites the cache. When storage
+// isn't configured it transparently falls back to a direct live fetch.
+export function useCrossTenantConnections(active: boolean): CrossTenantState {
+  const qc = useQueryClient()
+
+  const cacheQuery = useQuery<CachedBlob<CrossTenantConnectionReport> | null, Error>({
+    queryKey: ['cross-tenant-cache'],
+    queryFn: () => loadGovernanceCache<CrossTenantConnectionReport>(CROSS_TENANT_CACHE_ROW),
+    enabled: active && tableStorageConfigured,
+    retry: false,
+    staleTime: Infinity,
+  })
+
+  const liveQuery = useQuery<CrossTenantConnectionReport, Error>({
+    queryKey: ['cross-tenant-report'],
+    queryFn: ({ signal }) => fetchCrossTenantConnectionReport(signal),
+    enabled: active && !tableStorageConfigured,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const refreshMutation = useMutation<CrossTenantConnectionReport, Error, void>({
+    mutationFn: async () => {
+      const report = await fetchCrossTenantConnectionReport()
+      // Caching is best-effort: a storage write failure must not hide a report
+      // that the governance API returned successfully.
+      try { await saveGovernanceCache(CROSS_TENANT_CACHE_ROW, report) } catch { /* ignore */ }
+      return report
+    },
+    onSuccess: (report) => {
+      qc.setQueryData<CachedBlob<CrossTenantConnectionReport>>(
+        ['cross-tenant-cache'],
+        { data: report, cachedAt: new Date().toISOString() },
+      )
+    },
+  })
+
+  // Auto-populate when storage is configured but the cache is empty (or its read
+  // failed — treat that as empty and fall back to a live fetch + re-cache).
+  const { mutate: doRefresh, isPending } = refreshMutation
+  const autoTriggered = useRef(false)
+  useEffect(() => {
+    if (!active || !tableStorageConfigured) return
+    if (cacheQuery.isLoading) return
+    if (!cacheQuery.data && !autoTriggered.current && !isPending) {
+      autoTriggered.current = true
+      doRefresh()
+    }
+  }, [active, cacheQuery.isLoading, cacheQuery.data, isPending, doRefresh])
+
+  if (!tableStorageConfigured) {
+    return {
+      report: liveQuery.data,
+      cachedAt: undefined,
+      isLoading: liveQuery.isLoading,
+      isUpdating: liveQuery.isFetching && !!liveQuery.data,
+      isError: liveQuery.isError,
+      error: liveQuery.error,
+      cached: false,
+      refresh: () => { liveQuery.refetch() },
+    }
+  }
+
+  // Prefer cached data; fall back to the freshly-fetched report when the cache
+  // read failed but the live regeneration succeeded.
+  const report = cacheQuery.data?.data ?? refreshMutation.data
+  return {
+    report,
+    cachedAt: cacheQuery.data?.cachedAt,
+    isLoading: cacheQuery.isLoading,
+    isUpdating: isPending,
+    isError: !report && !isPending && refreshMutation.isError,
+    error: refreshMutation.error ?? cacheQuery.error,
+    cached: true,
+    refresh: () => { doRefresh() },
+  }
 }
 
 export function useAdvisorRecommendations(enabled: boolean) {

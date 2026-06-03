@@ -313,15 +313,35 @@ function formatSharingCount(c: SharingCounts | undefined): string {
   return parts.length ? parts.join(' · ') : 'Not shared'
 }
 
-function ConnectorChip({ connectorId }: { connectorId: string }) {
+function ConnectorChip({ connectorId, meta }: { connectorId: string; meta?: ConnectorMetadata }) {
   const classes = useClasses()
   const info = getConnectorInfo(connectorId)
+  const [imgError, setImgError] = useState(false)
+  const displayName = meta?.displayName || info.displayName
+  // Prefer the official connector icon; fall back to the colored letter chip.
+  if (meta?.iconUri && !imgError) {
+    return (
+      <span
+        className={classes.connectorChip}
+        style={{ backgroundColor: '#fff', border: `1px solid ${tokens.colorNeutralStroke2}`, padding: '3px' }}
+        title={displayName}
+        aria-label={displayName}
+      >
+        <img
+          src={meta.iconUri}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          onError={() => setImgError(true)}
+        />
+      </span>
+    )
+  }
   return (
     <span
       className={classes.connectorChip}
-      style={{ backgroundColor: info.color }}
-      title={info.displayName}
-      aria-label={info.displayName}
+      style={{ backgroundColor: meta?.iconBrandColor || info.color }}
+      title={displayName}
+      aria-label={displayName}
     >
       {info.letter}
     </span>
@@ -634,13 +654,6 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
 
   // Extract everything once so we know which sections have data.
   const connectors = useMemo(() => isAgent ? [] : getConnectorsWithOperations(resource), [resource, isAgent])
-
-  // Enrich apps/flows connectors with tier / publisher / display name from the
-  // PowerApps catalog. Best-effort: disabled for agents or when there's nothing
-  // to enrich, and failures fall back to the static connector lookup.
-  const connectorMeta = useConnectorMetadata(
-    !isAgent && connectors.length > 0 ? resource.environmentId : undefined,
-  )
   const sharing = useMemo(() => getSharing(resource), [resource])
   const sharingCounts = useMemo(() => getResourceSharingCounts(resource), [resource])
   const knowledge = useMemo(() => isAgent ? getAgentKnowledge(resource)       : [], [resource, isAgent])
@@ -649,6 +662,14 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
   const containedFlows = useMemo(() => isAgent ? getAgentFlows(resource)      : [], [resource, isAgent])
   const channels = useMemo(() => isAgent ? getAgentChannels(resource)         : [], [resource, isAgent])
   const topics = useMemo(() => isAgent ? getAgentTopics(resource)             : [], [resource, isAgent])
+
+  // Enrich connectors with official display names, icons, tier and publisher
+  // from the PowerApps catalog — for apps/flows connectors and for the agent
+  // Tools/Knowledge that are connector operations. Best-effort: cached per
+  // environment, and failures fall back to the static connector lookup.
+  const needsConnectorMeta = !!resource.environmentId && (connectors.length > 0 || tools.length > 0 || knowledge.length > 0)
+  const connectorMeta = useConnectorMetadata(needsConnectorMeta ? resource.environmentId : undefined)
+  const meta = connectorMeta.data
 
   // Apps/Flows get a simple "Connectors" entry; Agents get the per-feature sub-nav
   // (no "Connector actions" — connectors are surfaced via Tools and Knowledge instead).
@@ -703,10 +724,10 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
         </div>
 
         {active === 'connectors' && (
-          <ConnectorsSection connectors={connectors} search={search} meta={connectorMeta.data} />
+          <ConnectorsSection connectors={connectors} search={search} meta={meta} />
         )}
-        {active === 'knowledge'  && <NamedItemsSection items={knowledge}       search={search} empty="No knowledge sources reported by inventory." nameMap={nameMap} />}
-        {active === 'tools'      && <NamedItemsSection items={tools}           search={search} empty="No tool / capability data in inventory." nameMap={nameMap} />}
+        {active === 'knowledge'  && <NamedItemsSection items={knowledge}       search={search} empty="No knowledge sources reported by inventory." nameMap={nameMap} meta={meta} />}
+        {active === 'tools'      && <NamedItemsSection items={tools}           search={search} empty="No tool / capability data in inventory." nameMap={nameMap} meta={meta} />}
         {active === 'agents'     && <NamedItemsSection items={connectedAgents} search={search} empty="This agent isn't reported as referencing other agents." nameMap={nameMap} />}
         {active === 'flows'      && <NamedItemsSection items={containedFlows}  search={search} empty="No flows referenced by this agent in inventory." nameMap={nameMap} />}
         {active === 'channels'   && <NamedItemsSection items={channels}        search={search} empty="No channel data in inventory for this agent." nameMap={nameMap} />}
@@ -776,7 +797,7 @@ function ConnectorsSection({ connectors, search, meta }: {
         const e = enrich(c.connectorId)
         return (
           <div key={c.connectorId} className={classes.itemRowSimple} style={{ alignItems: 'flex-start' }}>
-            <ConnectorChip connectorId={c.connectorId} />
+            <ConnectorChip connectorId={c.connectorId} meta={meta?.[normalizeConnectorId(c.connectorId)]} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <Body1Strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.displayName}>
@@ -816,24 +837,29 @@ function ConnectorsSection({ connectors, search, meta }: {
   )
 }
 
-function NamedItemsSection({ items, search, empty, nameMap }: {
+function NamedItemsSection({ items, search, empty, nameMap, meta }: {
   items: NamedItem[]
   search: string
   empty: string
   nameMap: Map<string, string>
+  meta?: Record<string, ConnectorMetadata>
 }) {
   const classes = useClasses()
+  // Prefer the official catalog display name for a connector id, else the static lookup.
+  const connectorName = (connectorId: string) =>
+    meta?.[normalizeConnectorId(connectorId)]?.displayName || getConnectorInfo(connectorId).displayName
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items.filter(it => {
       if (!q) return true
       const connectorId = it.connectorId ?? findConnectorIdByDisplayName(it.name)
-      const displayName = connectorId ? getConnectorInfo(connectorId).displayName : it.name
+      const displayName = connectorId ? connectorName(connectorId) : it.name
       return displayName.toLowerCase().includes(q)
         || (it.operationId ?? '').toLowerCase().includes(q)
         || (it.description ?? '').toLowerCase().includes(q)
     })
-  }, [items, search])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, search, meta])
 
   if (items.length === 0) return <EmptyState message={empty} />
   return (
@@ -841,7 +867,7 @@ function NamedItemsSection({ items, search, empty, nameMap }: {
       {filtered.map(item => {
         const connectorId = item.connectorId ?? findConnectorIdByDisplayName(item.name)
         const displayName = connectorId
-          ? getConnectorInfo(connectorId).displayName
+          ? connectorName(connectorId)
           : (item.name || item.operationId || 'Item')
         const hasSharing = item.sharing?.editors || item.sharing?.viewers
         const createdByName = resolvePersonName(item.createdBy, nameMap)
@@ -861,7 +887,7 @@ function NamedItemsSection({ items, search, empty, nameMap }: {
 
         return (
           <div key={item.key} className={classes.itemRowSimple} style={{ alignItems: 'flex-start' }}>
-            {connectorId && <ConnectorChip connectorId={connectorId} />}
+            {connectorId && <ConnectorChip connectorId={connectorId} meta={meta?.[normalizeConnectorId(connectorId)]} />}
             <div style={{ minWidth: 0, flex: 1 }}>
               <Body1Strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</Body1Strong>
               {(item.operationId || item.description) && (

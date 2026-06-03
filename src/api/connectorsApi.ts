@@ -32,6 +32,7 @@ export interface ConnectorMetadata {
   tier?: string                // 'Standard' | 'Premium'
   publisher?: string
   iconBrandColor?: string
+  iconUri?: string             // official connector icon (Microsoft CDN)
   isCustom?: boolean
 }
 
@@ -72,6 +73,7 @@ export async function fetchConnectorMetadata(
       tier: (props['tier'] as string) || undefined,
       publisher: (props['publisher'] as string) || undefined,
       iconBrandColor: (props['iconBrandColor'] as string) || undefined,
+      iconUri: (props['iconUri'] as string) || undefined,
       isCustom,
     }
   }
