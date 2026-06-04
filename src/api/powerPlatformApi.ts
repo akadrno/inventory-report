@@ -1,6 +1,5 @@
 import { IPublicClientApplication } from '@azure/msal-browser'
 import { powerPlatformScopes } from '../auth/msalConfig'
-import { apiConfigured, apiJson } from './apiClient'
 import type { ResourceItem, ResourceQueryResponse } from '../types'
 import type { DebugEntry } from '../context/DebugContext'
 
@@ -153,24 +152,16 @@ async function queryResources(
   }
 }
 
-// When the RBAC backend is enabled, all resourcequery reads go through the /api
-// proxy (which holds the elevated identity and enforces page access + record scope).
-// Otherwise we fall back to the user's own delegated token (legacy mode).
-async function queryViaProxy(
-  kind: 'resources' | 'environments' | 'groups',
-  options?: QueryOptions,
-): Promise<ResourceQueryResponse> {
-  const params = new URLSearchParams({ kind })
-  if (options?.skipToken) params.set('skipToken', options.skipToken)
-  if (options?.top) params.set('top', String(options.top))
-  return apiJson<ResourceQueryResponse>(`/api/powerplatform/query?${params.toString()}`)
-}
-
+// NOTE: the Power Platform resourcequery API does NOT support app-only (service
+// principal) access, so these reads stay on the caller's own delegated token even
+// when the RBAC backend is enabled. Record scoping for inventory is therefore applied
+// client-side (see Shell): non-app-admins see only resources they own. A true
+// non-admin maker can't query resourcequery at all — serving them requires the
+// per-environment admin APIs (documented follow-up in docs/RBAC-SETUP.md).
 export async function fetchResourcesPage(
   msalInstance: IPublicClientApplication,
   options?: QueryOptions,
 ): Promise<ResourceQueryResponse> {
-  if (apiConfigured) return queryViaProxy('resources', options)
   const token = await getAccessToken(msalInstance)
   return queryResources(token, options)
 }
@@ -179,7 +170,6 @@ export async function fetchEnvironmentsPage(
   msalInstance: IPublicClientApplication,
   options?: QueryOptions,
 ): Promise<ResourceQueryResponse> {
-  if (apiConfigured) return queryViaProxy('environments', options)
   const token = await getAccessToken(msalInstance)
   return queryResources(token, { ...options, clauses: ENVIRONMENTS_CLAUSES })
 }
@@ -188,7 +178,6 @@ export async function fetchEnvironmentGroupsPage(
   msalInstance: IPublicClientApplication,
   options?: QueryOptions,
 ): Promise<ResourceQueryResponse> {
-  if (apiConfigured) return queryViaProxy('groups', options)
   const token = await getAccessToken(msalInstance)
   return queryResources(token, { ...options, clauses: GROUPS_CLAUSES })
 }
@@ -196,8 +185,7 @@ export async function fetchEnvironmentGroupsPage(
 export async function fetchAllResources(
   msalInstance: IPublicClientApplication,
 ): Promise<ResourceItem[]> {
-  const useProxy = apiConfigured
-  const token = useProxy ? '' : await getAccessToken(msalInstance)
+  const token = await getAccessToken(msalInstance)
   const all: ResourceItem[] = []
   let skipToken: string | undefined
 
@@ -205,9 +193,7 @@ export async function fetchAllResources(
   // set `resultTruncated` to 0 even when a skipToken is present, so we only
   // stop when the API explicitly omits the token.
   do {
-    const result = useProxy
-      ? await queryViaProxy('resources', { top: 500, skipToken })
-      : await queryResources(token, { top: 500, skipToken })
+    const result = await queryResources(token, { top: 500, skipToken })
     all.push(...result.data)
     if (result.resultTruncated && !result.skipToken) {
       console.warn('fetchAllResources: API reports truncated results but provided no continuation token; pagination cannot continue')

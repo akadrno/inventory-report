@@ -110,7 +110,6 @@ npm run dev
 | PUT/DELETE | `/api/admin/roles/{id}` | edit / delete custom role | isAppAdmin |
 | GET/POST | `/api/admin/assignments` | list / add user→role | canManageUsers |
 | DELETE | `/api/admin/assignments/{id}` | remove assignment | canManageUsers |
-| GET | `/api/powerplatform/query?kind=resources\|environments\|groups` | inventory resources / environments / groups (record-scoped) | page `inventory:all` / `:environments` / `:groups` |
 | GET | `/api/licensing/skus` | tenant subscribed SKUs | page `licensing:summary` |
 | GET/POST | `/api/governance/{op}` | governance reads (see below) | per-op page key |
 | GET | `/api/usage/signins?since=&appIds=&maxRecords=` | Entra sign-in logs (heatmap) | page `usage:heatmap` |
@@ -120,22 +119,38 @@ npm run dev
 `{envIds}`), `rule-assignments?groupId=`, `rule-policy?policyId=`,
 `policy-rules?policyId=`, `all-rule-policies`.
 
-All matching frontend reads are repointed behind `apiConfigured` (with
-`VITE_API_BASE_URL` unset they keep using the user's own token; with it set they call
-the proxy): `powerPlatformApi` (resources/environments/groups), `graphApi`
-(`fetchSubscribedSkus`), `governanceApi` (all fetchers above), and `signInsApi`
+Backend-proxied reads (repointed behind `apiConfigured`): `graphApi`
+(`fetchSubscribedSkus`), `governanceApi` (all fetchers), and `signInsApi`
 (`fetchSignIns`).
 
-## Remaining work (optional)
+## Inventory is the exception (important)
 
-Core inventory, licensing, governance, and usage reads are all proxied. What's left is
-optional polish:
+The Power Platform **`resourcequery`** API (the source for the Inventory list —
+Apps/Flows/Agents/Environments/Groups) does **not** support app-only / service-principal
+access. The "Power Platform API" exposes only one application permission
+(`CopilotStudio.Copilots.Invoke`), and granting the SP the Power Platform Administrator
+directory role does **not** unblock it (verified). So inventory cannot be served by the
+backend.
 
-- **Owner-name resolution** (`graphApi` batch `/users` / `/servicePrincipals`) still
-  uses the user's own `User.ReadBasic.All` token. Non-admin users typically have this,
-  but to route it through the SP add a `/api/directory/resolve` batch endpoint.
-- **Co-owner / shared-with scoping** — extend `api/src/lib/scope.ts` `ownsResource`
-  with the PowerApps admin per-resource permissions endpoint so `recordScope:'own'`
-  also includes shared resources (currently owner/creator only).
+Current behaviour: inventory stays on the **caller's own delegated token**, and record
+scoping is applied **client-side** in `Shell` — non-app-admins see only resources whose
+owner/createdBy matches their Entra object id or UPN (`isOwnedBy` in `src/types`);
+app-admins see everything. Consequence: a true non-admin maker (no Power Platform read
+access of their own) sees an empty inventory.
+
+To serve inventory to true non-admins, rework the inventory fetch to enumerate apps +
+flows **per environment** via the PowerApps/Flow **admin** APIs (these DO work app-only
+— verified):
+- apps: `GET https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/{env}/apps?api-version=2016-11-01`
+- flows: `GET https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/scopes/admin/environments/{env}/v2/flows?api-version=2016-11-01`
+- environments: BAP admin (already used by the capacity proxy)
+- agents/Copilot bots live in Dataverse — hardest app-only; do last.
+
+## Other remaining work (optional)
+
+- **Owner-name resolution** (`graphApi` batch `/users`) still uses the user's own
+  `User.ReadBasic.All` token; route via the SP with a `/api/directory/resolve` endpoint.
+- **Co-owner / shared-with scoping** — extend the owner match (`isOwnedBy` /
+  `api/src/lib/scope.ts`) with the PowerApps admin per-resource permissions endpoint.
 
 Keep `api/src/lib/catalog.ts` in sync with `src/permissions/catalog.ts`.

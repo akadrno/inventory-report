@@ -60,7 +60,7 @@ import { useDebug } from '../context/DebugContext'
 import { usePermissions } from '../context/PermissionsContext'
 import { AdminConsole } from './admin/AdminConsole'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerFromProperties } from '../types'
+import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerFromProperties, isOwnedBy } from '../types'
 import { GUID_RE } from '../hooks/useOwnerNames'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
 import { formatRegion } from '../utils/regions'
@@ -1021,9 +1021,22 @@ export function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permsLoading, rail, invView, govView, usageView, tagView, licView, can])
 
-  const allResources = useMemo(() => resources.data?.pages.flatMap(p => p.data) ?? [], [resources.data])
+  const rawResources = useMemo(() => resources.data?.pages.flatMap(p => p.data) ?? [], [resources.data])
   const allGroups = useMemo(() => groups.data?.pages.flatMap(p => p.data) ?? [], [groups.data])
   const allEnvironments = useMemo(() => environmentsQuery.data?.pages.flatMap(p => p.data) ?? [], [environmentsQuery.data])
+
+  // Record scoping: when the user's role limits them to their own records, show only
+  // resources they own/created (matched on Entra object id or UPN). App-admins (scope
+  // 'all') see everything. Enforced client-side because the inventory resourcequery API
+  // has no app-only support — see powerPlatformApi for the caveat.
+  const scopeIdentities = useMemo(
+    () => (recordScope === 'own' ? [account?.localAccountId, account?.username].filter(Boolean) as string[] : []),
+    [recordScope, account],
+  )
+  const allResources = useMemo(
+    () => (recordScope === 'own' ? rawResources.filter(r => isOwnedBy(r, scopeIdentities)) : rawResources),
+    [rawResources, recordScope, scopeIdentities],
+  )
   const ownerNames = useOwnerNames(allResources)
   const nonSystemResources = useMemo(() => allResources.filter(r => !isSystemResource(r)), [allResources])
 
