@@ -77,6 +77,12 @@ function AppShell() {
   const { inProgress } = useMsal()
   const classes = useClasses()
 
+  // Already signed in: keep the Shell mounted even while an incremental token
+  // popup (e.g. the service.powerapps.com scope) is in flight. Otherwise an
+  // AcquireToken interaction unmounts and remounts Shell, wiping its local
+  // navigation state and bouncing the user back to the home screen.
+  if (isAuthenticated) return <Shell />
+
   if (inProgress !== InteractionStatus.None) {
     return (
       <div className={classes.loadingPage}>
@@ -85,9 +91,7 @@ function AppShell() {
     )
   }
 
-  if (!isAuthenticated) return <SignInPage />
-
-  return <Shell />
+  return <SignInPage />
 }
 
 export default function App() {
