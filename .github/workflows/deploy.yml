@@ -45,5 +45,7 @@ jobs:
         run: |
           npx --yes @azure/static-web-apps-cli@latest deploy ./dist \
             --api-location ./api \
+            --api-language node \
+            --api-version 20 \
             --deployment-token "${{ secrets.SWA_DEPLOYMENT_TOKEN }}" \
             --env production
