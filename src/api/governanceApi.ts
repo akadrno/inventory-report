@@ -1,5 +1,6 @@
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { msalInstance, bapScopes, powerPlatformScopes, powerAppsScopes } from '../auth/msalConfig'
+import { apiConfigured, apiJson } from './apiClient'
 
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
@@ -120,6 +121,7 @@ export interface RuleBasedPolicy {
 export async function fetchGroupRuleAssignments(
   groupId: string,
 ): Promise<{ assignments: GroupRuleAssignment[] }> {
+  if (apiConfigured) return apiJson<{ assignments: GroupRuleAssignment[] }>(`/api/governance/rule-assignments?groupId=${encodeURIComponent(groupId)}`)
   const id = groupId.includes('/') ? groupId.split('/').filter(Boolean).pop()! : groupId
   const token = await getPowerPlatformToken()
   const res = await fetch(
@@ -134,6 +136,7 @@ export async function fetchGroupRuleAssignments(
 }
 
 export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedPolicy> {
+  if (apiConfigured) return apiJson<RuleBasedPolicy>(`/api/governance/rule-policy?policyId=${encodeURIComponent(policyId)}`)
   const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
   const token = await getPowerPlatformToken()
   const res = await fetch(
@@ -145,6 +148,7 @@ export async function fetchRuleBasedPolicy(policyId: string): Promise<RuleBasedP
 }
 
 export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> {
+  if (apiConfigured) return apiJson<PolicyRule[]>(`/api/governance/policy-rules?policyId=${encodeURIComponent(policyId)}`)
   const id = policyId.includes('/') ? policyId.split('/').filter(Boolean).pop()! : policyId
   const token = await getPowerPlatformToken()
   const res = await fetch(
@@ -161,6 +165,7 @@ export async function fetchPolicyRules(policyId: string): Promise<PolicyRule[]> 
 // does not support it). Used to discover policies for a group that may not
 // surface via the per-group assignments endpoint.
 export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBasedPolicy[] }> {
+  if (apiConfigured) return apiJson<{ policies: RuleBasedPolicy[] }>('/api/governance/all-rule-policies')
   const token = await getPowerPlatformToken()
   const res = await fetch(
     `https://api.powerplatform.com/governance/ruleBasedPolicies?$top=100&api-version=2022-03-01-preview`,
@@ -173,6 +178,7 @@ export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBased
 }
 
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
+  if (apiConfigured) return apiJson<EnvironmentCapacity[]>('/api/governance/capacity')
   const token = await getPowerPlatformToken()
   const res = await fetch(
     'https://api.powerplatform.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2020-10-01&$expand=properties.capacity,properties.addons',
@@ -196,6 +202,7 @@ export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]>
 }
 
 export async function fetchBillingPolicies(): Promise<BillingPolicy[]> {
+  if (apiConfigured) return apiJson<BillingPolicy[]>('/api/governance/billing')
   const token = await getPowerPlatformToken()
   const res = await fetch(
     'https://api.powerplatform.com/licensing/billingPolicies?api-version=2022-03-01-preview',
@@ -275,6 +282,7 @@ export interface TenantSettings {
 }
 
 export async function fetchDLPPolicies(): Promise<DLPPolicy[]> {
+  if (apiConfigured) return apiJson<DLPPolicy[]>('/api/governance/dlp')
   const token = await getBapToken()
   const res = await fetch(
     'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/apiPolicies?api-version=2016-11-01',
@@ -294,6 +302,7 @@ export async function fetchDLPPolicies(): Promise<DLPPolicy[]> {
 }
 
 export async function fetchTenantSettings(): Promise<TenantSettings> {
+  if (apiConfigured) return apiJson<TenantSettings>('/api/governance/tenant-settings')
   const token = await getBapToken()
   const res = await fetch(
     'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/listTenantSettings?api-version=2021-04-01',
@@ -334,6 +343,7 @@ export interface CrossTenantConnectionReport {
 export async function fetchCrossTenantConnectionReport(
   signal?: AbortSignal,
 ): Promise<CrossTenantConnectionReport> {
+  if (apiConfigured) return apiJson<CrossTenantConnectionReport>('/api/governance/cross-tenant', { signal })
   const token = await getPowerPlatformToken()
   const auth = { Authorization: `Bearer ${token}` }
 
@@ -413,6 +423,7 @@ interface RawAdvisorRecommendation {
 }
 
 export async function fetchAdvisorRecommendations(signal?: AbortSignal): Promise<AdvisorRecommendation[]> {
+  if (apiConfigured) return apiJson<AdvisorRecommendation[]>('/api/governance/advisor', { signal })
   const token = await getPowerPlatformToken()
   const out: AdvisorRecommendation[] = []
   let url: string | undefined = `${ADVISOR_BASE}?${PP_API_VERSION}`
@@ -440,6 +451,7 @@ export async function fetchRecommendationResources(
   scenario: string,
   signal?: AbortSignal,
 ): Promise<RecommendationResource[]> {
+  if (apiConfigured) return apiJson<RecommendationResource[]>(`/api/governance/advisor-resources?scenario=${encodeURIComponent(scenario)}`, { signal })
   const token = await getPowerPlatformToken()
   const out: RecommendationResource[] = []
   let url: string | undefined = `${ADVISOR_BASE}/${encodeURIComponent(scenario)}/resources?${PP_API_VERSION}`
@@ -537,6 +549,7 @@ export async function fetchConnections(
   envIds: string[],
   signal?: AbortSignal,
 ): Promise<ConnectionsResult> {
+  if (apiConfigured) return apiJson<ConnectionsResult>('/api/governance/connections', { method: 'POST', body: JSON.stringify({ envIds }), signal })
   const token = await getPowerAppsToken()
   // Cap the environment fan-out so very large tenants stay responsive.
   const CAP = 60

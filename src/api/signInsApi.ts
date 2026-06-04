@@ -1,5 +1,6 @@
 import { IPublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser'
 import { graphAuditLogScopes } from '../auth/msalConfig'
+import { apiConfigured, apiJson } from './apiClient'
 
 // Minimal shape we need from Microsoft Graph's signIn entity.
 // https://learn.microsoft.com/en-us/graph/api/resources/signin
@@ -83,6 +84,12 @@ export async function fetchSignIns(
   msal: IPublicClientApplication,
   opts: FetchSignInsOptions,
 ): Promise<FetchSignInsResult> {
+  if (apiConfigured) {
+    const params = new URLSearchParams({ since: opts.since })
+    if (opts.appIds?.length) params.set('appIds', opts.appIds.join(','))
+    if (opts.maxRecords) params.set('maxRecords', String(opts.maxRecords))
+    return apiJson<FetchSignInsResult>(`/api/usage/signins?${params.toString()}`, { signal: opts.signal })
+  }
   const token = await getGraphToken(msal)
   const maxRecords = opts.maxRecords ?? 5000
   const records: SignInRecord[] = []

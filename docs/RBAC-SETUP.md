@@ -107,24 +107,30 @@ npm run dev
 | DELETE | `/api/admin/assignments/{id}` | remove assignment | canManageUsers |
 | GET | `/api/powerplatform/query?kind=resources\|environments\|groups` | inventory resources / environments / groups (record-scoped) | page `inventory:all` / `:environments` / `:groups` |
 | GET | `/api/licensing/skus` | tenant subscribed SKUs | page `licensing:summary` |
+| GET/POST | `/api/governance/{op}` | governance reads (see below) | per-op page key |
+| GET | `/api/usage/signins?since=&appIds=&maxRecords=` | Entra sign-in logs (heatmap) | page `usage:heatmap` |
 
-The matching frontend reads are already repointed behind `apiConfigured`:
-`fetchResourcesPage` / `fetchEnvironmentsPage` / `fetchEnvironmentGroupsPage` /
-`fetchAllResources` (`src/api/powerPlatformApi.ts`) and `fetchSubscribedSkus`
-(`src/api/graphApi.ts`). With `VITE_API_BASE_URL` unset they keep using the user's
-own token; with it set they call the proxy.
+`/api/governance/{op}` ops: `dlp`, `tenant-settings`, `capacity`, `billing`,
+`cross-tenant`, `advisor`, `advisor-resources?scenario=`, `connections` (POST
+`{envIds}`), `rule-assignments?groupId=`, `rule-policy?policyId=`,
+`policy-rules?policyId=`, `all-rule-policies`.
 
-## Remaining work (data-proxy migration)
+All matching frontend reads are repointed behind `apiConfigured` (with
+`VITE_API_BASE_URL` unset they keep using the user's own token; with it set they call
+the proxy): `powerPlatformApi` (resources/environments/groups), `graphApi`
+(`fetchSubscribedSkus`), `governanceApi` (all fetchers above), and `signInsApi`
+(`fetchSignIns`).
 
-The RBAC management plane and the inventory + licensing reads are done. To fully
-remove the admin-role requirement for the rest, port these behind `/api` following
-`api/src/functions/powerplatform.ts` as the template, then repoint the matching
-frontend `src/api/*.ts` `fetchX` bodies (guarded by `apiConfigured`):
+## Remaining work (optional)
 
-- governance: DLP, tenant settings, capacity, billing, cross-tenant, advisor, connections (`governanceApi`) — note cross-tenant/advisor use async polling + per-environment fan-out
-- usage sign-ins (`signInsApi`)
-- owner-name resolution (`graphApi` batch `/users`) if you want non-admins to resolve names
+Core inventory, licensing, governance, and usage reads are all proxied. What's left is
+optional polish:
 
-Also extend `api/src/lib/scope.ts` `ownsResource` with the co-owner / shared-with
-expansion (PowerApps admin per-resource permissions endpoint) per the agreed design.
+- **Owner-name resolution** (`graphApi` batch `/users` / `/servicePrincipals`) still
+  uses the user's own `User.ReadBasic.All` token. Non-admin users typically have this,
+  but to route it through the SP add a `/api/directory/resolve` batch endpoint.
+- **Co-owner / shared-with scoping** — extend `api/src/lib/scope.ts` `ownsResource`
+  with the PowerApps admin per-resource permissions endpoint so `recordScope:'own'`
+  also includes shared resources (currently owner/creator only).
+
 Keep `api/src/lib/catalog.ts` in sync with `src/permissions/catalog.ts`.
