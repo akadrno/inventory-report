@@ -23,52 +23,41 @@ function parseRoleInput(body: unknown): CustomRoleInput {
   }
 }
 
-// GET /api/admin/roles  |  POST /api/admin/roles
-async function collectionHandler(req: HttpRequest): Promise<HttpResponseInit> {
+// Single function for both the collection and item routes (optional {id?}) so the
+// two don't register as an overlapping parent/child pair — which SWA's Functions
+// host silently drops.
+//   GET    /api/admin/roles        → list
+//   POST   /api/admin/roles        → create
+//   PUT    /api/admin/roles/{id}   → update
+//   DELETE /api/admin/roles/{id}   → delete
+async function handler(req: HttpRequest): Promise<HttpResponseInit> {
   try {
     const caller = await validateUser(req)
     await requireAppAdmin(caller)
+    const id = req.params.id
+
+    if (id) {
+      if (req.method === 'DELETE') {
+        await deleteRole(id)
+        return noContent()
+      }
+      if (req.method === 'PUT') {
+        return json(await updateRole(id, parseRoleInput(await req.json())))
+      }
+      throw new HttpError(405, `Method ${req.method} not allowed on a role`)
+    }
 
     if (req.method === 'GET') return json(await listAllRoles())
-
-    const input = parseRoleInput(await req.json())
-    const role = await createRole(input)
-    return json(role, 201)
-  } catch (e) {
-    return errorResponse(e)
-  }
-}
-
-// PUT /api/admin/roles/{id}  |  DELETE /api/admin/roles/{id}
-async function itemHandler(req: HttpRequest): Promise<HttpResponseInit> {
-  try {
-    const caller = await validateUser(req)
-    await requireAppAdmin(caller)
-
-    const id = req.params.id
-    if (!id) throw new HttpError(400, 'Role id required')
-
-    if (req.method === 'DELETE') {
-      await deleteRole(id)
-      return noContent()
-    }
-    const input = parseRoleInput(await req.json())
-    return json(await updateRole(id, input))
+    if (req.method === 'POST') return json(await createRole(parseRoleInput(await req.json())), 201)
+    throw new HttpError(405, `Method ${req.method} not allowed`)
   } catch (e) {
     return errorResponse(e)
   }
 }
 
 app.http('admin-roles', {
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   authLevel: 'anonymous',
-  route: 'admin/roles',
-  handler: collectionHandler,
-})
-
-app.http('admin-roles-item', {
-  methods: ['PUT', 'DELETE'],
-  authLevel: 'anonymous',
-  route: 'admin/roles/{id}',
-  handler: itemHandler,
+  route: 'admin/roles/{id?}',
+  handler,
 })
