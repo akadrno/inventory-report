@@ -46,6 +46,11 @@ So merging this code changes nothing in production until you set `VITE_API_BASE_
 
 ## One-time Azure / Entra setup (Global Admin)
 
+> A scripted, parameterized walkthrough of all the steps below lives in
+> [`provision-rbac.ps1`](./provision-rbac.ps1) — run it block-by-block as a Global
+> Admin of the powerappsscale tenant. The manual steps follow.
+
+
 1. **Service principal** — create (or reuse) an app registration to be the elevated
    identity. Grant **application** permissions and admin-consent them:
    - Microsoft Graph: `User.Read.All`, `Organization.Read.All`, `AuditLog.Read.All`, `Directory.Read.All`
