@@ -16,11 +16,11 @@ async function resolveUser(oid: string): Promise<{ displayName: string; upn: str
   return { displayName: u.displayName ?? '', upn: u.userPrincipalName ?? u.mail ?? '' }
 }
 
-// Single function for the collection + item routes (optional {id?}) — see roles.ts
-// for why the parent/child pair is merged.
-//   GET    /api/admin/assignments        → list
-//   POST   /api/admin/assignments        → add (body: {principalId, roleId})
-//   DELETE /api/admin/assignments/{id}   → remove
+// Routes use the `rbac/` prefix, not `admin/` (reserved by the Functions host —
+// see roles.ts). Single function via an optional {id?} segment:
+//   GET    /api/rbac/assignments        → list
+//   POST   /api/rbac/assignments        → add (body: {principalId, roleId})
+//   DELETE /api/rbac/assignments/{id}   → remove
 async function handler(req: HttpRequest): Promise<HttpResponseInit> {
   try {
     const caller = await validateUser(req)
@@ -56,9 +56,9 @@ async function handler(req: HttpRequest): Promise<HttpResponseInit> {
   }
 }
 
-app.http('admin-assignments', {
+app.http('rbac-assignments', {
   methods: ['GET', 'POST', 'DELETE'],
   authLevel: 'anonymous',
-  route: 'admin/assignments/{id?}',
+  route: 'rbac/assignments/{id?}',
   handler,
 })

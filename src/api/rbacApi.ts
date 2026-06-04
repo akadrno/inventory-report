@@ -18,35 +18,36 @@ export function searchDirectory(q: string, signal?: AbortSignal): Promise<Direct
   return apiJson<DirectoryUser[]>(`/api/directory/search?q=${encodeURIComponent(q)}`, { signal })
 }
 
-// Roles
+// Roles. NOTE: the backend uses the `rbac/` route prefix, not `admin/` (the Azure
+// Functions host reserves `admin`, making such routes unreachable).
 export function listRoles(signal?: AbortSignal): Promise<RoleDefinition[]> {
-  return apiJson<RoleDefinition[]>('/api/admin/roles', { signal })
+  return apiJson<RoleDefinition[]>('/api/rbac/roles', { signal })
 }
 
 export function createRole(role: Omit<RoleDefinition, 'id' | 'isPredefined'>): Promise<RoleDefinition> {
-  return apiJson<RoleDefinition>('/api/admin/roles', { method: 'POST', body: JSON.stringify(role) })
+  return apiJson<RoleDefinition>('/api/rbac/roles', { method: 'POST', body: JSON.stringify(role) })
 }
 
 export function updateRole(role: RoleDefinition): Promise<RoleDefinition> {
-  return apiJson<RoleDefinition>(`/api/admin/roles/${encodeURIComponent(role.id)}`, {
+  return apiJson<RoleDefinition>(`/api/rbac/roles/${encodeURIComponent(role.id)}`, {
     method: 'PUT',
     body: JSON.stringify(role),
   })
 }
 
 export function deleteRole(id: string): Promise<void> {
-  return apiJson<void>(`/api/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  return apiJson<void>(`/api/rbac/roles/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // Assignments
 export function listAssignments(signal?: AbortSignal): Promise<Assignment[]> {
-  return apiJson<Assignment[]>('/api/admin/assignments', { signal })
+  return apiJson<Assignment[]>('/api/rbac/assignments', { signal })
 }
 
 export function createAssignment(input: { principalId: string; roleId: string }): Promise<Assignment> {
-  return apiJson<Assignment>('/api/admin/assignments', { method: 'POST', body: JSON.stringify(input) })
+  return apiJson<Assignment>('/api/rbac/assignments', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function deleteAssignment(id: string): Promise<void> {
-  return apiJson<void>(`/api/admin/assignments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  return apiJson<void>(`/api/rbac/assignments/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }

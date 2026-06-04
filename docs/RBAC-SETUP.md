@@ -106,10 +106,12 @@ npm run dev
 |--------|-------|---------|-------|
 | GET | `/api/me/permissions` | caller's effective access | any signed-in user |
 | GET | `/api/directory/search?q=` | Entra people picker | canManageUsers |
-| GET/POST | `/api/admin/roles` | list / create roles | isAppAdmin |
-| PUT/DELETE | `/api/admin/roles/{id}` | edit / delete custom role | isAppAdmin |
-| GET/POST | `/api/admin/assignments` | list / add user→role | canManageUsers |
-| DELETE | `/api/admin/assignments/{id}` | remove assignment | canManageUsers |
+| GET/POST/PUT/DELETE | `/api/rbac/roles/{id?}` | list / create / edit / delete roles | isAppAdmin |
+| GET/POST/DELETE | `/api/rbac/assignments/{id?}` | list / add / remove user→role | canManageUsers |
+
+> Routes use the `rbac/` prefix, **not** `admin/` — the Azure Functions host reserves
+> the `admin` route prefix, so `admin/*` function routes return 404.
+
 | GET | `/api/licensing/skus` | tenant subscribed SKUs | page `licensing:summary` |
 | GET/POST | `/api/governance/{op}` | governance reads (see below) | per-op page key |
 | GET | `/api/usage/signins?since=&appIds=&maxRecords=` | Entra sign-in logs (heatmap) | page `usage:heatmap` |

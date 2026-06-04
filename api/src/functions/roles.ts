@@ -23,13 +23,13 @@ function parseRoleInput(body: unknown): CustomRoleInput {
   }
 }
 
-// Single function for both the collection and item routes (optional {id?}) so the
-// two don't register as an overlapping parent/child pair — which SWA's Functions
-// host silently drops.
-//   GET    /api/admin/roles        → list
-//   POST   /api/admin/roles        → create
-//   PUT    /api/admin/roles/{id}   → update
-//   DELETE /api/admin/roles/{id}   → delete
+// NOTE: routes must NOT start with `admin` — the Azure Functions host reserves that
+// prefix, so `admin/*` function routes are silently unreachable (404). We use `rbac/`.
+// Single function handles both collection and item via an optional {id?} segment:
+//   GET    /api/rbac/roles        → list
+//   POST   /api/rbac/roles        → create
+//   PUT    /api/rbac/roles/{id}   → update
+//   DELETE /api/rbac/roles/{id}   → delete
 async function handler(req: HttpRequest): Promise<HttpResponseInit> {
   try {
     const caller = await validateUser(req)
@@ -55,9 +55,9 @@ async function handler(req: HttpRequest): Promise<HttpResponseInit> {
   }
 }
 
-app.http('admin-roles', {
+app.http('rbac-roles', {
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   authLevel: 'anonymous',
-  route: 'admin/roles/{id?}',
+  route: 'rbac/roles/{id?}',
   handler,
 })
