@@ -152,6 +152,12 @@ async function queryResources(
   }
 }
 
+// NOTE: the Power Platform resourcequery API does NOT support app-only (service
+// principal) access, so these reads stay on the caller's own delegated token even
+// when the RBAC backend is enabled. Record scoping for inventory is therefore applied
+// client-side (see Shell): non-app-admins see only resources they own. A true
+// non-admin maker can't query resourcequery at all — serving them requires the
+// per-environment admin APIs (documented follow-up in docs/RBAC-SETUP.md).
 export async function fetchResourcesPage(
   msalInstance: IPublicClientApplication,
   options?: QueryOptions,

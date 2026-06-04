@@ -142,6 +142,39 @@ export function getIsManagedEnvironment(env: ResourceItem): boolean {
   return v === true || v === 'true'
 }
 
+// Collect every owner/creator identity string (object id, UPN, email, display name)
+// from a resource's properties — used for record-scope ('own') matching.
+export function getOwnerIdentities(item: ResourceItem): string[] {
+  const p = item.properties
+  if (!p) return []
+  const fields = [
+    'owner', 'createdBy', 'lastModifiedBy', 'author', 'createdByUser',
+    'modifiedBy', 'modifiedByUser', 'publishedBy', 'ownerEmail',
+    'ownerDisplayName', 'ownerObjectId',
+  ]
+  const out: string[] = []
+  for (const f of fields) {
+    const v = p[f]
+    if (typeof v === 'string' && v) {
+      out.push(v)
+    } else if (v && typeof v === 'object') {
+      const obj = v as Record<string, unknown>
+      for (const k of ['id', 'objectId', 'userPrincipalName', 'email', 'displayName']) {
+        if (typeof obj[k] === 'string' && obj[k]) out.push(obj[k] as string)
+      }
+    }
+  }
+  return out
+}
+
+// True when any owner/creator identity of the resource matches one of the caller's
+// identities (Entra object id or UPN/email), case-insensitively.
+export function isOwnedBy(item: ResourceItem, identities: string[]): boolean {
+  if (!identities.length) return false
+  const wanted = new Set(identities.filter(Boolean).map(s => s.toLowerCase()))
+  return getOwnerIdentities(item).some(id => wanted.has(id.toLowerCase()))
+}
+
 export function getOwnerFromProperties(item: ResourceItem): string {
   const p = item.properties
   if (!p) return '—'

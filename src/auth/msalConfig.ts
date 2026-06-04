@@ -21,6 +21,13 @@ export const msalConfig: Configuration = {
   },
 }
 
+// Scope for this app's own backend (Azure Functions). The backend app registration
+// exposes an `access_as_user` delegated scope; the SPA sends a token for it as the
+// Bearer to /api/*. Defaults to the frontend client id when no dedicated API app id
+// is configured (single-registration setup).
+const apiAppId = (import.meta.env.VITE_API_APP_ID as string) || clientId
+export const apiScopes = [`api://${apiAppId}/access_as_user`]
+
 export const powerPlatformScopes = ['https://api.powerplatform.com/.default']
 export const graphScopes = ['https://graph.microsoft.com/User.ReadBasic.All']
 export const graphOrgScopes = ['https://graph.microsoft.com/Organization.Read.All']

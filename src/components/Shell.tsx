@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { makeStyles, tokens, Text, Caption1, Button, Badge, Spinner, Input } from '@fluentui/react-components'
+import { useState, useMemo, useEffect } from 'react'
+import { makeStyles, tokens, Text, Caption1, Button, Badge, Spinner, Input, MessageBar, MessageBarBody } from '@fluentui/react-components'
 import {
   HomeRegular,
   ClipboardBulletListRegular,
@@ -57,8 +57,10 @@ import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
 import { DebugPanel } from './DebugPanel'
 import { useDebug } from '../context/DebugContext'
+import { usePermissions } from '../context/PermissionsContext'
+import { AdminConsole } from './admin/AdminConsole'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerFromProperties } from '../types'
+import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerFromProperties, isOwnedBy } from '../types'
 import { GUID_RE } from '../hooks/useOwnerNames'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
 import { formatRegion } from '../utils/regions'
@@ -92,7 +94,7 @@ const STROKE1 = tokens.colorNeutralStroke2
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
+type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing' | 'admin'
 type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
 type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
@@ -984,9 +986,57 @@ export function Shell() {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
-  const allResources = useMemo(() => resources.data?.pages.flatMap(p => p.data) ?? [], [resources.data])
+  const { can, canRail, isAppAdmin, recordScope, isLoading: permsLoading, isError: permsError } = usePermissions()
+
+  // ── RBAC default-state guards ───────────────────────────────────────────────
+  // The rail/sub-view useState defaults can point at a page the user isn't allowed
+  // to see. Once permissions resolve, snap the active rail (and its sub-view) to the
+  // first permitted option so a forbidden default never renders. 'home' is always
+  // permitted, so there is always a safe fallback.
+  const RAIL_ORDER: RailSection[] = ['home', 'inventory', 'governance', 'usage', 'tags', 'licensing']
+
+  useEffect(() => {
+    if (permsLoading) return
+    if (rail !== 'admin' && !canRail(rail)) {
+      setRail(RAIL_ORDER.find(r => canRail(r)) ?? 'home')
+    } else if (rail === 'admin' && !isAppAdmin) {
+      setRail(RAIL_ORDER.find(r => canRail(r)) ?? 'home')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permsLoading, rail, canRail, isAppAdmin])
+
+  useEffect(() => {
+    if (permsLoading) return
+    const fix = <T extends string>(railKey: RailSection, view: T, set: (v: T) => void, order: readonly T[]) => {
+      if (rail !== railKey) return
+      if (can(`${railKey}:${view}`)) return
+      const next = order.find(v => can(`${railKey}:${v}`))
+      if (next) set(next)
+    }
+    fix('inventory', invView, setInvView, ['all', 'apps', 'flows', 'agents', 'environments', 'groups', 'users'] as const)
+    fix('governance', govView, setGovView, ['overview', 'tenant-settings', 'dlp', 'cross-tenant', 'connections', 'recommendations', 'maker-analytics', 'risk-assessments'] as const)
+    fix('usage', usageView, setUsageView, ['overview', 'heatmap'] as const)
+    fix('tags', tagView, setTagView, ['browser', 'termstore'] as const)
+    fix('licensing', licView, setLicView, ['summary', 'power-apps', 'power-automate', 'copilot-studio'] as const)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permsLoading, rail, invView, govView, usageView, tagView, licView, can])
+
+  const rawResources = useMemo(() => resources.data?.pages.flatMap(p => p.data) ?? [], [resources.data])
   const allGroups = useMemo(() => groups.data?.pages.flatMap(p => p.data) ?? [], [groups.data])
   const allEnvironments = useMemo(() => environmentsQuery.data?.pages.flatMap(p => p.data) ?? [], [environmentsQuery.data])
+
+  // Record scoping: when the user's role limits them to their own records, show only
+  // resources they own/created (matched on Entra object id or UPN). App-admins (scope
+  // 'all') see everything. Enforced client-side because the inventory resourcequery API
+  // has no app-only support — see powerPlatformApi for the caveat.
+  const scopeIdentities = useMemo(
+    () => (recordScope === 'own' ? [account?.localAccountId, account?.username].filter(Boolean) as string[] : []),
+    [recordScope, account],
+  )
+  const allResources = useMemo(
+    () => (recordScope === 'own' ? rawResources.filter(r => isOwnedBy(r, scopeIdentities)) : rawResources),
+    [rawResources, recordScope, scopeIdentities],
+  )
   const ownerNames = useOwnerNames(allResources)
   const nonSystemResources = useMemo(() => allResources.filter(r => !isSystemResource(r)), [allResources])
 
@@ -1095,6 +1145,11 @@ export function Shell() {
   // ── Render content ──────────────────────────────────────────────────────────
 
   const renderContent = () => {
+    if (rail === 'admin') return isAppAdmin ? <AdminConsole /> : null
+    // Safety net: the redirect effect snaps a forbidden rail on the next tick; until
+    // then, render nothing for any section the user can't access ('home' is always ok).
+    if (rail !== 'home' && !canRail(rail)) return null
+
     if (rail === 'home') return <ReportView allResources={allResources} allEnvironments={allEnvironments} onNavigateToRiskAssessments={() => { setRail('governance'); setGovView('risk-assessments') }} />
 
     if (rail === 'inventory') {
@@ -1294,6 +1349,30 @@ export function Shell() {
     }
   }
 
+  // While RBAC permissions load, hold the UI so a forbidden default page can't flash.
+  if (permsLoading) {
+    return (
+      <div className={classes.shell}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Spinner label="Loading your access…" size="large" />
+        </div>
+      </div>
+    )
+  }
+  if (permsError) {
+    return (
+      <div className={classes.shell}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <MessageBar intent="error">
+            <MessageBarBody>
+              Couldn't load your access for this app. Refresh to try again; if it persists, contact an administrator.
+            </MessageBarBody>
+          </MessageBar>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={classes.shell}>
       <AppHeader
@@ -1305,11 +1384,14 @@ export function Shell() {
         {/* Rail */}
         <nav className={classes.rail}>
           <RailButton icon={<HomeRegular />} label="Home" active={rail === 'home'} onClick={() => handleRailClick('home')} />
-          <RailButton icon={<ClipboardBulletListRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />
-          <RailButton icon={<ShieldRegular />} label="Governance" active={rail === 'governance'} onClick={() => handleRailClick('governance')} />
-          <RailButton icon={<ChartMultipleRegular />} label="Usage" active={rail === 'usage'} onClick={() => handleRailClick('usage')} />
-          <RailButton icon={<TagMultipleRegular />} label="Tagging" active={rail === 'tags'} onClick={() => handleRailClick('tags')} />
-          <RailButton icon={<CertificateRegular />} label="Licensing" active={rail === 'licensing'} onClick={() => handleRailClick('licensing')} />
+          {canRail('inventory') && <RailButton icon={<ClipboardBulletListRegular />} label="Inventory" active={rail === 'inventory'} onClick={() => handleRailClick('inventory')} />}
+          {canRail('governance') && <RailButton icon={<ShieldRegular />} label="Governance" active={rail === 'governance'} onClick={() => handleRailClick('governance')} />}
+          {canRail('usage') && <RailButton icon={<ChartMultipleRegular />} label="Usage" active={rail === 'usage'} onClick={() => handleRailClick('usage')} />}
+          {canRail('tags') && <RailButton icon={<TagMultipleRegular />} label="Tagging" active={rail === 'tags'} onClick={() => handleRailClick('tags')} />}
+          {canRail('licensing') && <RailButton icon={<CertificateRegular />} label="Licensing" active={rail === 'licensing'} onClick={() => handleRailClick('licensing')} />}
+          {/* Spacer pushes the admin icon to the bottom of the rail */}
+          <div style={{ flex: 1 }} />
+          {isAppAdmin && <RailButton icon={<SettingsRegular />} label="Admin" active={rail === 'admin'} onClick={() => handleRailClick('admin')} />}
         </nav>
 
         {/* Secondary panel */}
@@ -1327,13 +1409,13 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<GridRegular />} label="All Resources" active={invView === 'all'} onClick={() => setInvView('all')} collapsed={!panelOpen} />
-            <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
-            <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
-            <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
-            <NavItem icon={<GlobeRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
-            <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
-            <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />
+            {can('inventory:all') && <NavItem icon={<GridRegular />} label="All Resources" active={invView === 'all'} onClick={() => setInvView('all')} collapsed={!panelOpen} />}
+            {can('inventory:apps') && <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />}
+            {can('inventory:flows') && <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />}
+            {can('inventory:agents') && <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />}
+            {can('inventory:environments') && <NavItem icon={<GlobeRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />}
+            {can('inventory:groups') && <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />}
+            {can('inventory:users') && <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />}
           </div>
         )}
 
@@ -1351,14 +1433,14 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<ShieldCheckmarkRegular />} label="Overview" active={govView === 'overview'} onClick={() => setGovView('overview')} collapsed={!panelOpen} />
-            <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />
-            <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />
-            <NavItem icon={<GlobeRegular />} label="Cross Tenant Connections" active={govView === 'cross-tenant'} onClick={() => setGovView('cross-tenant')} collapsed={!panelOpen} />
-            <NavItem icon={<PlugConnectedRegular />} label="Connections" active={govView === 'connections'} onClick={() => setGovView('connections')} collapsed={!panelOpen} />
-            <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
-            <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
-            <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />
+            {can('governance:overview') && <NavItem icon={<ShieldCheckmarkRegular />} label="Overview" active={govView === 'overview'} onClick={() => setGovView('overview')} collapsed={!panelOpen} />}
+            {can('governance:tenant-settings') && <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />}
+            {can('governance:dlp') && <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />}
+            {can('governance:cross-tenant') && <NavItem icon={<GlobeRegular />} label="Cross Tenant Connections" active={govView === 'cross-tenant'} onClick={() => setGovView('cross-tenant')} collapsed={!panelOpen} />}
+            {can('governance:connections') && <NavItem icon={<PlugConnectedRegular />} label="Connections" active={govView === 'connections'} onClick={() => setGovView('connections')} collapsed={!panelOpen} />}
+            {can('governance:recommendations') && <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />}
+            {can('governance:maker-analytics') && <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />}
+            {can('governance:risk-assessments') && <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />}
           </div>
         )}
 
@@ -1376,8 +1458,8 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<ChartMultipleRegular />} label="Overview" active={usageView === 'overview'} onClick={() => setUsageView('overview')} collapsed={!panelOpen} />
-            <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />
+            {can('usage:overview') && <NavItem icon={<ChartMultipleRegular />} label="Overview" active={usageView === 'overview'} onClick={() => setUsageView('overview')} collapsed={!panelOpen} />}
+            {can('usage:heatmap') && <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />}
           </div>
         )}
 
@@ -1395,8 +1477,8 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<TagRegular />} label="Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
-            <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />
+            {can('tags:browser') && <NavItem icon={<TagRegular />} label="Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />}
+            {can('tags:termstore') && <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />}
           </div>
         )}
 
@@ -1414,17 +1496,22 @@ export function Shell() {
                 <ChevronRightRegular fontSize={16} />
               </button>
             )}
-            <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />
+            {can('licensing:summary') && <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />}
             {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
-            <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />
-            <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />
-            <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Copilot Studio" active={licView === 'copilot-studio'} onClick={() => setLicView('copilot-studio')} collapsed={!panelOpen} />
+            {can('licensing:power-apps') && <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />}
+            {can('licensing:power-automate') && <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />}
+            {can('licensing:copilot-studio') && <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Copilot Studio" active={licView === 'copilot-studio'} onClick={() => setLicView('copilot-studio')} collapsed={!panelOpen} />}
           </div>
         )}
 
         {/* Main content */}
         <main className={classes.content}>
           <div className={classes.contentScroll}>
+            {recordScope === 'own' && rail !== 'admin' && (
+              <MessageBar intent="info">
+                <MessageBarBody>You're viewing only resources you own or are shared on.</MessageBarBody>
+              </MessageBar>
+            )}
             {renderContent()}
           </div>
         </main>

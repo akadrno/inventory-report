@@ -23,16 +23,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build frontend
         env:
           VITE_CLIENT_ID: ${{ secrets.VITE_CLIENT_ID }}
           VITE_TENANT_ID: ${{ secrets.VITE_TENANT_ID }}
           VITE_STORAGE_ACCOUNT: ${{ secrets.VITE_STORAGE_ACCOUNT }}
           VITE_TABLE_SAS: ${{ secrets.VITE_TABLE_SAS }}
+          # Set to "/" to enable the RBAC backend (same-origin /api). Leave the
+          # secret unset/empty to ship in legacy direct-token mode.
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_API_APP_ID: ${{ secrets.VITE_API_APP_ID }}
         run: npm run build
+
+      - name: Build API (Azure Functions)
+        run: |
+          cd api
+          npm ci
+          npm run build
 
       - name: Deploy to Azure Static Web Apps
         run: |
           npx --yes @azure/static-web-apps-cli@latest deploy ./dist \
+            --api-location ./api \
             --deployment-token "${{ secrets.SWA_DEPLOYMENT_TOKEN }}" \
             --env production

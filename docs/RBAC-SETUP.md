@@ -1,0 +1,156 @@
+# RBAC / Access Control — Setup & Architecture
+
+This app has an in-app role-based access control (RBAC) system so people can use it
+**without** holding Power Platform / Global admin themselves. A small Azure Functions
+backend (`/api`) holds an elevated **service principal** and enforces access
+server-side; the React app renders only what each user is allowed to see.
+
+## How it works
+
+```
+Browser SPA (MSAL) ──Bearer(user token for api://<id>/access_as_user)──▶ /api (Functions)
+                                                                          │ validates token (oid, upn, wids)
+                                                                          │ looks up role assignments (Table Storage)
+                                                                          │ computes effective permissions
+                                                                          ▼
+                                                  app-only token (service principal)
+                                                                          ▼
+                                          Power Platform / BAP / PowerApps / Graph
+                                                                          │
+                                       filter by page permission + record scope
+                                                                          ▼
+                                                       only-allowed data ──▶ SPA
+```
+
+- **Implicit admins:** anyone holding **Global Administrator**, **Power Platform
+  Administrator**, or **Dynamics 365 Administrator** is automatically a full app-admin
+  (sees the Admin console, can grant roles). Detected from the `wids` claim on their
+  token — no extra call, and it bootstraps the first admin with zero config.
+- **Roles:** 4 built-in (App Administrator, Usage Administrator, Full Viewer,
+  Own-Records Viewer) plus custom roles you build in the Admin console. A role = a set
+  of page/sub-page keys + flags (`isAppAdmin`, `canManageUsers`, `recordScope`).
+- **Record scope `own`:** the user sees only resources they own/created (and, once the
+  shared-with expansion is added, resources shared with them).
+
+## Toggle
+
+The whole backend is gated behind the **`VITE_API_BASE_URL`** build variable:
+
+| Value | Mode |
+|-------|------|
+| unset / empty | **Legacy** — no backend; every user uses their own admin token (the app behaves exactly as before RBAC). Admin console hidden. |
+| `/` | **Enabled, same-origin** — the SWA serves `/api/*`. Use this in production. |
+| `https://host` | **Enabled, explicit origin** — for local dev against a separate Functions host. |
+
+So merging this code changes nothing in production until you set `VITE_API_BASE_URL`.
+
+## One-time Azure / Entra setup (Global Admin)
+
+> A scripted, parameterized walkthrough of all the steps below lives in
+> [`provision-rbac.ps1`](./provision-rbac.ps1) — run it block-by-block as a Global
+> Admin of the powerappsscale tenant. The manual steps follow.
+
+
+1. **Service principal** — create (or reuse) an app registration to be the elevated
+   identity. Grant **application** permissions and admin-consent them:
+   - Microsoft Graph: `User.Read.All`, `Organization.Read.All`, `AuditLog.Read.All`, `Directory.Read.All`
+   - Register it as a Power Platform management app so app-only tokens work against
+     BAP / PowerApps admin / resourcequery:
+     ```powershell
+     Install-Module Microsoft.PowerApps.Administration.PowerShell
+     Add-PowerAppsAccount
+     New-PowerAppManagementApplication -ApplicationId <sp-app-id>
+     ```
+   - Create a client secret **or** (preferred) a federated credential / managed identity.
+
+2. **Frontend app registration** (`VITE_CLIENT_ID`, the powerappsscale app):
+   - **Expose an API** → set Application ID URI `api://<frontend-client-id>` → add a
+     delegated scope **`access_as_user`** (admin + user consent).
+   - Under **Authorized client applications**, pre-authorize the same client id for the
+     `access_as_user` scope (so the SPA gets the token silently).
+   - Keep the existing SPA redirect URI (the SWA origin).
+   - If you use a *separate* app id for the API, set `VITE_API_APP_ID` to it; otherwise
+     it defaults to `VITE_CLIENT_ID`.
+
+3. **Static Web App → Configuration (Function app settings):**
+   - `TENANT_ID` = powerappsscale tenant id
+   - `API_APP_ID` = the app id whose `api://…/access_as_user` scope the SPA requests
+   - `SP_CLIENT_ID`, `SP_CLIENT_SECRET` = the service principal credentials
+   - `STORAGE_CONNECTION_STRING` = connection string for the Table Storage account that
+     holds `ppacRoles` / `ppacRoleAssignments` (tables auto-create on first write)
+
+4. **GitHub repo secrets** (used by `.github/workflows/deploy.yml`):
+   - `VITE_API_BASE_URL` = `/`
+   - `VITE_API_APP_ID` = (only if using a separate API app id)
+
+5. **Deploy** — push to `main`. The workflow now builds `./api` and deploys it with
+   `--api-location ./api`.
+
+## Local development
+
+```bash
+# Terminal 1 — API
+cd api
+cp local.settings.json.example local.settings.json   # fill in the values
+npm install
+npm start            # func start (http://localhost:7071)
+
+# Terminal 2 — SPA
+# set VITE_API_BASE_URL=http://localhost:7071 in .env.local
+npm run dev
+```
+
+## Endpoints (implemented)
+
+| Method | Route | Purpose | Guard |
+|--------|-------|---------|-------|
+| GET | `/api/me/permissions` | caller's effective access | any signed-in user |
+| GET | `/api/directory/search?q=` | Entra people picker | canManageUsers |
+| GET/POST | `/api/admin/roles` | list / create roles | isAppAdmin |
+| PUT/DELETE | `/api/admin/roles/{id}` | edit / delete custom role | isAppAdmin |
+| GET/POST | `/api/admin/assignments` | list / add user→role | canManageUsers |
+| DELETE | `/api/admin/assignments/{id}` | remove assignment | canManageUsers |
+| GET | `/api/licensing/skus` | tenant subscribed SKUs | page `licensing:summary` |
+| GET/POST | `/api/governance/{op}` | governance reads (see below) | per-op page key |
+| GET | `/api/usage/signins?since=&appIds=&maxRecords=` | Entra sign-in logs (heatmap) | page `usage:heatmap` |
+
+`/api/governance/{op}` ops: `dlp`, `tenant-settings`, `capacity`, `billing`,
+`cross-tenant`, `advisor`, `advisor-resources?scenario=`, `connections` (POST
+`{envIds}`), `rule-assignments?groupId=`, `rule-policy?policyId=`,
+`policy-rules?policyId=`, `all-rule-policies`.
+
+Backend-proxied reads (repointed behind `apiConfigured`): `graphApi`
+(`fetchSubscribedSkus`), `governanceApi` (all fetchers), and `signInsApi`
+(`fetchSignIns`).
+
+## Inventory is the exception (important)
+
+The Power Platform **`resourcequery`** API (the source for the Inventory list —
+Apps/Flows/Agents/Environments/Groups) does **not** support app-only / service-principal
+access. The "Power Platform API" exposes only one application permission
+(`CopilotStudio.Copilots.Invoke`), and granting the SP the Power Platform Administrator
+directory role does **not** unblock it (verified). So inventory cannot be served by the
+backend.
+
+Current behaviour: inventory stays on the **caller's own delegated token**, and record
+scoping is applied **client-side** in `Shell` — non-app-admins see only resources whose
+owner/createdBy matches their Entra object id or UPN (`isOwnedBy` in `src/types`);
+app-admins see everything. Consequence: a true non-admin maker (no Power Platform read
+access of their own) sees an empty inventory.
+
+To serve inventory to true non-admins, rework the inventory fetch to enumerate apps +
+flows **per environment** via the PowerApps/Flow **admin** APIs (these DO work app-only
+— verified):
+- apps: `GET https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/{env}/apps?api-version=2016-11-01`
+- flows: `GET https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/scopes/admin/environments/{env}/v2/flows?api-version=2016-11-01`
+- environments: BAP admin (already used by the capacity proxy)
+- agents/Copilot bots live in Dataverse — hardest app-only; do last.
+
+## Other remaining work (optional)
+
+- **Owner-name resolution** (`graphApi` batch `/users`) still uses the user's own
+  `User.ReadBasic.All` token; route via the SP with a `/api/directory/resolve` endpoint.
+- **Co-owner / shared-with scoping** — extend the owner match (`isOwnedBy` /
+  `api/src/lib/scope.ts`) with the PowerApps admin per-resource permissions endpoint.
+
+Keep `api/src/lib/catalog.ts` in sync with `src/permissions/catalog.ts`.
