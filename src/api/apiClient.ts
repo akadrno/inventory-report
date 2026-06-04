@@ -43,6 +43,10 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   if (!apiConfigured) throw new Error('Backend API not configured (VITE_API_BASE_URL unset)')
   const token = await getApiToken()
   const headers = new Headers(init?.headers)
+  // Send the token in a custom header: Azure Static Web Apps overwrites the standard
+  // `Authorization` header before forwarding to the managed Functions backend, so the
+  // backend reads `x-ppac-auth` instead. (Authorization is also set for local dev.)
+  headers.set('x-ppac-auth', token)
   headers.set('Authorization', `Bearer ${token}`)
   if (init?.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const url = path.startsWith('http')

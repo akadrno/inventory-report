@@ -35,16 +35,20 @@ function audienceMatches(aud: JWTPayload['aud']): boolean {
 }
 
 export async function validateUser(req: HttpRequest): Promise<Caller> {
-  const header = req.headers.get('authorization') ?? ''
-  const match = /^Bearer\s+(.+)$/i.exec(header)
-  if (!match) throw new HttpError(401, 'Missing bearer token')
+  // Read the user token from a custom header — Azure Static Web Apps overwrites the
+  // standard `Authorization` header before forwarding to the managed Functions, so it
+  // can't be used. Fall back to Authorization for local dev (no SWA in front).
+  const custom = req.headers.get('x-ppac-auth')
+  const authMatch = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')
+  const token = custom || authMatch?.[1]
+  if (!token) throw new HttpError(401, 'Missing auth token')
 
   let payload: JWTPayload
   try {
-    const result = await jwtVerify(match[1], JWKS, { issuer: ISSUERS })
+    const result = await jwtVerify(token, JWKS, { issuer: ISSUERS })
     payload = result.payload
-  } catch {
-    throw new HttpError(401, 'Invalid or expired token')
+  } catch (e) {
+    throw new HttpError(401, `Invalid or expired token: ${(e as Error).message}`)
   }
 
   if (!audienceMatches(payload.aud)) throw new HttpError(401, 'Token audience mismatch')
