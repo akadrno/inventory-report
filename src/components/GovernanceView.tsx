@@ -1112,6 +1112,8 @@ export function ConnectionsSection({ result }: { result: ConnectionsResult }) {
       <div className={classes.sectionBody}>
         <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
           No connections found across the environments scanned.
+          {result.inaccessibleCount > 0 &&
+            ` (${result.inaccessibleCount} environment${result.inaccessibleCount !== 1 ? 's' : ''} could not be read — admin connection enumeration isn't available for some environment types.)`}
         </Caption1>
       </div>
     )
@@ -1125,6 +1127,9 @@ export function ConnectionsSection({ result }: { result: ConnectionsResult }) {
         <Badge appearance="tint" color="subtle" size="small">{distinctOwners} owners</Badge>
         {result.truncated && (
           <Badge appearance="tint" color="warning" size="small">Partial — first 60 environments scanned</Badge>
+        )}
+        {result.inaccessibleCount > 0 && (
+          <Badge appearance="tint" color="warning" size="small">{result.inaccessibleCount} environment{result.inaccessibleCount !== 1 ? 's' : ''} not readable</Badge>
         )}
       </div>
       {groups.map(g => (

@@ -493,22 +493,31 @@ export interface PowerConnection {
   status?: string
 }
 
+interface EnvConnectionsResult {
+  connections: PowerConnection[]
+  // A 401/403 on this specific environment. Common even for Global Admins on
+  // Developer/Teams/trial environments the admin API won't enumerate, so we
+  // record it instead of failing the whole report.
+  forbidden: boolean
+}
+
 async function fetchEnvironmentConnections(
   envId: string,
   token: string,
   signal?: AbortSignal,
-): Promise<PowerConnection[]> {
+): Promise<EnvConnectionsResult> {
   const res = await fetch(
     `https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/${encodeURIComponent(envId)}/connections?api-version=2016-11-01`,
     { headers: { Authorization: `Bearer ${token}` }, signal },
   )
-  // Surface auth failures (so the section shows a permission notice); treat any
-  // other per-environment error as "no connections" rather than failing the lot.
-  if (res.status === 401 || res.status === 403) throw new Error(`${res.status}: insufficient permissions to read connections`)
-  if (!res.ok) return []
+  // Record auth failures per environment; the caller only treats the report as
+  // a permission problem when EVERY environment refuses. Any other per-env
+  // error is treated as "no connections" rather than failing the lot.
+  if (res.status === 401 || res.status === 403) return { connections: [], forbidden: true }
+  if (!res.ok) return { connections: [], forbidden: false }
   const json = await res.json()
   const raw: Record<string, unknown>[] = json.value ?? []
-  return raw.map(c => {
+  const connections = raw.map(c => {
     const props = (c['properties'] as Record<string, unknown>) ?? {}
     const createdBy = (props['createdBy'] as Record<string, unknown>) ?? {}
     const statuses = props['statuses'] as Array<Record<string, unknown>> | undefined
@@ -526,11 +535,16 @@ async function fetchEnvironmentConnections(
       status: statuses?.[0]?.['status'] as string | undefined,
     }
   })
+  return { connections, forbidden: false }
 }
 
 export interface ConnectionsResult {
   connections: PowerConnection[]
   truncated: boolean
+  // Number of scanned environments that returned 401/403. A non-zero value with
+  // a non-empty report just means some environments (e.g. Developer/Teams envs)
+  // could not be enumerated — not a global permission failure.
+  inaccessibleCount: number
 }
 
 export async function fetchConnections(
@@ -543,11 +557,21 @@ export async function fetchConnections(
   const targets = envIds.slice(0, CAP)
   const truncated = envIds.length > CAP
   const all: PowerConnection[] = []
+  let inaccessibleCount = 0
   const CONCURRENCY = 6
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const batch = targets.slice(i, i + CONCURRENCY)
     const results = await Promise.all(batch.map(id => fetchEnvironmentConnections(id, token, signal)))
-    for (const r of results) all.push(...r)
+    for (const r of results) {
+      all.push(...r.connections)
+      if (r.forbidden) inaccessibleCount++
+    }
   }
-  return { connections: all, truncated }
+  // Only surface the permission notice when EVERY environment refused — that's
+  // the genuine "not a Power Platform admin" signal. A partial set of forbidden
+  // environments still yields a useful report.
+  if (targets.length > 0 && inaccessibleCount === targets.length) {
+    throw new Error('403: insufficient permissions to read connections')
+  }
+  return { connections: all, truncated, inaccessibleCount }
 }
