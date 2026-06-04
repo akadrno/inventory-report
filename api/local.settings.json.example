@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    "TENANT_ID": "78ff038c-633d-4743-8ba1-9744b275a2d0",
+    "API_APP_ID": "<frontend-app-registration-client-id>",
+
+    "SP_CLIENT_ID": "<service-principal-app-id>",
+    "SP_CLIENT_SECRET": "<service-principal-secret-or-use-federated-credential>",
+
+    "STORAGE_CONNECTION_STRING": "<connection string for the RBAC Table Storage account>"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}

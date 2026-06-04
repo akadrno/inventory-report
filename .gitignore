@@ -14,6 +14,9 @@ node_modules
 dist
 dist-ssr
 
+# Azure Functions local settings (holds the SP secret + storage conn string)
+api/local.settings.json
+
 # Local env files (never commit secrets)
 *.env
 *.env.local
