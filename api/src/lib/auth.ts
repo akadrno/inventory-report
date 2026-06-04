@@ -6,8 +6,13 @@ import { HttpError } from './http'
 const TENANT_ID = process.env.TENANT_ID ?? ''
 const API_APP_ID = process.env.API_APP_ID ?? ''
 
-// Microsoft identity platform v2 issuer + JWKS for this tenant.
-const ISSUER = `https://login.microsoftonline.com/${TENANT_ID}/v2.0`
+// Accept both the v2 (login.microsoftonline.com/.../v2.0) and v1 (sts.windows.net/.../)
+// issuers, since a custom-API access token's version depends on the app's
+// requestedAccessTokenVersion and we want validation to hold either way.
+const ISSUERS = [
+  `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
+  `https://sts.windows.net/${TENANT_ID}/`,
+]
 const JWKS = createRemoteJWKSet(
   new URL(`https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`),
 )
@@ -36,7 +41,7 @@ export async function validateUser(req: HttpRequest): Promise<Caller> {
 
   let payload: JWTPayload
   try {
-    const result = await jwtVerify(match[1], JWKS, { issuer: ISSUER })
+    const result = await jwtVerify(match[1], JWKS, { issuer: ISSUERS })
     payload = result.payload
   } catch {
     throw new HttpError(401, 'Invalid or expired token')
