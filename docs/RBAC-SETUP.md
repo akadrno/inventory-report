@@ -105,18 +105,25 @@ npm run dev
 | PUT/DELETE | `/api/admin/roles/{id}` | edit / delete custom role | isAppAdmin |
 | GET/POST | `/api/admin/assignments` | list / add user→role | canManageUsers |
 | DELETE | `/api/admin/assignments/{id}` | remove assignment | canManageUsers |
-| GET | `/api/inventory/resources` | inventory proxy (template) | page `inventory:all` |
+| GET | `/api/powerplatform/query?kind=resources\|environments\|groups` | inventory resources / environments / groups (record-scoped) | page `inventory:all` / `:environments` / `:groups` |
+| GET | `/api/licensing/skus` | tenant subscribed SKUs | page `licensing:summary` |
+
+The matching frontend reads are already repointed behind `apiConfigured`:
+`fetchResourcesPage` / `fetchEnvironmentsPage` / `fetchEnvironmentGroupsPage` /
+`fetchAllResources` (`src/api/powerPlatformApi.ts`) and `fetchSubscribedSkus`
+(`src/api/graphApi.ts`). With `VITE_API_BASE_URL` unset they keep using the user's
+own token; with it set they call the proxy.
 
 ## Remaining work (data-proxy migration)
 
-The RBAC management plane is complete. To fully remove the admin-role requirement for
-**loading data**, port the remaining read paths behind `/api` following
-`api/src/functions/inventory.ts` as the template, then repoint the matching frontend
-`src/api/*.ts` `fetchX` bodies to `apiFetch(...)` (guarded by `apiConfigured`):
+The RBAC management plane and the inventory + licensing reads are done. To fully
+remove the admin-role requirement for the rest, port these behind `/api` following
+`api/src/functions/powerplatform.ts` as the template, then repoint the matching
+frontend `src/api/*.ts` `fetchX` bodies (guarded by `apiConfigured`):
 
-- environments & environment groups (`powerPlatformApi`)
-- governance: DLP, tenant settings, capacity, billing, cross-tenant, advisor, connections (`governanceApi`)
-- usage sign-ins (`signInsApi`) and licensing SKUs (`graphApi`)
+- governance: DLP, tenant settings, capacity, billing, cross-tenant, advisor, connections (`governanceApi`) — note cross-tenant/advisor use async polling + per-environment fan-out
+- usage sign-ins (`signInsApi`)
+- owner-name resolution (`graphApi` batch `/users`) if you want non-admins to resolve names
 
 Also extend `api/src/lib/scope.ts` `ownsResource` with the co-owner / shared-with
 expansion (PowerApps admin per-resource permissions endpoint) per the agreed design.

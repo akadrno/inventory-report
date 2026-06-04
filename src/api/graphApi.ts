@@ -1,5 +1,6 @@
 import { IPublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser'
 import { graphScopes, graphOrgScopes, msalInstance as defaultMsalInstance } from '../auth/msalConfig'
+import { apiConfigured, apiJson } from './apiClient'
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 
@@ -178,6 +179,8 @@ async function getGraphOrgToken(): Promise<string> {
 }
 
 export async function fetchSubscribedSkus(): Promise<SubscribedSku[]> {
+  // RBAC backend enabled → fetch via the elevated proxy (page-gated server-side).
+  if (apiConfigured) return apiJson<SubscribedSku[]>('/api/licensing/skus')
   const token = await getGraphOrgToken()
   const res = await fetch(`${GRAPH_BASE}/subscribedSkus`, {
     headers: { Authorization: `Bearer ${token}` },
