@@ -1477,18 +1477,30 @@ export function ConnectionsSection({
       {cachedAt && (
         <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>· Cached {formatLocalDateTime(cachedAt)}</Caption1>
       )}
-      {onRefresh && (
-        <Button
-          appearance="subtle"
-          icon={<ArrowSyncRegular />}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+        <Input
           size="small"
-          disabled={isUpdating}
-          onClick={onRefresh}
-          style={{ marginLeft: 'auto' }}
-        >
-          {isUpdating ? 'Updating…' : 'Refresh'}
-        </Button>
-      )}
+          placeholder="Search connectors, users, or environments…"
+          value={query}
+          onChange={(_, d) => setQuery(d.value)}
+          contentBefore={<SearchRegular />}
+          contentAfter={query
+            ? <DismissRegular aria-label="Clear search" style={{ cursor: 'pointer' }} onClick={() => setQuery('')} />
+            : undefined}
+          style={{ width: '300px', maxWidth: '40vw' }}
+        />
+        {onRefresh && (
+          <Button
+            appearance="subtle"
+            icon={<ArrowSyncRegular />}
+            size="small"
+            disabled={isUpdating}
+            onClick={onRefresh}
+          >
+            {isUpdating ? 'Updating…' : 'Refresh'}
+          </Button>
+        )}
+      </div>
     </div>
   )
 
@@ -1499,20 +1511,7 @@ export function ConnectionsSection({
     </div>
   )
 
-  const searchInput = (
-    <Input
-      size="small"
-      placeholder="Search connectors, users, or environments…"
-      value={query}
-      onChange={(_, d) => setQuery(d.value)}
-      contentBefore={<SearchRegular />}
-      contentAfter={query
-        ? <DismissRegular aria-label="Clear search" style={{ cursor: 'pointer' }} onClick={() => setQuery('')} />
-        : undefined}
-      style={{ maxWidth: '440px' }}
-    />
-  )
-  const controls = <>{header}{searchInput}{updatingNotice}</>
+  const controls = <>{header}{updatingNotice}</>
 
   // ── Search view: results grouped by what was searched, then drillable ──────
   if (q) {
