@@ -39,7 +39,7 @@ import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
 import {
   useDLPPolicies, useTenantSettings, useLicenses,
-  useCrossTenantConnections, useAdvisorRecommendations, useConnections,
+  useCrossTenantConnections, useAdvisorRecommendations, useConnectionsReport,
 } from '../hooks/useGovernance'
 import type { SubscribedSku } from '../hooks/useGovernance'
 import { isPowerPlatformSku } from '../api/graphApi'
@@ -640,26 +640,31 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
     }
     return m
   }, [allEnvironments])
-  const query = useConnections(envIds, true)
+  const state = useConnectionsReport(envIds, true)
 
-  if (query.isError) {
-    const diagnostics = (query.error as ConnectionsError | null)?.diagnostics
+  if (state.isLoading) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading connections…" /></div>
+  }
+  if (!state.report && state.isUpdating) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Scanning all environments for connections…" /></div>
+  }
+  if (!state.report && state.isError) {
+    const diagnostics = (state.error as ConnectionsError | null)?.diagnostics
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <GovPermNotice message="Requires Power Platform admin permissions to enumerate connections across environments." />
         <ConnectionsDiagnosticsPanel
           envCount={envIds.length}
-          errorMessage={query.error instanceof Error ? query.error.message : String(query.error)}
+          errorMessage={state.error?.message}
           diagnostics={diagnostics}
           defaultOpen
         />
       </div>
     )
   }
-  if (query.isLoading) {
-    return <div style={{ padding: '24px' }}><Spinner size="small" label="Scanning environments for connections…" /></div>
+  if (!state.report) {
+    return <div style={{ padding: '24px' }}><Spinner size="small" label="Preparing connections…" /></div>
   }
-  if (!query.data) return null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -668,9 +673,15 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
           <PlugConnectedRegular fontSize={16} style={{ color: ACTIVE }} />
           Connections
         </div>
-        <ConnectionsSection result={query.data} envNames={envNames} />
+        <ConnectionsSection
+          result={state.report}
+          envNames={envNames}
+          onRefresh={state.refresh}
+          isUpdating={state.isUpdating}
+          cachedAt={state.cachedAt}
+        />
       </div>
-      <ConnectionsDiagnosticsPanel envCount={envIds.length} diagnostics={query.data.diagnostics} />
+      <ConnectionsDiagnosticsPanel envCount={envIds.length} diagnostics={state.report.diagnostics} />
     </div>
   )
 }

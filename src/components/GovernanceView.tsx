@@ -32,6 +32,7 @@ import {
   ArrowSyncRegular,
   ArrowDownloadRegular,
   ArrowUploadRegular,
+  FolderRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
@@ -1069,11 +1070,11 @@ function InlineConnectorChip({ connectorId }: { connectorId: string }) {
   )
 }
 
-interface ConnectorGroup {
-  connectorId: string
-  displayName: string
+interface EnvConnectionGroup {
+  envId: string
+  envName: string
   connections: PowerConnection[]
-  owners: number
+  connectors: number
 }
 
 function ConnectionStatusBadge({ status }: { status?: string }) {
@@ -1119,9 +1120,17 @@ function ConnectionDetail({ c, envName }: { c: PowerConnection; envName?: string
   )
 }
 
-export function ConnectionsSection({ result, envNames }: { result: ConnectionsResult; envNames?: Map<string, string> }) {
+export function ConnectionsSection({
+  result, envNames, onRefresh, isUpdating, cachedAt,
+}: {
+  result: ConnectionsResult
+  envNames?: Map<string, string>
+  onRefresh?: () => void
+  isUpdating?: boolean
+  cachedAt?: string
+}) {
   const classes = useClasses()
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const [openEnvs, setOpenEnvs] = useState<Set<string>>(new Set())
   const [openConns, setOpenConns] = useState<Set<string>>(new Set())
 
   const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
@@ -1132,42 +1141,70 @@ export function ConnectionsSection({ result, envNames }: { result: ConnectionsRe
       return next
     })
 
-  const groups = useMemo<ConnectorGroup[]>(() => {
+  // Group by environment, then sort connections inside each by connector then
+  // name so the drill-down reads connector-by-connector within an environment.
+  const envGroups = useMemo<EnvConnectionGroup[]>(() => {
     const m = new Map<string, PowerConnection[]>()
     for (const c of result.connections) {
-      const arr = m.get(c.connectorId) ?? []
+      const arr = m.get(c.environmentId) ?? []
       arr.push(c)
-      m.set(c.connectorId, arr)
+      m.set(c.environmentId, arr)
     }
     return [...m.entries()]
-      .map(([connectorId, conns]) => {
-        const owners = new Set<string>()
-        for (const c of conns) {
-          const k = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
-          if (k) owners.add(k)
-        }
-        return {
-          connectorId,
-          displayName: getConnectorInfo(connectorId).displayName,
-          connections: [...conns].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '')),
-          owners: owners.size,
-        }
-      })
-      .sort((a, b) => b.connections.length - a.connections.length)
-  }, [result])
+      .map(([envId, conns]) => ({
+        envId,
+        envName: envNames?.get(envId) ?? envId,
+        connectors: new Set(conns.map(c => c.connectorId)).size,
+        connections: [...conns].sort((a, b) =>
+          getConnectorInfo(a.connectorId).displayName.localeCompare(getConnectorInfo(b.connectorId).displayName)
+          || (a.displayName || '').localeCompare(b.displayName || '')),
+      }))
+      .sort((a, b) => b.connections.length - a.connections.length || a.envName.localeCompare(b.envName))
+  }, [result, envNames])
 
-  const distinctOwners = useMemo(() => {
-    const s = new Set<string>()
-    for (const c of result.connections) {
-      const k = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
-      if (k) s.add(k)
-    }
-    return s.size
-  }, [result])
+  const distinctConnectors = useMemo(
+    () => new Set(result.connections.map(c => c.connectorId)).size,
+    [result],
+  )
+
+  const header = (
+    <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap', marginBottom: tokens.spacingVerticalXS }}>
+      <Badge appearance="tint" color="informative" size="small">{result.connections.length} connections</Badge>
+      <Badge appearance="tint" color="subtle" size="small">{envGroups.length} environments</Badge>
+      <Badge appearance="tint" color="subtle" size="small">{distinctConnectors} connectors</Badge>
+      {result.inaccessibleCount > 0 && (
+        <Badge appearance="tint" color="warning" size="small">{result.inaccessibleCount} environment{result.inaccessibleCount !== 1 ? 's' : ''} not readable</Badge>
+      )}
+      {cachedAt && (
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>· Cached {formatLocalDateTime(cachedAt)}</Caption1>
+      )}
+      {onRefresh && (
+        <Button
+          appearance="subtle"
+          icon={<ArrowSyncRegular />}
+          size="small"
+          disabled={isUpdating}
+          onClick={onRefresh}
+          style={{ marginLeft: 'auto' }}
+        >
+          {isUpdating ? 'Updating…' : 'Refresh'}
+        </Button>
+      )}
+    </div>
+  )
+
+  const updatingNotice = isUpdating && (
+    <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966' }}>
+      <Spinner size="extra-tiny" />
+      <Caption1 style={{ color: '#003966' }}>Refreshing connections across all environments…</Caption1>
+    </div>
+  )
 
   if (result.connections.length === 0) {
     return (
       <div className={classes.sectionBody}>
+        {header}
+        {updatingNotice}
         <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
           No connections found across the environments scanned.
           {result.inaccessibleCount > 0 &&
@@ -1179,42 +1216,33 @@ export function ConnectionsSection({ result, envNames }: { result: ConnectionsRe
 
   return (
     <div className={classes.sectionBody}>
-      <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap', marginBottom: tokens.spacingVerticalXS }}>
-        <Badge appearance="tint" color="informative" size="small">{result.connections.length} connections</Badge>
-        <Badge appearance="tint" color="subtle" size="small">{groups.length} connectors</Badge>
-        <Badge appearance="tint" color="subtle" size="small">{distinctOwners} owners</Badge>
-        {result.truncated && (
-          <Badge appearance="tint" color="warning" size="small">Partial — first 60 environments scanned</Badge>
-        )}
-        {result.inaccessibleCount > 0 && (
-          <Badge appearance="tint" color="warning" size="small">{result.inaccessibleCount} environment{result.inaccessibleCount !== 1 ? 's' : ''} not readable</Badge>
-        )}
-      </div>
-      {groups.map(g => {
-        const gOpen = openGroups.has(g.connectorId)
+      {header}
+      {updatingNotice}
+      {envGroups.map(env => {
+        const envOpen = openEnvs.has(env.envId)
         return (
-          <div key={g.connectorId}>
+          <div key={env.envId}>
             <div
               className={classes.row}
               style={{ cursor: 'pointer' }}
-              onClick={() => toggle(setOpenGroups, g.connectorId)}
+              onClick={() => toggle(setOpenEnvs, env.envId)}
               role="button"
-              aria-expanded={gOpen}
+              aria-expanded={envOpen}
             >
               <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                {gOpen
+                {envOpen
                   ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
                   : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
-                <InlineConnectorChip connectorId={g.connectorId} />
-                <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.displayName}</Text>
+                <FolderRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{env.envName}</Text>
               </div>
               <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
-                <Badge appearance="tint" color="subtle" size="small">{g.connections.length} conn.</Badge>
-                <Badge appearance="tint" color="subtle" size="small">{g.owners} owner{g.owners !== 1 ? 's' : ''}</Badge>
+                <Badge appearance="tint" color="subtle" size="small">{env.connections.length} conn.</Badge>
+                <Badge appearance="tint" color="subtle" size="small">{env.connectors} connector{env.connectors !== 1 ? 's' : ''}</Badge>
               </div>
             </div>
 
-            {gOpen && g.connections.map(c => {
+            {envOpen && env.connections.map(c => {
               const cOpen = openConns.has(c.id)
               const ownerLabel = c.owner?.displayName ?? c.owner?.email ?? '—'
               return (
@@ -1230,6 +1258,7 @@ export function ConnectionsSection({ result, envNames }: { result: ConnectionsRe
                       {cOpen
                         ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
                         : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
+                      <InlineConnectorChip connectorId={c.connectorId} />
                       <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.displayName || '(unnamed connection)'}
                       </Text>
@@ -1239,7 +1268,7 @@ export function ConnectionsSection({ result, envNames }: { result: ConnectionsRe
                       {ownerLabel}
                     </Caption1>
                   </div>
-                  {cOpen && <ConnectionDetail c={c} envName={envNames?.get(c.environmentId)} />}
+                  {cOpen && <ConnectionDetail c={c} envName={env.envName} />}
                 </div>
               )
             })}

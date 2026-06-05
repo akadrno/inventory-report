@@ -79,6 +79,7 @@ export function useCrossTenantConnectionReport(enabled: boolean) {
 }
 
 const CROSS_TENANT_CACHE_ROW = 'crossTenantReport'
+const CONNECTIONS_CACHE_ROW = 'connectionsReport'
 
 export interface CrossTenantState {
   report?: CrossTenantConnectionReport
@@ -201,4 +202,99 @@ export function useConnections(envIds: string[], enabled: boolean) {
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
+}
+
+export interface ConnectionsReportState {
+  report?: ConnectionsResult
+  cachedAt?: string
+  isLoading: boolean      // initial cache read, nothing to show yet
+  isUpdating: boolean     // background full rescan in flight
+  isError: boolean
+  error: Error | null
+  cached: boolean         // whether storage-backed caching is in effect
+  refresh: () => void
+}
+
+// Cache-backed, auto-refreshing connections report. When Azure Table Storage is
+// configured the page shows the cached snapshot instantly, then ALWAYS kicks off
+// a background rescan of every environment that rewrites the cache. Without
+// storage it falls back to a live (uncached) scan.
+export function useConnectionsReport(envIds: string[], active: boolean): ConnectionsReportState {
+  const qc = useQueryClient()
+
+  const cacheQuery = useQuery<CachedBlob<ConnectionsResult> | null, Error>({
+    queryKey: ['connections-cache'],
+    queryFn: () => loadGovernanceCache<ConnectionsResult>(CONNECTIONS_CACHE_ROW),
+    enabled: active && tableStorageConfigured,
+    retry: false,
+    staleTime: Infinity,
+  })
+
+  const liveQuery = useQuery<ConnectionsResult, Error>({
+    queryKey: ['connections-report-live', envIds.length],
+    queryFn: ({ signal }) => fetchConnections(envIds, signal),
+    enabled: active && !tableStorageConfigured && envIds.length > 0,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const refreshMutation = useMutation<ConnectionsResult, Error, void>({
+    mutationFn: async () => {
+      const report = await fetchConnections(envIds)
+      // Caching is best-effort: a storage write failure (e.g. payload over the
+      // ~1 MB row cap on a very large tenant) must not hide a report the API
+      // returned successfully.
+      try { await saveGovernanceCache(CONNECTIONS_CACHE_ROW, report) } catch { /* ignore */ }
+      return report
+    },
+    onSuccess: (report) => {
+      qc.setQueryData<CachedBlob<ConnectionsResult>>(
+        ['connections-cache'],
+        { data: report, cachedAt: new Date().toISOString() },
+      )
+    },
+  })
+
+  const { mutate: doRefresh, isPending } = refreshMutation
+
+  // Auto-refresh once per mount: show cached data immediately, then rescan every
+  // environment in the background and rewrite the cache. The guard ref keeps it
+  // to a single refresh (not a loop); it fires after the cache read settles and
+  // once environments are known.
+  const autoTriggered = useRef(false)
+  useEffect(() => {
+    if (!active || !tableStorageConfigured) return
+    if (cacheQuery.isLoading) return
+    if (envIds.length === 0) return
+    if (autoTriggered.current || isPending) return
+    autoTriggered.current = true
+    doRefresh()
+  }, [active, cacheQuery.isLoading, envIds.length, isPending, doRefresh])
+
+  if (!tableStorageConfigured) {
+    return {
+      report: liveQuery.data,
+      cachedAt: undefined,
+      isLoading: liveQuery.isLoading,
+      isUpdating: liveQuery.isFetching && !!liveQuery.data,
+      isError: liveQuery.isError,
+      error: liveQuery.error,
+      cached: false,
+      refresh: () => { liveQuery.refetch() },
+    }
+  }
+
+  // Prefer cached data; fall back to the freshly-fetched report when the cache
+  // read failed but the live regeneration succeeded.
+  const report = cacheQuery.data?.data ?? refreshMutation.data
+  return {
+    report,
+    cachedAt: cacheQuery.data?.cachedAt,
+    isLoading: cacheQuery.isLoading && !report,
+    isUpdating: isPending,
+    isError: !report && !isPending && refreshMutation.isError,
+    error: refreshMutation.error ?? cacheQuery.error,
+    cached: true,
+    refresh: () => { doRefresh() },
+  }
 }

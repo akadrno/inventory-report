@@ -512,10 +512,15 @@ async function fetchEnvironmentConnections(
   token: string,
   signal?: AbortSignal,
 ): Promise<EnvConnectionsResult> {
-  const res = await fetch(
-    `https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/${encodeURIComponent(envId)}/connections?api-version=2016-11-01`,
-    { headers: { Authorization: `Bearer ${token}` }, signal },
-  )
+  const url = `https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/${encodeURIComponent(envId)}/connections?api-version=2016-11-01`
+  // Scanning every environment makes throttling (429) likely on large tenants;
+  // retry a couple of times honouring Retry-After so the batch stays complete.
+  let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+  for (let attempt = 0; res.status === 429 && attempt < 2; attempt++) {
+    const ra = Number(res.headers.get('Retry-After'))
+    await delay((Number.isFinite(ra) && ra > 0 ? Math.min(ra, 10) : 2 + attempt * 2) * 1000)
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+  }
   // Record auth failures per environment; the caller only treats the report as
   // a permission problem when EVERY environment refuses. Any other per-env
   // error is treated as "no connections" rather than failing the lot.
@@ -621,10 +626,10 @@ export async function fetchConnections(
   envIds: string[],
   signal?: AbortSignal,
 ): Promise<ConnectionsResult> {
-  // Cap the environment fan-out so very large tenants stay responsive.
-  const CAP = 60
-  const targets = envIds.slice(0, CAP)
-  const truncated = envIds.length > CAP
+  // Scan every environment — the report is cached, so a slower full sweep runs
+  // in the background and the page still loads instantly from storage.
+  const targets = envIds
+  const truncated = false
 
   const diag: ConnectionsDiagnostics = {
     endpoint: 'https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/{envId}/connections?api-version=2016-11-01',
