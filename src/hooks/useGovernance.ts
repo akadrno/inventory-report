@@ -11,14 +11,14 @@ import {
 import type { CachedBlob } from '../api/tableStorageApi'
 import type {
   DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
-  CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult,
+  CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult, PowerConnection,
 } from '../api/governanceApi'
 import { fetchSubscribedSkus } from '../api/graphApi'
 import type { SubscribedSku } from '../api/graphApi'
 
 export type {
   DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy, SubscribedSku,
-  CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult,
+  CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult, PowerConnection,
 }
 
 export function useDLPPolicies() {

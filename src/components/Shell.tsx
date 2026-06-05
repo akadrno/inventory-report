@@ -633,6 +633,13 @@ function GovCrossTenantPage() {
 function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
   const classes = useClasses()
   const envIds = useMemo(() => allEnvironments.map(e => e.name).filter(Boolean), [allEnvironments])
+  const envNames = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const e of allEnvironments) {
+      if (e.name) m.set(e.name, getDisplayName(e))
+    }
+    return m
+  }, [allEnvironments])
   const query = useConnections(envIds, true)
 
   if (query.isError) {
@@ -661,7 +668,7 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
           <PlugConnectedRegular fontSize={16} style={{ color: ACTIVE }} />
           Connections
         </div>
-        <ConnectionsSection result={query.data} />
+        <ConnectionsSection result={query.data} envNames={envNames} />
       </div>
       <ConnectionsDiagnosticsPanel envCount={envIds.length} diagnostics={query.data.diagnostics} />
     </div>

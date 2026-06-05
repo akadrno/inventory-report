@@ -489,8 +489,11 @@ export interface PowerConnection {
   connectorId: string
   owner?: { id?: string; displayName?: string; email?: string }
   createdTime?: string
+  lastModifiedTime?: string
   environmentId: string
   status?: string
+  statusError?: string
+  accountName?: string
 }
 
 interface EnvConnectionsResult {
@@ -530,6 +533,8 @@ async function fetchEnvironmentConnections(
     const props = (c['properties'] as Record<string, unknown>) ?? {}
     const createdBy = (props['createdBy'] as Record<string, unknown>) ?? {}
     const statuses = props['statuses'] as Array<Record<string, unknown>> | undefined
+    const firstStatus = statuses?.[0]
+    const statusError = firstStatus?.['error'] as Record<string, unknown> | undefined
     return {
       id: (c['name'] as string) ?? (c['id'] as string) ?? '',
       displayName: (props['displayName'] as string) ?? '',
@@ -540,8 +545,11 @@ async function fetchEnvironmentConnections(
         email: (createdBy['email'] ?? createdBy['userPrincipalName']) as string | undefined,
       },
       createdTime: props['createdTime'] as string | undefined,
+      lastModifiedTime: props['lastModifiedTime'] as string | undefined,
       environmentId: envId,
-      status: statuses?.[0]?.['status'] as string | undefined,
+      status: firstStatus?.['status'] as string | undefined,
+      statusError: statusError?.['message'] as string | undefined,
+      accountName: props['accountName'] as string | undefined,
     }
   })
   return { connections, forbidden: false, status: res.status }

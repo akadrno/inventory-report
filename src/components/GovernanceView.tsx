@@ -41,7 +41,7 @@ import {
 } from '../hooks/useGovernance'
 import type {
   DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
-  CrossTenantConnectionReport, AdvisorRecommendation, ConnectionsResult,
+  CrossTenantConnectionReport, AdvisorRecommendation, ConnectionsResult, PowerConnection,
 } from '../hooks/useGovernance'
 import { getConnectorInfo } from '../utils/connectors'
 import { formatLocalDateTime } from '../utils/format'
@@ -1072,30 +1072,88 @@ function InlineConnectorChip({ connectorId }: { connectorId: string }) {
 interface ConnectorGroup {
   connectorId: string
   displayName: string
-  count: number
+  connections: PowerConnection[]
   owners: number
 }
 
-export function ConnectionsSection({ result }: { result: ConnectionsResult }) {
+function ConnectionStatusBadge({ status }: { status?: string }) {
+  if (!status) return null
+  const connected = /connected/i.test(status)
+  return (
+    <Badge appearance="tint" color={connected ? 'success' : 'danger'} size="small">{status}</Badge>
+  )
+}
+
+function ConnectionDetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
+  if (value == null || value === '') return null
+  return (
+    <div style={{ display: 'flex', gap: '12px', padding: '2px 0', alignItems: 'baseline' }}>
+      <div style={{ minWidth: '128px', flexShrink: 0, color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 }}>{label}</div>
+      <div style={{ fontSize: tokens.fontSizeBase200, wordBreak: 'break-word', fontFamily: 'Consolas, monospace' }}>{value}</div>
+    </div>
+  )
+}
+
+function ConnectionDetail({ c, envName }: { c: PowerConnection; envName?: string }) {
+  const info = getConnectorInfo(c.connectorId)
+  const ownerText = c.owner?.displayName
+    ? `${c.owner.displayName}${c.owner.email ? ` <${c.owner.email}>` : ''}`
+    : c.owner?.email
+  const envLabel = envName && envName !== c.environmentId ? `${envName} (${c.environmentId})` : c.environmentId
+  return (
+    <div style={{
+      padding: '6px 8px 10px 30px',
+      display: 'flex', flexDirection: 'column', gap: '1px',
+      borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    }}>
+      <ConnectionDetailRow label="Connector" value={info.displayName} />
+      <ConnectionDetailRow label="Connector ID" value={c.connectorId} />
+      <ConnectionDetailRow label="Connection ID" value={c.id} />
+      <ConnectionDetailRow label="Status" value={c.statusError ? `${c.status ?? 'Error'} — ${c.statusError}` : c.status} />
+      <ConnectionDetailRow label="Owner" value={ownerText} />
+      <ConnectionDetailRow label="Account" value={c.accountName} />
+      <ConnectionDetailRow label="Environment" value={envLabel} />
+      <ConnectionDetailRow label="Created" value={c.createdTime ? formatLocalDateTime(c.createdTime) : undefined} />
+      <ConnectionDetailRow label="Modified" value={c.lastModifiedTime ? formatLocalDateTime(c.lastModifiedTime) : undefined} />
+    </div>
+  )
+}
+
+export function ConnectionsSection({ result, envNames }: { result: ConnectionsResult; envNames?: Map<string, string> }) {
   const classes = useClasses()
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const [openConns, setOpenConns] = useState<Set<string>>(new Set())
+
+  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
+    setter(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const groups = useMemo<ConnectorGroup[]>(() => {
-    const m = new Map<string, { count: number; owners: Set<string> }>()
+    const m = new Map<string, PowerConnection[]>()
     for (const c of result.connections) {
-      const entry = m.get(c.connectorId) ?? { count: 0, owners: new Set<string>() }
-      entry.count++
-      const ownerKey = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
-      if (ownerKey) entry.owners.add(ownerKey)
-      m.set(c.connectorId, entry)
+      const arr = m.get(c.connectorId) ?? []
+      arr.push(c)
+      m.set(c.connectorId, arr)
     }
     return [...m.entries()]
-      .map(([connectorId, v]) => ({
-        connectorId,
-        displayName: getConnectorInfo(connectorId).displayName,
-        count: v.count,
-        owners: v.owners.size,
-      }))
-      .sort((a, b) => b.count - a.count)
+      .map(([connectorId, conns]) => {
+        const owners = new Set<string>()
+        for (const c of conns) {
+          const k = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName
+          if (k) owners.add(k)
+        }
+        return {
+          connectorId,
+          displayName: getConnectorInfo(connectorId).displayName,
+          connections: [...conns].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '')),
+          owners: owners.size,
+        }
+      })
+      .sort((a, b) => b.connections.length - a.connections.length)
   }, [result])
 
   const distinctOwners = useMemo(() => {
@@ -1132,18 +1190,62 @@ export function ConnectionsSection({ result }: { result: ConnectionsResult }) {
           <Badge appearance="tint" color="warning" size="small">{result.inaccessibleCount} environment{result.inaccessibleCount !== 1 ? 's' : ''} not readable</Badge>
         )}
       </div>
-      {groups.map(g => (
-        <div key={g.connectorId} className={classes.row}>
-          <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-            <InlineConnectorChip connectorId={g.connectorId} />
-            <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.displayName}</Text>
+      {groups.map(g => {
+        const gOpen = openGroups.has(g.connectorId)
+        return (
+          <div key={g.connectorId}>
+            <div
+              className={classes.row}
+              style={{ cursor: 'pointer' }}
+              onClick={() => toggle(setOpenGroups, g.connectorId)}
+              role="button"
+              aria-expanded={gOpen}
+            >
+              <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                {gOpen
+                  ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                  : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
+                <InlineConnectorChip connectorId={g.connectorId} />
+                <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.displayName}</Text>
+              </div>
+              <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
+                <Badge appearance="tint" color="subtle" size="small">{g.connections.length} conn.</Badge>
+                <Badge appearance="tint" color="subtle" size="small">{g.owners} owner{g.owners !== 1 ? 's' : ''}</Badge>
+              </div>
+            </div>
+
+            {gOpen && g.connections.map(c => {
+              const cOpen = openConns.has(c.id)
+              const ownerLabel = c.owner?.displayName ?? c.owner?.email ?? '—'
+              return (
+                <div key={c.id}>
+                  <div
+                    className={classes.row}
+                    style={{ cursor: 'pointer', paddingLeft: '30px' }}
+                    onClick={() => toggle(setOpenConns, c.id)}
+                    role="button"
+                    aria-expanded={cOpen}
+                  >
+                    <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                      {cOpen
+                        ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                        : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
+                      <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.displayName || '(unnamed connection)'}
+                      </Text>
+                      <ConnectionStatusBadge status={c.status} />
+                    </div>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ownerLabel}
+                    </Caption1>
+                  </div>
+                  {cOpen && <ConnectionDetail c={c} envName={envNames?.get(c.environmentId)} />}
+                </div>
+              )
+            })}
           </div>
-          <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
-            <Badge appearance="tint" color="subtle" size="small">{g.count} conn.</Badge>
-            <Badge appearance="tint" color="subtle" size="small">{g.owners} owner{g.owners !== 1 ? 's' : ''}</Badge>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
