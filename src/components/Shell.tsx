@@ -5,6 +5,7 @@ import {
   ClipboardBulletListRegular,
   ShieldRegular,
   GlobeRegular,
+  DatabaseRegular,
   FolderOpenRegular,
   PersonRegular,
   SearchRegular,
@@ -631,7 +632,6 @@ function GovCrossTenantPage() {
 // ── Governance: Connections page ─────────────────────────────────────────────
 
 function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
-  const classes = useClasses()
   const envIds = useMemo(() => allEnvironments.map(e => e.name).filter(Boolean), [allEnvironments])
   const envNames = useMemo(() => {
     const m = new Map<string, string>()
@@ -668,19 +668,14 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div className={classes.sectionCard}>
-        <div className={classes.cardHead}>
-          <PlugConnectedRegular fontSize={16} style={{ color: ACTIVE }} />
-          Connections
-        </div>
-        <ConnectionsSection
-          result={state.report}
-          envNames={envNames}
-          onRefresh={state.refresh}
-          isUpdating={state.isUpdating}
-          cachedAt={state.cachedAt}
-        />
-      </div>
+      <ConnectionsSection
+        result={state.report}
+        environments={allEnvironments}
+        envNames={envNames}
+        onRefresh={state.refresh}
+        isUpdating={state.isUpdating}
+        cachedAt={state.cachedAt}
+      />
       <ConnectionsDiagnosticsPanel envCount={envIds.length} diagnostics={state.report.diagnostics} />
     </div>
   )
@@ -1468,7 +1463,7 @@ export function Shell() {
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
             <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
-            <NavItem icon={<GlobeRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
+            <NavItem icon={<DatabaseRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
             <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />
           </div>

@@ -32,7 +32,8 @@ import {
   ArrowSyncRegular,
   ArrowDownloadRegular,
   ArrowUploadRegular,
-  FolderRegular,
+  ArrowSortRegular,
+  ChevronUpRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
@@ -46,6 +47,7 @@ import type {
 } from '../hooks/useGovernance'
 import { getConnectorInfo } from '../utils/connectors'
 import { formatLocalDateTime } from '../utils/format'
+import { EnvironmentBadge } from './EnvironmentBadge'
 
 interface GovernanceViewProps {
   allResources: ResourceItem[]
@@ -110,6 +112,60 @@ const useClasses = makeStyles({
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
   },
+  // Environments-style table card, reused by the Connections page.
+  envTableWrapper: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusLarge,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    overflow: 'hidden',
+    boxShadow: tokens.shadow4,
+  },
+  envTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: tokens.fontSizeBase200,
+    tableLayout: 'fixed' as const,
+  },
+  envThead: { backgroundColor: tokens.colorNeutralBackground3 },
+  envTh: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    textAlign: 'left',
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+    ':hover': { color: tokens.colorNeutralForeground1 },
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+  },
+  envThStatic: {
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+  },
+  envThInner: { display: 'flex', alignItems: 'center', gap: '4px' },
+  envTd: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden' as const,
+  },
+  envTr: {
+    cursor: 'pointer',
+    ':hover': { backgroundColor: tokens.colorBrandBackground2 },
+    ':last-child td': { borderBottom: 'none' },
+  },
+  envNameCell: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, minWidth: 0 },
   summaryGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
@@ -1070,11 +1126,43 @@ function InlineConnectorChip({ connectorId }: { connectorId: string }) {
   )
 }
 
+type ConnEnvSortField = 'name' | 'type' | 'connections' | 'connectors' | 'errors'
+type ConnSortDir = 'asc' | 'desc'
+
 interface EnvConnectionGroup {
   envId: string
   envName: string
+  envType?: string
+  env?: ResourceItem
   connections: PowerConnection[]
   connectors: number
+  errors: number
+}
+
+// A connection is "in error" when it carries an error message or any status
+// other than Connected — matching the red status badge below.
+function connectionHasError(c: PowerConnection): boolean {
+  if (c.statusError) return true
+  return !!c.status && !/connected/i.test(c.status)
+}
+
+// Resolve an environment's friendly type for the Type column / badge.
+function envTypeOf(env?: ResourceItem): string | undefined {
+  if (!env) return undefined
+  if (env.environmentType) return env.environmentType
+  const p = env.properties
+  if (!p) return undefined
+  for (const c of [p['environmentSku'], p['sku'], p['type'], p['environmentType'], p['kind']]) {
+    if (typeof c === 'string' && c.trim()) return c.trim()
+  }
+  return undefined
+}
+
+function ConnSortIcon({ active, dir }: { active: boolean; dir: ConnSortDir }) {
+  if (!active) return <ArrowSortRegular fontSize={14} style={{ opacity: 0.4 }} />
+  return dir === 'asc'
+    ? <ChevronUpRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
+    : <ChevronDownRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
 }
 
 function ConnectionStatusBadge({ status }: { status?: string }) {
@@ -1121,28 +1209,27 @@ function ConnectionDetail({ c, envName }: { c: PowerConnection; envName?: string
 }
 
 export function ConnectionsSection({
-  result, envNames, onRefresh, isUpdating, cachedAt,
+  result, environments, envNames, onRefresh, isUpdating, cachedAt,
 }: {
   result: ConnectionsResult
+  environments?: ResourceItem[]
   envNames?: Map<string, string>
   onRefresh?: () => void
   isUpdating?: boolean
   cachedAt?: string
 }) {
   const classes = useClasses()
-  const [openEnvs, setOpenEnvs] = useState<Set<string>>(new Set())
+  const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null)
   const [openConns, setOpenConns] = useState<Set<string>>(new Set())
+  const [sort, setSort] = useState<{ field: ConnEnvSortField; dir: ConnSortDir }>({ field: 'connections', dir: 'desc' })
 
-  const toggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
-    setter(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+  const envMap = useMemo(() => {
+    const m = new Map<string, ResourceItem>()
+    for (const e of environments ?? []) { if (e.name) m.set(e.name, e) }
+    return m
+  }, [environments])
 
-  // Group by environment, then sort connections inside each by connector then
-  // name so the drill-down reads connector-by-connector within an environment.
+  // One group per environment with connection/connector/error counts.
   const envGroups = useMemo<EnvConnectionGroup[]>(() => {
     const m = new Map<string, PowerConnection[]>()
     for (const c of result.connections) {
@@ -1150,28 +1237,65 @@ export function ConnectionsSection({
       arr.push(c)
       m.set(c.environmentId, arr)
     }
-    return [...m.entries()]
-      .map(([envId, conns]) => ({
+    return [...m.entries()].map(([envId, conns]) => {
+      const env = envMap.get(envId)
+      return {
         envId,
-        envName: envNames?.get(envId) ?? envId,
+        env,
+        envName: env ? getDisplayName(env) : (envNames?.get(envId) ?? envId),
+        envType: envTypeOf(env),
         connectors: new Set(conns.map(c => c.connectorId)).size,
+        errors: conns.filter(connectionHasError).length,
+        // Connections sorted connector-then-name for the drill-down list.
         connections: [...conns].sort((a, b) =>
           getConnectorInfo(a.connectorId).displayName.localeCompare(getConnectorInfo(b.connectorId).displayName)
           || (a.displayName || '').localeCompare(b.displayName || '')),
-      }))
-      .sort((a, b) => b.connections.length - a.connections.length || a.envName.localeCompare(b.envName))
-  }, [result, envNames])
+      }
+    })
+  }, [result, envMap, envNames])
 
-  const distinctConnectors = useMemo(
-    () => new Set(result.connections.map(c => c.connectorId)).size,
-    [result],
-  )
+  const sortedGroups = useMemo(() => {
+    const arr = [...envGroups]
+    arr.sort((a, b) => {
+      let c = 0
+      switch (sort.field) {
+        case 'name': c = a.envName.localeCompare(b.envName); break
+        case 'type': c = (a.envType ?? '').localeCompare(b.envType ?? ''); break
+        case 'connections': c = a.connections.length - b.connections.length; break
+        case 'connectors': c = a.connectors - b.connectors; break
+        case 'errors': c = a.errors - b.errors; break
+      }
+      return sort.dir === 'asc' ? c : -c
+    })
+    return arr
+  }, [envGroups, sort])
+
+  const totals = useMemo(() => ({
+    connectors: new Set(result.connections.map(c => c.connectorId)).size,
+    errors: result.connections.filter(connectionHasError).length,
+  }), [result])
+
+  const handleSort = (f: ConnEnvSortField) =>
+    setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
+
+  const toggleConn = (key: string) =>
+    setOpenConns(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const header = (
-    <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap', marginBottom: tokens.spacingVerticalXS }}>
+    <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap' }}>
+      <PlugConnectedRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+      <Text weight="semibold">Connections</Text>
       <Badge appearance="tint" color="informative" size="small">{result.connections.length} connections</Badge>
       <Badge appearance="tint" color="subtle" size="small">{envGroups.length} environments</Badge>
-      <Badge appearance="tint" color="subtle" size="small">{distinctConnectors} connectors</Badge>
+      <Badge appearance="tint" color="subtle" size="small">{totals.connectors} connectors</Badge>
+      {totals.errors > 0 && (
+        <Badge appearance="tint" color="danger" size="small">{totals.errors} error{totals.errors !== 1 ? 's' : ''}</Badge>
+      )}
       {result.inaccessibleCount > 0 && (
         <Badge appearance="tint" color="warning" size="small">{result.inaccessibleCount} environment{result.inaccessibleCount !== 1 ? 's' : ''} not readable</Badge>
       )}
@@ -1194,63 +1318,40 @@ export function ConnectionsSection({
   )
 
   const updatingNotice = isUpdating && (
-    <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966' }}>
+    <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966', borderRadius: tokens.borderRadiusLarge }}>
       <Spinner size="extra-tiny" />
       <Caption1 style={{ color: '#003966' }}>Refreshing connections across all environments…</Caption1>
     </div>
   )
 
-  if (result.connections.length === 0) {
+  // ── Drilled view: connections within the selected environment ──────────────
+  const selected = selectedEnvId ? envGroups.find(g => g.envId === selectedEnvId) : undefined
+  if (selected) {
     return (
-      <div className={classes.sectionBody}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
         {header}
-        {updatingNotice}
-        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-          No connections found across the environments scanned.
-          {result.inaccessibleCount > 0 &&
-            ` (${result.inaccessibleCount} environment${result.inaccessibleCount !== 1 ? 's' : ''} could not be read — admin connection enumeration isn't available for some environment types.)`}
-        </Caption1>
-      </div>
-    )
-  }
-
-  return (
-    <div className={classes.sectionBody}>
-      {header}
-      {updatingNotice}
-      {envGroups.map(env => {
-        const envOpen = openEnvs.has(env.envId)
-        return (
-          <div key={env.envId}>
-            <div
-              className={classes.row}
-              style={{ cursor: 'pointer' }}
-              onClick={() => toggle(setOpenEnvs, env.envId)}
-              role="button"
-              aria-expanded={envOpen}
-            >
-              <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                {envOpen
-                  ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                  : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
-                <FolderRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{env.envName}</Text>
-              </div>
-              <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
-                <Badge appearance="tint" color="subtle" size="small">{env.connections.length} conn.</Badge>
-                <Badge appearance="tint" color="subtle" size="small">{env.connectors} connector{env.connectors !== 1 ? 's' : ''}</Badge>
-              </div>
-            </div>
-
-            {envOpen && env.connections.map(c => {
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' }}>
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={() => setSelectedEnvId(null)}>
+            All Environments
+          </Button>
+          <Text style={{ color: tokens.colorNeutralForeground3 }}>/</Text>
+          <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
+          <Text weight="semibold">{selected.envName}</Text>
+          {selected.envType && <EnvironmentBadge name={selected.envType} type={selected.envType} />}
+          <Badge appearance="tint" color="subtle" size="small">{selected.connections.length} connection{selected.connections.length !== 1 ? 's' : ''}</Badge>
+          {selected.errors > 0 && <Badge appearance="tint" color="danger" size="small">{selected.errors} error{selected.errors !== 1 ? 's' : ''}</Badge>}
+        </div>
+        <div className={classes.envTableWrapper}>
+          <div className={classes.sectionBody}>
+            {selected.connections.map(c => {
               const cOpen = openConns.has(c.id)
               const ownerLabel = c.owner?.displayName ?? c.owner?.email ?? '—'
               return (
                 <div key={c.id}>
                   <div
                     className={classes.row}
-                    style={{ cursor: 'pointer', paddingLeft: '30px' }}
-                    onClick={() => toggle(setOpenConns, c.id)}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => toggleConn(c.id)}
                     role="button"
                     aria-expanded={cOpen}
                   >
@@ -1268,13 +1369,94 @@ export function ConnectionsSection({
                       {ownerLabel}
                     </Caption1>
                   </div>
-                  {cOpen && <ConnectionDetail c={c} envName={env.envName} />}
+                  {cOpen && <ConnectionDetail c={c} envName={selected.envName} />}
                 </div>
               )
             })}
           </div>
-        )
-      })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── List view: environments table (Environments-page card styling) ─────────
+  if (result.connections.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+        {header}
+        {updatingNotice}
+        <div className={classes.envTableWrapper} style={{ padding: `calc(${tokens.spacingVerticalXXL} * 1.5)`, textAlign: 'center' }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            No connections found across the environments scanned.
+            {result.inaccessibleCount > 0 &&
+              ` (${result.inaccessibleCount} environment${result.inaccessibleCount !== 1 ? 's' : ''} could not be read — admin connection enumeration isn't available for some environment types.)`}
+          </Caption1>
+        </div>
+      </div>
+    )
+  }
+
+  const sortableTh = (field: ConnEnvSortField, label: string) => (
+    <th className={classes.envTh} onClick={() => handleSort(field)}>
+      <div className={classes.envThInner}>{label} <ConnSortIcon active={sort.field === field} dir={sort.dir} /></div>
+    </th>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+      {header}
+      {updatingNotice}
+      <div className={classes.envTableWrapper}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className={classes.envTable}>
+            <colgroup>
+              <col />
+              <col style={{ width: '170px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '100px' }} />
+              <col style={{ width: '44px' }} />
+            </colgroup>
+            <thead className={classes.envThead}>
+              <tr>
+                {sortableTh('name', 'Environment')}
+                {sortableTh('type', 'Type')}
+                {sortableTh('connections', 'Connections')}
+                {sortableTh('connectors', 'Connectors')}
+                {sortableTh('errors', 'Errors')}
+                <th className={classes.envThStatic} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGroups.map(env => (
+                <tr key={env.envId} className={classes.envTr} onClick={() => setSelectedEnvId(env.envId)}>
+                  <td className={classes.envTd}>
+                    <div className={classes.envNameCell}>
+                      <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
+                      <Text weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={env.envName}>{env.envName}</Text>
+                    </div>
+                  </td>
+                  <td className={classes.envTd}>
+                    {env.envType ? <EnvironmentBadge name={env.envType} type={env.envType} /> : <Text style={{ color: tokens.colorNeutralForeground3 }}>—</Text>}
+                  </td>
+                  <td className={classes.envTd}>
+                    <Badge appearance="tint" color="subtle" size="small">{env.connections.length}</Badge>
+                  </td>
+                  <td className={classes.envTd}>
+                    <Badge appearance="tint" color="subtle" size="small">{env.connectors}</Badge>
+                  </td>
+                  <td className={classes.envTd}>
+                    <Badge appearance="tint" color={env.errors > 0 ? 'danger' : 'subtle'} size="small">{env.errors}</Badge>
+                  </td>
+                  <td className={classes.envTd} style={{ textAlign: 'right' }}>
+                    <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3 }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }

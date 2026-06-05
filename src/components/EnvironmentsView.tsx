@@ -7,7 +7,7 @@ import {
 } from '@fluentui/react-components'
 import {
   ArrowLeftRegular,
-  GlobeRegular,
+  DatabaseRegular,
   ChevronRightRegular,
   ChevronUpRegular,
   ChevronDownRegular,
@@ -258,7 +258,7 @@ function EnvironmentMetadataModal({ env, onClose }: { env: ResourceItem; onClose
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
-                <GlobeRegular style={{ color: tokens.colorBrandForeground2, fontSize: '20px', flexShrink: 0 }} />
+                <DatabaseRegular style={{ color: tokens.colorBrandForeground2, fontSize: '20px', flexShrink: 0 }} />
                 {displayName}
               </div>
               <div className={classes.modalSubtitle}>
@@ -340,7 +340,7 @@ function EnvironmentResourcesView({
         </Button>
         <Text style={{ color: tokens.colorNeutralForeground3 }}>/</Text>
         <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
-          <GlobeRegular style={{ color: tokens.colorBrandForeground2, fontSize: '16px' }} />
+          <DatabaseRegular style={{ color: tokens.colorBrandForeground2, fontSize: '16px' }} />
           <Text weight="semibold">{envName}</Text>
         </div>
         <Badge appearance="tint" color="subtle" size="small">
@@ -487,7 +487,7 @@ function EnvironmentListTable({
                   <tr key={env.id} className={classes.tr} onClick={() => onEnvClick(env)}>
                     <td className={classes.td}>
                       <div className={classes.nameCell}>
-                        <GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
+                        <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
                         <Text weight="semibold">{name}</Text>
                       </div>
                     </td>
