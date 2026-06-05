@@ -499,6 +499,9 @@ interface EnvConnectionsResult {
   // Developer/Teams/trial environments the admin API won't enumerate, so we
   // record it instead of failing the whole report.
   forbidden: boolean
+  // Diagnostics: HTTP status (0 = network/exception) and a short body snippet.
+  status: number
+  message?: string
 }
 
 async function fetchEnvironmentConnections(
@@ -513,8 +516,14 @@ async function fetchEnvironmentConnections(
   // Record auth failures per environment; the caller only treats the report as
   // a permission problem when EVERY environment refuses. Any other per-env
   // error is treated as "no connections" rather than failing the lot.
-  if (res.status === 401 || res.status === 403) return { connections: [], forbidden: true }
-  if (!res.ok) return { connections: [], forbidden: false }
+  if (res.status === 401 || res.status === 403) {
+    const body = await res.text().catch(() => '')
+    return { connections: [], forbidden: true, status: res.status, message: body.slice(0, 400) }
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    return { connections: [], forbidden: false, status: res.status, message: body.slice(0, 400) }
+  }
   const json = await res.json()
   const raw: Record<string, unknown>[] = json.value ?? []
   const connections = raw.map(c => {
@@ -535,7 +544,59 @@ async function fetchEnvironmentConnections(
       status: statuses?.[0]?.['status'] as string | undefined,
     }
   })
-  return { connections, forbidden: false }
+  return { connections, forbidden: false, status: res.status }
+}
+
+// ── Connections diagnostics ──────────────────────────────────────────────────
+// Surfaced on the Connections page (including its error state) so an admin can
+// see exactly why enumeration failed: token audience/scopes and per-environment
+// HTTP results.
+
+export interface ConnectionEnvDiag {
+  envId: string
+  status: number
+  ok: boolean
+  forbidden: boolean
+  message?: string
+}
+
+export interface ConnectionsDiagnostics {
+  endpoint: string
+  requestedScope: string
+  tokenAcquired: boolean
+  tokenError?: string
+  tokenAudience?: string
+  tokenScopes?: string
+  tokenTenant?: string
+  tokenUpn?: string
+  tokenRoles?: string
+  totalEnvironments: number
+  scanned: number
+  okCount: number
+  forbiddenCount: number
+  otherErrorCount: number
+  environments: ConnectionEnvDiag[]
+}
+
+export type ConnectionsError = Error & { diagnostics?: ConnectionsDiagnostics }
+
+function throwWithDiag(message: string, diagnostics: ConnectionsDiagnostics): never {
+  const err = new Error(message) as ConnectionsError
+  err.diagnostics = diagnostics
+  throw err
+}
+
+// Decode a JWT payload (no verification) to read claims for diagnostics only.
+function decodeJwtClaims(token: string): Record<string, unknown> | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    let b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    while (b64.length % 4) b64 += '='
+    return JSON.parse(atob(b64))
+  } catch {
+    return null
+  }
 }
 
 export interface ConnectionsResult {
@@ -545,33 +606,87 @@ export interface ConnectionsResult {
   // a non-empty report just means some environments (e.g. Developer/Teams envs)
   // could not be enumerated — not a global permission failure.
   inaccessibleCount: number
+  diagnostics: ConnectionsDiagnostics
 }
 
 export async function fetchConnections(
   envIds: string[],
   signal?: AbortSignal,
 ): Promise<ConnectionsResult> {
-  const token = await getPowerAppsToken()
   // Cap the environment fan-out so very large tenants stay responsive.
   const CAP = 60
   const targets = envIds.slice(0, CAP)
   const truncated = envIds.length > CAP
+
+  const diag: ConnectionsDiagnostics = {
+    endpoint: 'https://api.powerapps.com/providers/Microsoft.PowerApps/scopes/admin/environments/{envId}/connections?api-version=2016-11-01',
+    requestedScope: powerAppsScopes.join(' '),
+    tokenAcquired: false,
+    totalEnvironments: envIds.length,
+    scanned: targets.length,
+    okCount: 0,
+    forbiddenCount: 0,
+    otherErrorCount: 0,
+    environments: [],
+  }
+
+  let token: string
+  try {
+    token = await getPowerAppsToken()
+    diag.tokenAcquired = true
+    const claims = decodeJwtClaims(token)
+    if (claims) {
+      diag.tokenAudience = claims.aud != null ? String(claims.aud) : undefined
+      diag.tokenScopes = claims.scp != null ? String(claims.scp) : undefined
+      diag.tokenTenant = claims.tid != null ? String(claims.tid) : undefined
+      diag.tokenUpn = String(claims.upn ?? claims.preferred_username ?? claims.unique_name ?? '') || undefined
+      diag.tokenRoles = Array.isArray(claims.roles) ? (claims.roles as unknown[]).join(' ') : undefined
+    }
+  } catch (e) {
+    diag.tokenError = e instanceof Error ? e.message : String(e)
+    throwWithDiag('Could not acquire a Power Platform access token for connections.', diag)
+  }
+
   const all: PowerConnection[] = []
-  let inaccessibleCount = 0
   const CONCURRENCY = 6
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const batch = targets.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map(id => fetchEnvironmentConnections(id, token, signal)))
-    for (const r of results) {
+    const results = await Promise.all(batch.map(async id => {
+      try {
+        return await fetchEnvironmentConnections(id, token, signal)
+      } catch (e) {
+        // Re-raise real cancellations; otherwise record as a per-env error so
+        // one network blip can't hide the rest of the diagnostics.
+        if (signal?.aborted) throw e
+        return {
+          connections: [] as PowerConnection[],
+          forbidden: false,
+          status: 0,
+          message: e instanceof Error ? e.message : String(e),
+        } satisfies EnvConnectionsResult
+      }
+    }))
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j]
       all.push(...r.connections)
-      if (r.forbidden) inaccessibleCount++
+      const ok = r.status >= 200 && r.status < 300
+      if (ok) diag.okCount++
+      else if (r.forbidden) diag.forbiddenCount++
+      else diag.otherErrorCount++
+      diag.environments.push({ envId: batch[j], status: r.status, ok, forbidden: r.forbidden, message: r.message })
     }
   }
+
   // Only surface the permission notice when EVERY environment refused — that's
   // the genuine "not a Power Platform admin" signal. A partial set of forbidden
   // environments still yields a useful report.
-  if (targets.length > 0 && inaccessibleCount === targets.length) {
-    throw new Error('403: insufficient permissions to read connections')
+  if (targets.length > 0 && diag.forbiddenCount === targets.length) {
+    throwWithDiag('Every environment returned 401/403 — the token is not authorized for admin connection enumeration.', diag)
   }
-  return { connections: all, truncated, inaccessibleCount }
+  // If nothing succeeded and nothing was forbidden either, surface the failure
+  // (e.g. all 5xx / network errors) rather than silently showing an empty list.
+  if (targets.length > 0 && diag.okCount === 0 && diag.otherErrorCount === targets.length) {
+    throwWithDiag('Every environment request failed (non-auth errors). See per-environment details below.', diag)
+  }
+  return { connections: all, truncated, inaccessibleCount: diag.forbiddenCount, diagnostics: diag }
 }
