@@ -78,7 +78,6 @@ import {
 } from './GovernanceView'
 import type { InsightKey } from './GovernanceView'
 import type { DLPPolicy } from '../hooks/useGovernance'
-import type { ConnectionsDiagnostics, ConnectionsError } from '../api/governanceApi'
 
 // ── Design constants (Fluent v9 tokens — auto-adapt to light/dark theme) ─────
 
@@ -649,139 +648,21 @@ function GovConnectionsPage({ allEnvironments }: { allEnvironments: ResourceItem
     return <div style={{ padding: '24px' }}><Spinner size="small" label="Scanning all environments for connections…" /></div>
   }
   if (!state.report && state.isError) {
-    const diagnostics = (state.error as ConnectionsError | null)?.diagnostics
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <GovPermNotice message="Requires Power Platform admin permissions to enumerate connections across environments." />
-        <ConnectionsDiagnosticsPanel
-          envCount={envIds.length}
-          errorMessage={state.error?.message}
-          diagnostics={diagnostics}
-          defaultOpen
-        />
-      </div>
-    )
+    return <GovPermNotice message="Requires Power Platform admin permissions to enumerate connections across environments." />
   }
   if (!state.report) {
     return <div style={{ padding: '24px' }}><Spinner size="small" label="Preparing connections…" /></div>
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <ConnectionsSection
-        result={state.report}
-        environments={allEnvironments}
-        envNames={envNames}
-        onRefresh={state.refresh}
-        isUpdating={state.isUpdating}
-        cachedAt={state.cachedAt}
-      />
-      <ConnectionsDiagnosticsPanel envCount={envIds.length} diagnostics={state.report.diagnostics} />
-    </div>
-  )
-}
-
-// Inline diagnostics for the Connections page: token claims and per-environment
-// HTTP results, so an admin can see exactly why enumeration succeeded or failed.
-function ConnectionsDiagnosticsPanel({
-  envCount, diagnostics, errorMessage, defaultOpen = false,
-}: {
-  envCount: number
-  diagnostics?: ConnectionsDiagnostics
-  errorMessage?: string
-  defaultOpen?: boolean
-}) {
-  const classes = useClasses()
-  const [open, setOpen] = useState(defaultOpen)
-
-  const mono: React.CSSProperties = { fontFamily: 'Consolas, monospace', fontSize: '12px', wordBreak: 'break-all' }
-  const labelStyle: React.CSSProperties = { color: MUTED, fontSize: '11px', fontWeight: 600 }
-  const row = (label: string, value: React.ReactNode) => (
-    <div style={{ display: 'flex', gap: '8px', padding: '2px 0' }}>
-      <div style={{ ...labelStyle, minWidth: '120px', flexShrink: 0 }}>{label}</div>
-      <div style={mono}>{value}</div>
-    </div>
-  )
-
-  const failed = diagnostics
-    ? diagnostics.environments.filter(e => !e.ok)
-    : []
-  const sampleFailures = failed.slice(0, 12)
-
-  return (
-    <div className={classes.sectionCard}>
-      <div
-        className={classes.cardHead}
-        style={{ cursor: 'pointer', userSelect: 'none', borderBottom: open ? undefined : 'none' }}
-        onClick={() => setOpen(o => !o)}
-        role="button"
-        aria-expanded={open}
-      >
-        {open ? <ChevronDownRegular fontSize={16} /> : <ChevronRightRegular fontSize={16} />}
-        Connection diagnostics
-        {diagnostics && (
-          <span style={{ display: 'inline-flex', gap: '6px', marginLeft: '8px' }}>
-            <Badge appearance="tint" color="success" size="small">{diagnostics.okCount} ok</Badge>
-            {diagnostics.forbiddenCount > 0 && <Badge appearance="tint" color="danger" size="small">{diagnostics.forbiddenCount} forbidden</Badge>}
-            {diagnostics.otherErrorCount > 0 && <Badge appearance="tint" color="warning" size="small">{diagnostics.otherErrorCount} error</Badge>}
-          </span>
-        )}
-      </div>
-
-      {open && (
-        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {errorMessage && (
-            <div style={{ ...mono, color: tokens.colorPaletteRedForeground2 }}>{errorMessage}</div>
-          )}
-
-          {!diagnostics ? (
-            <Caption1 style={{ color: MUTED }}>
-              No structured diagnostics were attached to this error (it failed before the request stage).
-              Environments discovered: {envCount}.
-            </Caption1>
-          ) : (
-            <>
-              <div>
-                {row('Token acquired', diagnostics.tokenAcquired ? 'yes' : 'NO')}
-                {diagnostics.tokenError && row('Token error', <span style={{ color: tokens.colorPaletteRedForeground2 }}>{diagnostics.tokenError}</span>)}
-                {row('Requested scope', diagnostics.requestedScope)}
-                {diagnostics.tokenAudience && row('Token audience', diagnostics.tokenAudience)}
-                {diagnostics.tokenScopes && row('Token scopes (scp)', diagnostics.tokenScopes)}
-                {diagnostics.tokenRoles && row('Token roles', diagnostics.tokenRoles)}
-                {diagnostics.tokenTenant && row('Token tenant (tid)', diagnostics.tokenTenant)}
-                {diagnostics.tokenUpn && row('Signed-in (upn)', diagnostics.tokenUpn)}
-                {row('Endpoint', diagnostics.endpoint)}
-                {row('Environments', `${diagnostics.scanned} scanned of ${diagnostics.totalEnvironments} discovered`)}
-                {row('Results', `${diagnostics.okCount} ok · ${diagnostics.forbiddenCount} forbidden (401/403) · ${diagnostics.otherErrorCount} other error`)}
-              </div>
-
-              {sampleFailures.length > 0 && (
-                <div>
-                  <div style={{ ...labelStyle, marginBottom: '4px' }}>
-                    Failing environments{failed.length > sampleFailures.length ? ` (first ${sampleFailures.length} of ${failed.length})` : ''}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {sampleFailures.map(e => (
-                      <div key={e.envId} style={{ ...mono, borderLeft: `2px solid ${tokens.colorPaletteRedBorder2}`, paddingLeft: '8px' }}>
-                        <div><strong>{e.status === 0 ? 'network/exception' : e.status}</strong> — {e.envId}</div>
-                        {e.message && <div style={{ color: MUTED, whiteSpace: 'pre-wrap' }}>{e.message}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <details>
-                <summary style={{ ...labelStyle, cursor: 'pointer' }}>Raw diagnostics JSON (copy for support)</summary>
-                <pre style={{ ...mono, whiteSpace: 'pre-wrap', background: PANEL_BG, padding: '8px', borderRadius: '4px', maxHeight: '260px', overflow: 'auto', margin: '6px 0 0' }}>
-                  {JSON.stringify(diagnostics, null, 2)}
-                </pre>
-              </details>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+    <ConnectionsSection
+      result={state.report}
+      environments={allEnvironments}
+      envNames={envNames}
+      onRefresh={state.refresh}
+      isUpdating={state.isUpdating}
+      cachedAt={state.cachedAt}
+    />
   )
 }
 
