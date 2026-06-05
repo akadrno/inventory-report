@@ -7,6 +7,7 @@ import {
   Badge,
   Spinner,
   Button,
+  Input,
   Accordion,
   AccordionItem,
   AccordionHeader,
@@ -34,6 +35,8 @@ import {
   ArrowUploadRegular,
   ArrowSortRegular,
   ChevronUpRegular,
+  SearchRegular,
+  DismissRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
@@ -1165,59 +1168,27 @@ function ConnSortIcon({ active, dir }: { active: boolean; dir: ConnSortDir }) {
     : <ChevronDownRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
 }
 
-// In-environment hierarchy: connector → status (Connected/Error) → user → connection.
-type ConnStatusKind = 'Connected' | 'Error'
-interface ConnUserNode { userKey: string; userLabel: string; userEmail?: string; connections: PowerConnection[] }
-interface ConnStatusNode { status: ConnStatusKind; connections: PowerConnection[]; users: ConnUserNode[] }
-interface ConnConnectorNode { connectorId: string; displayName: string; connections: PowerConnection[]; errors: number; statuses: ConnStatusNode[] }
+// Generic grouping for the connections drill-down. A GroupDef partitions a set
+// of connections into labelled buckets; buckets render as expandable rows and
+// are recursively grouped by the next GroupDef, with connections as the leaves.
+// This lets the same renderer power both the in-environment hierarchy and the
+// search results (which simply reorder the GroupDefs by what was searched).
+interface GroupBucket { key: string; header: React.ReactNode; right?: React.ReactNode; conns: PowerConnection[] }
+type GroupDef = (conns: PowerConnection[]) => GroupBucket[]
 
-function buildConnectorTree(connections: PowerConnection[]): ConnConnectorNode[] {
-  const byConnector = new Map<string, PowerConnection[]>()
-  for (const c of connections) {
-    const arr = byConnector.get(c.connectorId) ?? []
+function groupConns(conns: PowerConnection[], keyFn: (c: PowerConnection) => string): Map<string, PowerConnection[]> {
+  const m = new Map<string, PowerConnection[]>()
+  for (const c of conns) {
+    const k = keyFn(c)
+    const arr = m.get(k) ?? []
     arr.push(c)
-    byConnector.set(c.connectorId, arr)
+    m.set(k, arr)
   }
-  return [...byConnector.entries()].map(([connectorId, conns]) => {
-    const byStatus = new Map<ConnStatusKind, PowerConnection[]>()
-    for (const c of conns) {
-      const key: ConnStatusKind = connectionHasError(c) ? 'Error' : 'Connected'
-      const arr = byStatus.get(key) ?? []
-      arr.push(c)
-      byStatus.set(key, arr)
-    }
-    // Surface errors first, then connected.
-    const statuses: ConnStatusNode[] = (['Error', 'Connected'] as ConnStatusKind[])
-      .filter(s => byStatus.has(s))
-      .map(s => {
-        const sconns = byStatus.get(s)!
-        const byUser = new Map<string, PowerConnection[]>()
-        for (const c of sconns) {
-          const key = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName ?? 'unknown'
-          const arr = byUser.get(key) ?? []
-          arr.push(c)
-          byUser.set(key, arr)
-        }
-        const users: ConnUserNode[] = [...byUser.entries()]
-          .map(([userKey, uconns]) => ({
-            userKey,
-            // Prefer the owner's display name; fall back to email only when absent.
-            userLabel: uconns[0].owner?.displayName ?? uconns[0].owner?.email ?? 'Unknown user',
-            userEmail: uconns[0].owner?.email,
-            connections: [...uconns].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '')),
-          }))
-          .sort((a, b) => a.userLabel.localeCompare(b.userLabel))
-        return { status: s, connections: sconns, users }
-      })
-    return {
-      connectorId,
-      displayName: getConnectorInfo(connectorId).displayName,
-      connections: conns,
-      errors: conns.filter(connectionHasError).length,
-      statuses,
-    }
-  }).sort((a, b) => b.connections.length - a.connections.length || a.displayName.localeCompare(b.displayName))
+  return m
 }
+
+const ownerKeyOf = (c: PowerConnection) => c.owner?.id ?? c.owner?.email ?? c.owner?.displayName ?? 'unknown'
+const ownerLabelOf = (c: PowerConnection) => c.owner?.displayName ?? c.owner?.email ?? 'Unknown user'
 
 function ConnectionDetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
   if (value == null || value === '') return null
@@ -1266,11 +1237,9 @@ export function ConnectionsSection({
 }) {
   const classes = useClasses()
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null)
-  // Expansion state for the in-environment hierarchy: connector → status → user → connection.
-  const [openConnectors, setOpenConnectors] = useState<Set<string>>(new Set())
-  const [openStatuses, setOpenStatuses] = useState<Set<string>>(new Set())
-  const [openUsers, setOpenUsers] = useState<Set<string>>(new Set())
-  const [openConns, setOpenConns] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
+  // Single expansion set keyed by each node's full path (group levels + leaf id).
+  const [openPaths, setOpenPaths] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<{ field: ConnEnvSortField; dir: ConnSortDir }>({ field: 'connections', dir: 'desc' })
 
   const toggleKey = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
@@ -1283,17 +1252,23 @@ export function ConnectionsSection({
 
   // Drilling into / out of an environment resets the nested expansion state so
   // groups don't appear pre-opened from a previously viewed environment.
-  const drillInto = (envId: string) => {
-    setSelectedEnvId(envId)
-    setOpenConnectors(new Set()); setOpenStatuses(new Set()); setOpenUsers(new Set()); setOpenConns(new Set())
-  }
+  const drillInto = (envId: string) => { setSelectedEnvId(envId); setOpenPaths(new Set()) }
   const drillBack = () => setSelectedEnvId(null)
+
+  const chevron = (open: boolean) => open
+    ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+    : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
 
   const envMap = useMemo(() => {
     const m = new Map<string, ResourceItem>()
     for (const e of environments ?? []) { if (e.name) m.set(e.name, e) }
     return m
   }, [environments])
+
+  const envDisplay = (envId: string) => {
+    const env = envMap.get(envId)
+    return env ? getDisplayName(env) : (envNames?.get(envId) ?? envId)
+  }
 
   // One group per environment with connection/connector/error counts.
   const envGroups = useMemo<EnvConnectionGroup[]>(() => {
@@ -1345,10 +1320,121 @@ export function ConnectionsSection({
     setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
 
   const selected = selectedEnvId ? envGroups.find(g => g.envId === selectedEnvId) : undefined
-  const connectorTree = useMemo(
-    () => selected ? buildConnectorTree(selected.connections) : [],
-    [selected],
-  )
+
+  // ── Grouping definitions for the recursive drill-down renderer ─────────────
+  const byConnector: GroupDef = (conns) =>
+    [...groupConns(conns, c => c.connectorId).entries()]
+      .map(([connectorId, cs]) => {
+        const errs = cs.filter(connectionHasError).length
+        return {
+          key: `c:${connectorId}`,
+          header: (
+            <>
+              <InlineConnectorChip connectorId={connectorId} />
+              <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getConnectorInfo(connectorId).displayName}</Text>
+            </>
+          ),
+          right: (
+            <>
+              <Badge appearance="tint" color="subtle" size="small">{cs.length}</Badge>
+              {errs > 0 && <Badge appearance="tint" color="danger" size="small">{errs} error{errs !== 1 ? 's' : ''}</Badge>}
+            </>
+          ),
+          conns: cs,
+        }
+      })
+      .sort((a, b) => b.conns.length - a.conns.length)
+
+  const byEnv: GroupDef = (conns) =>
+    [...groupConns(conns, c => c.environmentId).entries()]
+      .map(([envId, cs]) => ({
+        key: `e:${envId}`,
+        header: (
+          <>
+            <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
+            <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{envDisplay(envId)}</Text>
+          </>
+        ),
+        right: <Badge appearance="tint" color="subtle" size="small">{cs.length}</Badge>,
+        conns: cs,
+      }))
+      .sort((a, b) => b.conns.length - a.conns.length)
+
+  const byStatus: GroupDef = (conns) => {
+    const m = groupConns(conns, c => connectionHasError(c) ? 'Error' : 'Connected')
+    // Surface errors first.
+    return (['Error', 'Connected'] as const).filter(s => m.has(s)).map(s => ({
+      key: `s:${s}`,
+      header: <Badge appearance="tint" color={s === 'Connected' ? 'success' : 'danger'} size="small">{s}</Badge>,
+      right: <Badge appearance="tint" color="subtle" size="small">{m.get(s)!.length}</Badge>,
+      conns: m.get(s)!,
+    }))
+  }
+
+  const byUser: GroupDef = (conns) =>
+    [...groupConns(conns, ownerKeyOf).entries()]
+      .sort((a, b) => ownerLabelOf(a[1][0]).localeCompare(ownerLabelOf(b[1][0])))
+      .map(([key, cs]) => {
+        const label = ownerLabelOf(cs[0])
+        const email = cs[0].owner?.email
+        return {
+          key: `u:${key}`,
+          header: (
+            <>
+              <PersonRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+              <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</Text>
+              {email && email !== label && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</Caption1>
+              )}
+            </>
+          ),
+          right: <Badge appearance="tint" color="subtle" size="small">{cs.length}</Badge>,
+          conns: cs,
+        }
+      })
+
+  // Recursive renderer: group by each GroupDef in turn; connections are leaves
+  // that expand to the full ConnectionDetail ("last mile").
+  const renderGroups = (conns: PowerConnection[], defs: GroupDef[], depth: number, prefix: string): React.ReactNode => {
+    const pad = `${depth * 24}px`
+    if (defs.length === 0) {
+      return [...conns]
+        .sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''))
+        .map(c => {
+          const path = `${prefix}|conn:${c.id}`
+          const open = openPaths.has(path)
+          return (
+            <div key={path}>
+              <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" aria-expanded={open}>
+                <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                  {chevron(open)}
+                  <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.displayName || '(unnamed connection)'}</Text>
+                  {connectionHasError(c) && <Badge appearance="tint" color="danger" size="small">Error</Badge>}
+                </div>
+                {c.accountName && (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.accountName}</Caption1>
+                )}
+              </div>
+              {open && <ConnectionDetail c={c} envName={envDisplay(c.environmentId)} indent={depth * 24 + 30} />}
+            </div>
+          )
+        })
+    }
+    const [def, ...rest] = defs
+    return def(conns).map(b => {
+      const path = `${prefix}|${b.key}`
+      const open = openPaths.has(path)
+      return (
+        <div key={path}>
+          <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" aria-expanded={open}>
+            <div className={classes.rowLeft} style={{ minWidth: 0 }}>{chevron(open)}{b.header}</div>
+            {b.right && <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>{b.right}</div>}
+          </div>
+          {open && renderGroups(b.conns, rest, depth + 1, path)}
+        </div>
+      )
+    })
+  }
 
   const header = (
     <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1388,15 +1474,61 @@ export function ConnectionsSection({
     </div>
   )
 
-  // ── Drilled view: connector → status → user → connection (last mile) ───────
-  const chevron = (open: boolean) => open
-    ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-    : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+  const searchInput = (
+    <Input
+      size="small"
+      placeholder="Search connectors, users, or environments…"
+      value={query}
+      onChange={(_, d) => setQuery(d.value)}
+      contentBefore={<SearchRegular />}
+      contentAfter={query
+        ? <DismissRegular aria-label="Clear search" style={{ cursor: 'pointer' }} onClick={() => setQuery('')} />
+        : undefined}
+      style={{ maxWidth: '440px' }}
+    />
+  )
+  const controls = <>{header}{searchInput}{updatingNotice}</>
 
+  // ── Search view: results grouped by what was searched, then drillable ──────
+  const q = query.trim().toLowerCase()
+  if (q) {
+    const connectorConns = result.connections.filter(c => getConnectorInfo(c.connectorId).displayName.toLowerCase().includes(q))
+    const userConns = result.connections.filter(c => (c.owner?.displayName ?? '').toLowerCase().includes(q) || (c.owner?.email ?? '').toLowerCase().includes(q))
+    const envConns = result.connections.filter(c => envDisplay(c.environmentId).toLowerCase().includes(q))
+    const sections = [
+      { title: 'Connectors', icon: <PlugConnectedRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />, conns: connectorConns, defs: [byConnector, byEnv, byStatus, byUser], prefix: 'sC' },
+      { title: 'Users', icon: <PersonRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />, conns: userConns, defs: [byUser, byConnector, byEnv, byStatus], prefix: 'sU' },
+      { title: 'Environments', icon: <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2 }} />, conns: envConns, defs: [byEnv, byConnector, byStatus, byUser], prefix: 'sE' },
+    ].filter(s => s.conns.length > 0)
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+        {controls}
+        {sections.length === 0 && (
+          <div className={classes.envTableWrapper} style={{ padding: `calc(${tokens.spacingVerticalXXL} * 1.5)`, textAlign: 'center' }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No connectors, users, or environments match “{query.trim()}”.</Caption1>
+          </div>
+        )}
+        {sections.map(s => (
+          <div key={s.prefix} className={classes.envTableWrapper}>
+            <div className={classes.sectionBody}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalXS }}>
+                {s.icon}
+                <Text weight="semibold">{s.title}</Text>
+                <Badge appearance="tint" color="subtle" size="small">{s.conns.length} connection{s.conns.length !== 1 ? 's' : ''}</Badge>
+              </div>
+              {renderGroups(s.conns, s.defs, 0, s.prefix)}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // ── Drilled view: connector → status → user → connection (last mile) ───────
   if (selected) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
-        {header}
+        {controls}
         <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' }}>
           <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={drillBack}>
             All Environments
@@ -1410,87 +1542,7 @@ export function ConnectionsSection({
         </div>
         <div className={classes.envTableWrapper}>
           <div className={classes.sectionBody}>
-            {connectorTree.map(con => {
-              const conOpen = openConnectors.has(con.connectorId)
-              return (
-                <div key={con.connectorId}>
-                  {/* Level 1 — connector type (e.g. all SharePoint together) */}
-                  <div className={classes.row} style={{ cursor: 'pointer' }} onClick={() => toggleKey(setOpenConnectors, con.connectorId)} role="button" aria-expanded={conOpen}>
-                    <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                      {chevron(conOpen)}
-                      <InlineConnectorChip connectorId={con.connectorId} />
-                      <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{con.displayName}</Text>
-                    </div>
-                    <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
-                      <Badge appearance="tint" color="subtle" size="small">{con.connections.length} conn.</Badge>
-                      {con.errors > 0 && <Badge appearance="tint" color="danger" size="small">{con.errors} error{con.errors !== 1 ? 's' : ''}</Badge>}
-                    </div>
-                  </div>
-
-                  {conOpen && con.statuses.map(st => {
-                    const stKey = `${con.connectorId}|${st.status}`
-                    const stOpen = openStatuses.has(stKey)
-                    return (
-                      <div key={stKey}>
-                        {/* Level 2 — Connected / Error */}
-                        <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '28px' }} onClick={() => toggleKey(setOpenStatuses, stKey)} role="button" aria-expanded={stOpen}>
-                          <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                            {chevron(stOpen)}
-                            <Badge appearance="tint" color={st.status === 'Connected' ? 'success' : 'danger'} size="small">{st.status}</Badge>
-                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{st.users.length} user{st.users.length !== 1 ? 's' : ''}</Caption1>
-                          </div>
-                          <Badge appearance="tint" color="subtle" size="small">{st.connections.length}</Badge>
-                        </div>
-
-                        {stOpen && st.users.map(u => {
-                          const uKey = `${stKey}|${u.userKey}`
-                          const uOpen = openUsers.has(uKey)
-                          return (
-                            <div key={uKey}>
-                              {/* Level 3 — user (display name) */}
-                              <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '54px' }} onClick={() => toggleKey(setOpenUsers, uKey)} role="button" aria-expanded={uOpen}>
-                                <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                                  {chevron(uOpen)}
-                                  <PersonRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                                  <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.userLabel}</Text>
-                                  {u.userEmail && u.userEmail !== u.userLabel && (
-                                    <Caption1 style={{ color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.userEmail}</Caption1>
-                                  )}
-                                </div>
-                                <Badge appearance="tint" color="subtle" size="small">{u.connections.length}</Badge>
-                              </div>
-
-                              {uOpen && u.connections.map(c => {
-                                const cOpen = openConns.has(c.id)
-                                return (
-                                  <div key={c.id}>
-                                    {/* Level 4 — the connection itself (last mile) */}
-                                    <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '80px' }} onClick={() => toggleKey(setOpenConns, c.id)} role="button" aria-expanded={cOpen}>
-                                      <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                                        {chevron(cOpen)}
-                                        <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {c.displayName || '(unnamed connection)'}
-                                        </Text>
-                                      </div>
-                                      {c.accountName && (
-                                        <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {c.accountName}
-                                        </Caption1>
-                                      )}
-                                    </div>
-                                    {cOpen && <ConnectionDetail c={c} envName={selected.envName} indent={96} />}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
+            {renderGroups(selected.connections, [byConnector, byStatus, byUser], 0, `env:${selected.envId}`)}
           </div>
         </div>
       </div>
@@ -1501,8 +1553,7 @@ export function ConnectionsSection({
   if (result.connections.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
-        {header}
-        {updatingNotice}
+        {controls}
         <div className={classes.envTableWrapper} style={{ padding: `calc(${tokens.spacingVerticalXXL} * 1.5)`, textAlign: 'center' }}>
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
             No connections found across the environments scanned.
@@ -1522,8 +1573,7 @@ export function ConnectionsSection({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
-      {header}
-      {updatingNotice}
+      {controls}
       <div className={classes.envTableWrapper}>
         <div style={{ overflowX: 'auto' }}>
           <table className={classes.envTable}>
