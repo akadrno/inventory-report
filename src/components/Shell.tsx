@@ -493,13 +493,14 @@ function GovTenantSettingsPage() {
     </div>
   )
 
+  const warnings = countTenantWarnings(data)
   return (
-    <div className={classes.sectionCard}>
-      <div className={classes.cardHead}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <PersonRegular fontSize={16} style={{ color: ACTIVE }} />
-        Tenant Settings
-        {countTenantWarnings(data) > 0 && (
-          <Badge appearance="tint" color="warning" size="small">{countTenantWarnings(data)} warning{countTenantWarnings(data) !== 1 ? 's' : ''}</Badge>
+        <Text weight="semibold">Tenant Settings</Text>
+        {warnings > 0 && (
+          <Badge appearance="tint" color="warning" size="small">{warnings} warning{warnings !== 1 ? 's' : ''}</Badge>
         )}
       </div>
       <TenantSettingsSection settings={data} />

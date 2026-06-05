@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   makeStyles,
   tokens,
@@ -169,6 +169,22 @@ const useClasses = makeStyles({
     ':last-child td': { borderBottom: 'none' },
   },
   envNameCell: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, minWidth: 0 },
+  // Non-interactive table row (no pointer/hover); used for tenant settings.
+  settingsTr: { ':last-child td': { borderBottom: 'none' } },
+  // Full-width category divider row inside the settings table.
+  settingsCatTd: {
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalXS,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: tokens.colorNeutralStroke2,
+    color: tokens.colorNeutralForeground3,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+  },
   summaryGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
@@ -336,26 +352,6 @@ function SeverityIcon({ severity }: { severity: Insight['severity'] }) {
   if (severity === 'critical') return <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
   if (severity === 'warning') return <WarningRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
   return <InfoRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3 }} />
-}
-
-function SettingRow({ label, value, positive }: { label: string; value: boolean | undefined; positive: boolean }) {
-  const classes = useClasses()
-  if (value === undefined) return null
-  const isGood = positive ? value : !value
-  return (
-    <div className={classes.row}>
-      <div className={classes.rowLeft}>
-        {isGood
-          ? <CheckmarkCircleRegular fontSize={14} style={{ color: tokens.colorPaletteGreenForeground1 }} />
-          : <WarningRegular fontSize={14} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
-        }
-        <Text size={200}>{label}</Text>
-      </div>
-      <Badge appearance="tint" color={isGood ? 'success' : 'warning'} size="small">
-        {value ? 'Enabled' : 'Disabled'}
-      </Badge>
-    </div>
-  )
 }
 
 function PermissionNotice({ classes }: { classes: ReturnType<typeof useClasses> }) {
@@ -648,39 +644,85 @@ export function TenantSettingsSection({ settings }: { settings: TenantSettings }
   const classes = useClasses()
   const pp = settings.powerPlatform
 
+  const categories = [
+    {
+      title: 'Environment Creation',
+      rows: [
+        { label: 'Restrict environment creation to admins', value: settings.disableEnvironmentCreationByNonAdminUsers, positive: true },
+        { label: 'Restrict trial environment creation to admins', value: settings.disableTrialEnvironmentCreationByNonAdminUsers, positive: true },
+        { label: 'Restrict developer environment creation to admins', value: pp?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers, positive: true },
+        { label: 'Restrict portal creation to admins', value: settings.disablePortalsCreationByNonAdminUsers, positive: true },
+      ],
+    },
+    {
+      title: 'Power Apps',
+      rows: [
+        { label: 'Restrict Share with Everyone', value: pp?.powerApps?.disableShareWithEveryone, positive: true },
+        { label: 'Allow guests to create apps', value: pp?.powerApps?.enableGuestsToMake, positive: false },
+      ],
+    },
+    {
+      title: 'AI & Copilot',
+      rows: [
+        { label: 'Copilot in Power Automate', value: pp?.powerAutomate?.disableCopilot !== undefined ? !pp.powerAutomate.disableCopilot : undefined, positive: true },
+        { label: 'Copilot (tenant-wide)', value: pp?.intelligence?.disableCopilot !== undefined ? !pp.intelligence.disableCopilot : undefined, positive: true },
+        { label: 'OpenAI bot publishing', value: pp?.intelligence?.enableOpenAiBotPublishing, positive: false },
+      ],
+    },
+    {
+      title: 'Admin & Governance',
+      rows: [
+        { label: 'Admin digest emails', value: pp?.governance?.disableAdminDigest !== undefined ? !pp.governance.disableAdminDigest : undefined, positive: true },
+        { label: 'Usage metrics for admins', value: pp?.governance?.disableUsageMetricsForAdmins !== undefined ? !pp.governance.disableUsageMetricsForAdmins : undefined, positive: true },
+        { label: 'Capacity allocation by env admins', value: settings.disableCapacityAllocationByEnvironmentAdmins !== undefined ? !settings.disableCapacityAllocationByEnvironmentAdmins : undefined, positive: true },
+      ],
+    },
+  ]
+    .map(c => ({ ...c, rows: c.rows.filter(r => r.value !== undefined) }))
+    .filter(c => c.rows.length > 0)
+
   return (
-    <div className={classes.sectionBody}>
-      <div>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
-          Environment Creation
-        </Caption1>
-        <SettingRow label="Restrict environment creation to admins" value={settings.disableEnvironmentCreationByNonAdminUsers} positive={true} />
-        <SettingRow label="Restrict trial environment creation to admins" value={settings.disableTrialEnvironmentCreationByNonAdminUsers} positive={true} />
-        <SettingRow label="Restrict developer environment creation to admins" value={pp?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers} positive={true} />
-        <SettingRow label="Restrict portal creation to admins" value={settings.disablePortalsCreationByNonAdminUsers} positive={true} />
-      </div>
-      <div>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
-          Power Apps
-        </Caption1>
-        <SettingRow label="Restrict Share with Everyone" value={pp?.powerApps?.disableShareWithEveryone} positive={true} />
-        <SettingRow label="Allow guests to create apps" value={pp?.powerApps?.enableGuestsToMake} positive={false} />
-      </div>
-      <div>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
-          AI & Copilot
-        </Caption1>
-        <SettingRow label="Copilot in Power Automate" value={pp?.powerAutomate?.disableCopilot !== undefined ? !pp.powerAutomate.disableCopilot : undefined} positive={true} />
-        <SettingRow label="Copilot (tenant-wide)" value={pp?.intelligence?.disableCopilot !== undefined ? !pp.intelligence.disableCopilot : undefined} positive={true} />
-        <SettingRow label="OpenAI bot publishing" value={pp?.intelligence?.enableOpenAiBotPublishing} positive={false} />
-      </div>
-      <div>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
-          Admin & Governance
-        </Caption1>
-        <SettingRow label="Admin digest emails" value={pp?.governance?.disableAdminDigest !== undefined ? !pp.governance.disableAdminDigest : undefined} positive={true} />
-        <SettingRow label="Usage metrics for admins" value={pp?.governance?.disableUsageMetricsForAdmins !== undefined ? !pp.governance.disableUsageMetricsForAdmins : undefined} positive={true} />
-        <SettingRow label="Capacity allocation by env admins" value={settings.disableCapacityAllocationByEnvironmentAdmins !== undefined ? !settings.disableCapacityAllocationByEnvironmentAdmins : undefined} positive={true} />
+    <div className={classes.envTableWrapper}>
+      <div style={{ overflowX: 'auto' }}>
+        <table className={classes.envTable}>
+          <colgroup>
+            <col />
+            <col style={{ width: '130px' }} />
+          </colgroup>
+          <thead className={classes.envThead}>
+            <tr>
+              <th className={classes.envTh} style={{ cursor: 'default' }}>Setting</th>
+              <th className={classes.envTh} style={{ cursor: 'default' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map(cat => (
+              <Fragment key={cat.title}>
+                <tr>
+                  <td className={classes.settingsCatTd} colSpan={2}>{cat.title}</td>
+                </tr>
+                {cat.rows.map(r => {
+                  const isGood = r.positive ? r.value : !r.value
+                  return (
+                    <tr key={r.label} className={classes.settingsTr}>
+                      <td className={classes.envTd}>
+                        <div className={classes.envNameCell}>
+                          {isGood
+                            ? <CheckmarkCircleRegular fontSize={14} style={{ color: tokens.colorPaletteGreenForeground1, flexShrink: 0 }} />
+                            : <WarningRegular fontSize={14} style={{ color: tokens.colorPaletteMarigoldForeground2, flexShrink: 0 }} />}
+                          <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</Text>
+                        </div>
+                      </td>
+                      <td className={classes.envTd}>
+                        <Badge appearance="tint" color={isGood ? 'success' : 'warning'} size="small">{r.value ? 'Enabled' : 'Disabled'}</Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
