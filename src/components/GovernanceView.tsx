@@ -1190,6 +1190,30 @@ function groupConns(conns: PowerConnection[], keyFn: (c: PowerConnection) => str
 const ownerKeyOf = (c: PowerConnection) => c.owner?.id ?? c.owner?.email ?? c.owner?.displayName ?? 'unknown'
 const ownerLabelOf = (c: PowerConnection) => c.owner?.displayName ?? c.owner?.email ?? 'Unknown user'
 
+// Wrap every case-insensitive occurrence of `q` in `text` with a highlight mark.
+// `q` is expected already trimmed + lowercased; empty `q` returns plain text.
+function highlightMatch(text: string, q: string): React.ReactNode {
+  if (!q) return text
+  const lower = text.toLowerCase()
+  let idx = lower.indexOf(q)
+  if (idx === -1) return text
+  const parts: React.ReactNode[] = []
+  let i = 0
+  let key = 0
+  while (idx !== -1) {
+    if (idx > i) parts.push(text.slice(i, idx))
+    parts.push(
+      <mark key={key++} style={{ backgroundColor: tokens.colorPaletteYellowBackground2, color: 'inherit', borderRadius: '2px', padding: 0 }}>
+        {text.slice(idx, idx + q.length)}
+      </mark>,
+    )
+    i = idx + q.length
+    idx = lower.indexOf(q, i)
+  }
+  if (i < text.length) parts.push(text.slice(i))
+  return parts
+}
+
 function ConnectionDetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
   if (value == null || value === '') return null
   return (
@@ -1320,6 +1344,7 @@ export function ConnectionsSection({
     setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
 
   const selected = selectedEnvId ? envGroups.find(g => g.envId === selectedEnvId) : undefined
+  const q = query.trim().toLowerCase()
 
   // ── Grouping definitions for the recursive drill-down renderer ─────────────
   const byConnector: GroupDef = (conns) =>
@@ -1331,7 +1356,7 @@ export function ConnectionsSection({
           header: (
             <>
               <InlineConnectorChip connectorId={connectorId} />
-              <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getConnectorInfo(connectorId).displayName}</Text>
+              <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(getConnectorInfo(connectorId).displayName, q)}</Text>
             </>
           ),
           right: (
@@ -1352,7 +1377,7 @@ export function ConnectionsSection({
         header: (
           <>
             <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
-            <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{envDisplay(envId)}</Text>
+            <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(envDisplay(envId), q)}</Text>
           </>
         ),
         right: <Badge appearance="tint" color="subtle" size="small">{cs.length}</Badge>,
@@ -1382,9 +1407,9 @@ export function ConnectionsSection({
           header: (
             <>
               <PersonRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-              <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</Text>
+              <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(label, q)}</Text>
               {email && email !== label && (
-                <Caption1 style={{ color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</Caption1>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(email, q)}</Caption1>
               )}
             </>
           ),
@@ -1408,7 +1433,7 @@ export function ConnectionsSection({
               <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" aria-expanded={open}>
                 <div className={classes.rowLeft} style={{ minWidth: 0 }}>
                   {chevron(open)}
-                  <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.displayName || '(unnamed connection)'}</Text>
+                  <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(c.displayName || '(unnamed connection)', q)}</Text>
                   {connectionHasError(c) && <Badge appearance="tint" color="danger" size="small">Error</Badge>}
                 </div>
                 {c.accountName && (
@@ -1490,7 +1515,6 @@ export function ConnectionsSection({
   const controls = <>{header}{searchInput}{updatingNotice}</>
 
   // ── Search view: results grouped by what was searched, then drillable ──────
-  const q = query.trim().toLowerCase()
   if (q) {
     const connectorConns = result.connections.filter(c => getConnectorInfo(c.connectorId).displayName.toLowerCase().includes(q))
     const userConns = result.connections.filter(c => (c.owner?.displayName ?? '').toLowerCase().includes(q) || (c.owner?.email ?? '').toLowerCase().includes(q))
