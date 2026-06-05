@@ -1165,12 +1165,58 @@ function ConnSortIcon({ active, dir }: { active: boolean; dir: ConnSortDir }) {
     : <ChevronDownRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
 }
 
-function ConnectionStatusBadge({ status }: { status?: string }) {
-  if (!status) return null
-  const connected = /connected/i.test(status)
-  return (
-    <Badge appearance="tint" color={connected ? 'success' : 'danger'} size="small">{status}</Badge>
-  )
+// In-environment hierarchy: connector → status (Connected/Error) → user → connection.
+type ConnStatusKind = 'Connected' | 'Error'
+interface ConnUserNode { userKey: string; userLabel: string; userEmail?: string; connections: PowerConnection[] }
+interface ConnStatusNode { status: ConnStatusKind; connections: PowerConnection[]; users: ConnUserNode[] }
+interface ConnConnectorNode { connectorId: string; displayName: string; connections: PowerConnection[]; errors: number; statuses: ConnStatusNode[] }
+
+function buildConnectorTree(connections: PowerConnection[]): ConnConnectorNode[] {
+  const byConnector = new Map<string, PowerConnection[]>()
+  for (const c of connections) {
+    const arr = byConnector.get(c.connectorId) ?? []
+    arr.push(c)
+    byConnector.set(c.connectorId, arr)
+  }
+  return [...byConnector.entries()].map(([connectorId, conns]) => {
+    const byStatus = new Map<ConnStatusKind, PowerConnection[]>()
+    for (const c of conns) {
+      const key: ConnStatusKind = connectionHasError(c) ? 'Error' : 'Connected'
+      const arr = byStatus.get(key) ?? []
+      arr.push(c)
+      byStatus.set(key, arr)
+    }
+    // Surface errors first, then connected.
+    const statuses: ConnStatusNode[] = (['Error', 'Connected'] as ConnStatusKind[])
+      .filter(s => byStatus.has(s))
+      .map(s => {
+        const sconns = byStatus.get(s)!
+        const byUser = new Map<string, PowerConnection[]>()
+        for (const c of sconns) {
+          const key = c.owner?.id ?? c.owner?.email ?? c.owner?.displayName ?? 'unknown'
+          const arr = byUser.get(key) ?? []
+          arr.push(c)
+          byUser.set(key, arr)
+        }
+        const users: ConnUserNode[] = [...byUser.entries()]
+          .map(([userKey, uconns]) => ({
+            userKey,
+            // Prefer the owner's display name; fall back to email only when absent.
+            userLabel: uconns[0].owner?.displayName ?? uconns[0].owner?.email ?? 'Unknown user',
+            userEmail: uconns[0].owner?.email,
+            connections: [...uconns].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '')),
+          }))
+          .sort((a, b) => a.userLabel.localeCompare(b.userLabel))
+        return { status: s, connections: sconns, users }
+      })
+    return {
+      connectorId,
+      displayName: getConnectorInfo(connectorId).displayName,
+      connections: conns,
+      errors: conns.filter(connectionHasError).length,
+      statuses,
+    }
+  }).sort((a, b) => b.connections.length - a.connections.length || a.displayName.localeCompare(b.displayName))
 }
 
 function ConnectionDetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
@@ -1183,7 +1229,7 @@ function ConnectionDetailRow({ label, value }: { label: string; value?: React.Re
   )
 }
 
-function ConnectionDetail({ c, envName }: { c: PowerConnection; envName?: string }) {
+function ConnectionDetail({ c, envName, indent = 30 }: { c: PowerConnection; envName?: string; indent?: number }) {
   const info = getConnectorInfo(c.connectorId)
   const ownerText = c.owner?.displayName
     ? `${c.owner.displayName}${c.owner.email ? ` <${c.owner.email}>` : ''}`
@@ -1191,7 +1237,7 @@ function ConnectionDetail({ c, envName }: { c: PowerConnection; envName?: string
   const envLabel = envName && envName !== c.environmentId ? `${envName} (${c.environmentId})` : c.environmentId
   return (
     <div style={{
-      padding: '6px 8px 10px 30px',
+      padding: `6px 8px 10px ${indent}px`,
       display: 'flex', flexDirection: 'column', gap: '1px',
       borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     }}>
@@ -1220,8 +1266,28 @@ export function ConnectionsSection({
 }) {
   const classes = useClasses()
   const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null)
+  // Expansion state for the in-environment hierarchy: connector → status → user → connection.
+  const [openConnectors, setOpenConnectors] = useState<Set<string>>(new Set())
+  const [openStatuses, setOpenStatuses] = useState<Set<string>>(new Set())
+  const [openUsers, setOpenUsers] = useState<Set<string>>(new Set())
   const [openConns, setOpenConns] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<{ field: ConnEnvSortField; dir: ConnSortDir }>({ field: 'connections', dir: 'desc' })
+
+  const toggleKey = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
+    setter(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  // Drilling into / out of an environment resets the nested expansion state so
+  // groups don't appear pre-opened from a previously viewed environment.
+  const drillInto = (envId: string) => {
+    setSelectedEnvId(envId)
+    setOpenConnectors(new Set()); setOpenStatuses(new Set()); setOpenUsers(new Set()); setOpenConns(new Set())
+  }
+  const drillBack = () => setSelectedEnvId(null)
 
   const envMap = useMemo(() => {
     const m = new Map<string, ResourceItem>()
@@ -1278,13 +1344,11 @@ export function ConnectionsSection({
   const handleSort = (f: ConnEnvSortField) =>
     setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }))
 
-  const toggleConn = (key: string) =>
-    setOpenConns(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+  const selected = selectedEnvId ? envGroups.find(g => g.envId === selectedEnvId) : undefined
+  const connectorTree = useMemo(
+    () => selected ? buildConnectorTree(selected.connections) : [],
+    [selected],
+  )
 
   const header = (
     <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1324,14 +1388,17 @@ export function ConnectionsSection({
     </div>
   )
 
-  // ── Drilled view: connections within the selected environment ──────────────
-  const selected = selectedEnvId ? envGroups.find(g => g.envId === selectedEnvId) : undefined
+  // ── Drilled view: connector → status → user → connection (last mile) ───────
+  const chevron = (open: boolean) => open
+    ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+    : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+
   if (selected) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
         {header}
         <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' }}>
-          <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={() => setSelectedEnvId(null)}>
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={drillBack}>
             All Environments
           </Button>
           <Text style={{ color: tokens.colorNeutralForeground3 }}>/</Text>
@@ -1343,33 +1410,84 @@ export function ConnectionsSection({
         </div>
         <div className={classes.envTableWrapper}>
           <div className={classes.sectionBody}>
-            {selected.connections.map(c => {
-              const cOpen = openConns.has(c.id)
-              const ownerLabel = c.owner?.displayName ?? c.owner?.email ?? '—'
+            {connectorTree.map(con => {
+              const conOpen = openConnectors.has(con.connectorId)
               return (
-                <div key={c.id}>
-                  <div
-                    className={classes.row}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => toggleConn(c.id)}
-                    role="button"
-                    aria-expanded={cOpen}
-                  >
+                <div key={con.connectorId}>
+                  {/* Level 1 — connector type (e.g. all SharePoint together) */}
+                  <div className={classes.row} style={{ cursor: 'pointer' }} onClick={() => toggleKey(setOpenConnectors, con.connectorId)} role="button" aria-expanded={conOpen}>
                     <div className={classes.rowLeft} style={{ minWidth: 0 }}>
-                      {cOpen
-                        ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                        : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />}
-                      <InlineConnectorChip connectorId={c.connectorId} />
-                      <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.displayName || '(unnamed connection)'}
-                      </Text>
-                      <ConnectionStatusBadge status={c.status} />
+                      {chevron(conOpen)}
+                      <InlineConnectorChip connectorId={con.connectorId} />
+                      <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{con.displayName}</Text>
                     </div>
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {ownerLabel}
-                    </Caption1>
+                    <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>
+                      <Badge appearance="tint" color="subtle" size="small">{con.connections.length} conn.</Badge>
+                      {con.errors > 0 && <Badge appearance="tint" color="danger" size="small">{con.errors} error{con.errors !== 1 ? 's' : ''}</Badge>}
+                    </div>
                   </div>
-                  {cOpen && <ConnectionDetail c={c} envName={selected.envName} />}
+
+                  {conOpen && con.statuses.map(st => {
+                    const stKey = `${con.connectorId}|${st.status}`
+                    const stOpen = openStatuses.has(stKey)
+                    return (
+                      <div key={stKey}>
+                        {/* Level 2 — Connected / Error */}
+                        <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '28px' }} onClick={() => toggleKey(setOpenStatuses, stKey)} role="button" aria-expanded={stOpen}>
+                          <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                            {chevron(stOpen)}
+                            <Badge appearance="tint" color={st.status === 'Connected' ? 'success' : 'danger'} size="small">{st.status}</Badge>
+                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{st.users.length} user{st.users.length !== 1 ? 's' : ''}</Caption1>
+                          </div>
+                          <Badge appearance="tint" color="subtle" size="small">{st.connections.length}</Badge>
+                        </div>
+
+                        {stOpen && st.users.map(u => {
+                          const uKey = `${stKey}|${u.userKey}`
+                          const uOpen = openUsers.has(uKey)
+                          return (
+                            <div key={uKey}>
+                              {/* Level 3 — user (display name) */}
+                              <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '54px' }} onClick={() => toggleKey(setOpenUsers, uKey)} role="button" aria-expanded={uOpen}>
+                                <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                                  {chevron(uOpen)}
+                                  <PersonRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                                  <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.userLabel}</Text>
+                                  {u.userEmail && u.userEmail !== u.userLabel && (
+                                    <Caption1 style={{ color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.userEmail}</Caption1>
+                                  )}
+                                </div>
+                                <Badge appearance="tint" color="subtle" size="small">{u.connections.length}</Badge>
+                              </div>
+
+                              {uOpen && u.connections.map(c => {
+                                const cOpen = openConns.has(c.id)
+                                return (
+                                  <div key={c.id}>
+                                    {/* Level 4 — the connection itself (last mile) */}
+                                    <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: '80px' }} onClick={() => toggleKey(setOpenConns, c.id)} role="button" aria-expanded={cOpen}>
+                                      <div className={classes.rowLeft} style={{ minWidth: 0 }}>
+                                        {chevron(cOpen)}
+                                        <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {c.displayName || '(unnamed connection)'}
+                                        </Text>
+                                      </div>
+                                      {c.accountName && (
+                                        <Caption1 style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, maxWidth: '40%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {c.accountName}
+                                        </Caption1>
+                                      )}
+                                    </div>
+                                    {cOpen && <ConnectionDetail c={c} envName={selected.envName} indent={96} />}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -1429,7 +1547,7 @@ export function ConnectionsSection({
             </thead>
             <tbody>
               {sortedGroups.map(env => (
-                <tr key={env.envId} className={classes.envTr} onClick={() => setSelectedEnvId(env.envId)}>
+                <tr key={env.envId} className={classes.envTr} onClick={() => drillInto(env.envId)}>
                   <td className={classes.envTd}>
                     <div className={classes.envNameCell}>
                       <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
