@@ -8,6 +8,7 @@
     - Adds delegated API permissions for:
         Power Platform API   (https://api.powerplatform.com)
         BAP API              (https://api.bap.microsoft.com)
+        PowerApps Service    (https://service.powerapps.com)
         Microsoft Graph      User.ReadBasic.All
     - Does NOT grant admin consent (see 02-Grant-Consent.ps1)
     - Returns an object with ClientId and TenantId
@@ -50,9 +51,10 @@ Write-Host "  [01-Register-App] Starting..." -ForegroundColor Cyan
 # provisioned in your tenant before they can be used as API permission targets.
 # If lookups fail, visit the relevant admin portals to trigger provisioning.
 
-$GRAPH_APP_ID      = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
-$BAP_APP_ID        = "00000007-0000-0000-c000-000000000000"  # Business Application Platform
-$PP_API_APP_ID     = "8578e004-a5c6-46e7-913e-12f58912df43"  # Power Platform API
+$GRAPH_APP_ID         = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
+$BAP_APP_ID           = "00000007-0000-0000-c000-000000000000"  # Business Application Platform
+$PP_API_APP_ID        = "8578e004-a5c6-46e7-913e-12f58912df43"  # Power Platform API
+$POWERAPPS_SVC_APP_ID = "475226c6-020e-4fb2-8a90-7a972cbfc1d4"  # PowerApps Service (service.powerapps.com)
 
 # Microsoft Graph — User.ReadBasic.All permission ID (stable across tenants)
 $GRAPH_USER_READ_BASIC_ALL = "b340eb25-3456-403f-be2f-af7a0d370277"
@@ -190,6 +192,38 @@ try {
     }
 } catch {
     Write-Warning "  BAP API permission step failed: $_"
+    Write-Warning "  Add this permission manually in the Azure portal."
+}
+
+# ── Add PowerApps Service API permission ──────────────────────────────────────
+# Required by Governance > Connections, which enumerates connections via
+# api.powerapps.com/.../scopes/admin/environments/{env}/connections. That
+# endpoint's token audience is service.powerapps.com; without this permission
+# token acquisition fails with AADSTS650057 (Invalid resource).
+
+Write-Host "  Adding PowerApps Service API permissions..."
+try {
+    $paSvcSp = Get-OrProvisionSP -AppId $POWERAPPS_SVC_APP_ID -DisplayName "PowerApps Service"
+    if ($paSvcSp -and $paSvcSp.Trim()) {
+        # PowerApps Service exposes a single delegated scope named "User"
+        # (not the usual "user_impersonation").
+        $paSvcScopeId = Get-ScopeId -SpAppId $POWERAPPS_SVC_APP_ID -ScopeName "User"
+        if ($paSvcScopeId -and $paSvcScopeId.Trim()) {
+            az ad app permission add `
+                --id $appId `
+                --api $POWERAPPS_SVC_APP_ID `
+                --api-permissions "$($paSvcScopeId.Trim())=Scope" `
+                --output none
+            Write-Host "  PowerApps Service API permission added." -ForegroundColor Green
+        } else {
+            Write-Warning "  Could not resolve PowerApps Service 'User' scope ID. Add it manually in the Azure portal."
+        }
+    } else {
+        Write-Warning "  PowerApps Service service principal not found in this tenant."
+        Write-Warning "  Add the permission manually in the Azure portal (API app ID $POWERAPPS_SVC_APP_ID)."
+    }
+} catch {
+    Write-Warning "  PowerApps Service API permission step failed: $_"
     Write-Warning "  Add this permission manually in the Azure portal."
 }
 
