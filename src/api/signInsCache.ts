@@ -73,15 +73,27 @@ function collectionUrl(filter?: string, contPk?: string, contRk?: string): strin
   return url
 }
 
-/** Create the cache table if it doesn't exist. 409 = already there. */
+/**
+ * Best-effort create of the cache table. The deployed account-SAS is typically
+ * scoped to entity (object) operations only and can't create tables, so a 403
+ * here is expected — the table is provisioned out-of-band (see docs). We only
+ * surface unexpected failures; if the table is genuinely missing, the entity
+ * writes below fail loudly with a 404 instead.
+ *   409 = already exists, 403 = SAS lacks table-create rights → both are fine.
+ */
 async function ensureTable(): Promise<void> {
-  const res = await fetch(`https://${ACCOUNT}.table.core.windows.net/Tables?${SAS}`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ TableName: TABLE }),
-  })
-  if (!res.ok && res.status !== 409) {
-    throw new Error(`Sign-in cache table create failed: ${res.status} ${res.statusText}`)
+  try {
+    const res = await fetch(`https://${ACCOUNT}.table.core.windows.net/Tables?${SAS}`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ TableName: TABLE }),
+    })
+    if (!res.ok && res.status !== 409 && res.status !== 403) {
+      throw new Error(`Sign-in cache table create failed: ${res.status} ${res.statusText}`)
+    }
+  } catch {
+    // Network/permission hiccups on create are non-fatal; entity writes will
+    // surface a real error if the table actually doesn't exist.
   }
 }
 
