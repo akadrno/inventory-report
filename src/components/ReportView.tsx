@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react'
-import { makeStyles, tokens, Text, Caption1, Badge, Spinner } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Badge, Spinner, Button } from '@fluentui/react-components'
 import {
   ErrorCircleRegular,
   WarningRegular,
   CheckmarkCircleRegular,
   LockClosedRegular,
+  ArrowClockwiseRegular,
+  DatabaseRegular,
 } from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath } from '../types'
@@ -12,6 +14,7 @@ import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
 import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { useAdminData } from '../hooks/useAdminData'
+import { useSignInCache } from '../context/SignInCacheContext'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
@@ -113,6 +116,25 @@ const useClasses = makeStyles({
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     marginBottom: '-1px',
+  },
+  cacheCard: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalM,
+    flexWrap: 'wrap',
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    marginBottom: tokens.spacingVerticalL,
+  },
+  cacheCardInfo: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
   },
   section: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   sectionHead: {
@@ -253,6 +275,19 @@ function fmtDate(iso: string | null): string {
   try { return new Date(iso).toLocaleDateString() } catch { return iso }
 }
 
+function formatRelative(iso: string | null): string {
+  if (!iso) return 'never'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return 'just now'
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} minute${min !== 1 ? 's' : ''} ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} hour${hr !== 1 ? 's' : ''} ago`
+  const d = Math.floor(hr / 24)
+  return `${d} day${d !== 1 ? 's' : ''} ago`
+}
+
 function buildEnvMap(envs: ResourceItem[]): Map<string, string> {
   const m = new Map<string, string>()
   for (const e of envs) {
@@ -293,6 +328,64 @@ function HealthChip({ label, color, onClick }: { label: string; color: 'danger' 
     <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
       {chip}
     </button>
+  )
+}
+
+// Usage sign-in cache status strip. Shows when the heatmap's cached sign-in
+// data was last refreshed by the background job, surfaces in-progress updates,
+// and lets the user trigger a manual refresh of the login data.
+function UsageCacheStatus() {
+  const classes = useClasses()
+  const cache = useSignInCache()
+
+  // Nothing to manage if Azure Storage caching isn't configured.
+  if (!cache.configured) return null
+
+  const refreshing = cache.status === 'refreshing'
+  const errored = cache.status === 'error'
+
+  let icon: React.ReactNode
+  let text: React.ReactNode
+  if (refreshing) {
+    icon = <Spinner size="tiny" />
+    text = <>Updating usage sign-in data in the background…</>
+  } else if (errored) {
+    icon = <WarningRegular style={{ color: tokens.colorStatusWarningForeground1 }} />
+    text = (
+      <>
+        Couldn't update usage data{cache.error ? ` — ${cache.error}` : ''}.
+        {cache.cachedAt ? ` Showing data cached ${formatRelative(cache.cachedAt)}.` : ''}
+      </>
+    )
+  } else if (cache.cachedAt) {
+    icon = <CheckmarkCircleRegular style={{ color: tokens.colorPaletteGreenForeground1 }} />
+    text = (
+      <>
+        Usage sign-in data updated {formatRelative(cache.cachedAt)} ·{' '}
+        {cache.recordCount.toLocaleString()} sign-ins cached (last {cache.cacheDays} days)
+      </>
+    )
+  } else {
+    icon = <DatabaseRegular style={{ color: tokens.colorNeutralForeground3 }} />
+    text = <>No usage sign-in data cached yet. Run an update to populate the heatmap.</>
+  }
+
+  return (
+    <div className={classes.cacheCard}>
+      <span className={classes.cacheCardInfo}>
+        {icon}
+        <span>{text}</span>
+      </span>
+      <Button
+        size="small"
+        appearance="secondary"
+        icon={<ArrowClockwiseRegular />}
+        onClick={cache.refreshNow}
+        disabled={refreshing}
+      >
+        {refreshing ? 'Updating…' : 'Update now'}
+      </Button>
+    </div>
   )
 }
 
@@ -831,6 +924,9 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
           {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
         </div>
       </div>
+
+      {/* Usage sign-in cache status + manual refresh */}
+      <UsageCacheStatus />
 
       {/* Nav tabs */}
       <div className={classes.navRow}>

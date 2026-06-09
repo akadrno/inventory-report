@@ -19,7 +19,22 @@ import {
   fetchSignIns, aggregateByLocation, aggregateByField, diagnoseSignIns,
   type LocationBucket, type SignInRecord,
 } from '../api/signInsApi'
+import { useSignInCache } from '../context/SignInCacheContext'
 import { getAgentId } from '../utils/resourceMetadata'
+
+// Compact "x ago" formatter for the cache's last-updated timestamp.
+function formatRelative(iso: string | null): string {
+  if (!iso) return 'never'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return 'just now'
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} minute${min !== 1 ? 's' : ''} ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} hour${hr !== 1 ? 's' : ''} ago`
+  const d = Math.floor(hr / 24)
+  return `${d} day${d !== 1 ? 's' : ''} ago`
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +148,21 @@ const useClasses = makeStyles({
     flexWrap: 'wrap',
   },
   diagStat: { display: 'inline-flex', alignItems: 'center', gap: '4px' },
+  refreshBanner: {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    padding: '8px 12px',
+    backgroundColor: tokens.colorBrandBackground2,
+    color: tokens.colorBrandForeground2,
+    border: `1px solid ${tokens.colorBrandStroke2}`,
+    borderRadius: '4px',
+    fontSize: '12px',
+  },
+  cacheStatus: {
+    display: 'inline-flex', alignItems: 'center', gap: '6px',
+    marginLeft: 'auto',
+    color: tokens.colorNeutralForeground3,
+    fontSize: '12px',
+  },
   bodyRow: {
     display: 'grid',
     gridTemplateColumns: '1fr 360px',
@@ -286,17 +316,48 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
     return { sinceIso: since, appIds: undefined, scopeLabel: 'All sign-ins' }
   }, [timeWindow, scopeKey, agentScopes])
 
-  const query = useQuery({
+  const cache = useSignInCache()
+
+  // The 7- and 30-day windows render instantly from the cached last-30-days
+  // table. The 90-day window (and the no-storage fallback) fetches live from
+  // Graph since it falls outside the cache.
+  const useLive = timeWindow === '90' || !cache.configured
+
+  const liveQuery = useQuery({
     queryKey: ['signIns', sinceIso, appIds ?? 'all'],
     queryFn: ({ signal }) =>
       fetchSignIns(instance, { since: sinceIso, appIds, maxRecords: 5000, signal }),
+    enabled: useLive,
     staleTime: 5 * 60 * 1000,
     retry: 0,
   })
 
+  // Records before client-side filters: either the live Graph pull, or the
+  // cached records narrowed to the selected window + scope (agent appIds).
+  const baseRecords = useMemo<SignInRecord[]>(() => {
+    if (useLive) return liveQuery.data?.records ?? []
+    let rs = cache.records.filter(r => r.createdDateTime >= sinceIso)
+    if (appIds && appIds.length) {
+      const allow = new Set(appIds)
+      rs = rs.filter(r => r.appId != null && allow.has(r.appId))
+    }
+    return rs
+  }, [useLive, liveQuery.data, cache.records, sinceIso, appIds])
+
+  // Unified status across the live and cached paths.
+  const isLoadingData = useLive
+    ? liveQuery.isLoading
+    : cache.loadingFromCache && cache.records.length === 0
+  const isRefreshing = useLive ? liveQuery.isFetching : cache.status === 'refreshing'
+  const isError = useLive ? liveQuery.isError : false
+  const errorMsg = useLive ? (liveQuery.error as Error)?.message : null
+  const dataTruncated = useLive ? !!liveQuery.data?.truncated : cache.truncated
+  const pagesFetched = useLive ? liveQuery.data?.pagesFetched ?? 0 : 0
+  const onRefreshClick = () => { if (useLive) void liveQuery.refetch(); else cache.refreshNow() }
+
   // Build a filtered subset of records for the chosen category/status/user filters.
   const filteredRecords = useMemo<SignInRecord[]>(() => {
-    let rs = query.data?.records ?? []
+    let rs = baseRecords
     if (statusFilter !== 'all') {
       rs = rs.filter(r => {
         const success = (r.status?.errorCode ?? 0) === 0
@@ -318,12 +379,12 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
       )
     }
     return rs
-  }, [query.data, statusFilter, categoryFilter, userSearch, agentScopes])
+  }, [baseRecords, statusFilter, categoryFilter, userSearch, agentScopes])
 
   // Diagnostics are computed against the post-filter set so the banner
   // explains where the data went.
   const diag = useMemo(() => diagnoseSignIns(filteredRecords), [filteredRecords])
-  const rawDiag = useMemo(() => query.data ? diagnoseSignIns(query.data.records) : null, [query.data])
+  const rawDiag = useMemo(() => diagnoseSignIns(baseRecords), [baseRecords])
 
   const buckets = useMemo(() => aggregateByLocation(filteredRecords), [filteredRecords])
 
@@ -397,11 +458,23 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         <Button
           size="small"
           appearance="subtle"
-          onClick={() => query.refetch()}
-          disabled={query.isFetching}
+          onClick={onRefreshClick}
+          disabled={isRefreshing}
         >
-          {query.isFetching ? 'Refreshing…' : 'Refresh'}
+          {isRefreshing ? 'Refreshing…' : (useLive ? 'Refresh' : 'Update now')}
         </Button>
+        {!useLive && (
+          <span className={classes.cacheStatus}>
+            {isRefreshing ? (
+              <><Spinner size="tiny" /> Updating…</>
+            ) : (
+              <>
+                <CheckmarkCircleRegular fontSize={14} style={{ color: tokens.colorPaletteGreenForeground1 }} />
+                Cached · updated {formatRelative(cache.cachedAt)}
+              </>
+            )}
+          </span>
+        )}
       </div>
 
       {/* Controls row 2: client-side filters */}
@@ -442,13 +515,30 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         />
       </div>
 
-      {/* Diagnostics banner — shows what Graph returned vs what survived filters */}
-      {rawDiag && (
+      {/* Background-refresh notice — the cache is being updated from Graph */}
+      {!useLive && isRefreshing && (
+        <div className={classes.refreshBanner}>
+          <Spinner size="tiny" />
+          <span>
+            A background job is updating the current usage numbers. The map below shows the
+            last cached data and will refresh automatically when the update finishes.
+          </span>
+        </div>
+      )}
+      {!useLive && cache.status === 'error' && cache.error && (
+        <div className={classes.banner}>
+          <WarningRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>Couldn't update usage data ({cache.error}). Showing the last cached data.</span>
+        </div>
+      )}
+
+      {/* Diagnostics banner — shows the dataset size vs what survived filters */}
+      {!isLoadingData && (
         <div className={classes.diagBanner}>
           <InfoRegular fontSize={14} />
           <span className={classes.diagStat}>
-            <b>{rawDiag.totalRecords.toLocaleString()}</b> sign-ins returned from Graph
-            {' '}({query.data?.pagesFetched ?? 0} page{(query.data?.pagesFetched ?? 0) !== 1 ? 's' : ''})
+            <b>{rawDiag.totalRecords.toLocaleString()}</b> sign-ins {useLive ? 'returned from Graph' : `cached (last ${cache.cacheDays} days)`}
+            {useLive && ` (${pagesFetched} page${pagesFetched !== 1 ? 's' : ''})`}
           </span>
           <span style={{ color: tokens.colorNeutralForeground3 }}>·</span>
           <span className={classes.diagStat}>
@@ -478,28 +568,28 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         </div>
       )}
 
-      {query.data?.truncated && (
+      {dataTruncated && (
         <div className={classes.banner}>
           <WarningRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>
-            Result truncated at 5000 sign-ins. Narrow the time window or pick a specific
+            Result truncated at the record cap. Narrow the time window or pick a specific
             scope to see complete data.
           </span>
         </div>
       )}
 
-      {!query.isLoading && rawDiag && rawDiag.totalRecords === 0 && (
+      {!isLoadingData && rawDiag.totalRecords === 0 && (
         <div className={classes.emptyBanner}>
           <InfoRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>
-            Graph returned zero sign-ins for the selected scope and time window. Try a
+            No sign-ins for the selected scope and time window. Try a
             longer time window, switch the scope to "All sign-ins", or confirm the
             signed-in user has an audit-reader Entra role (Reports Reader / Security
             Reader / Global Reader / Global Admin).
           </span>
         </div>
       )}
-      {!query.isLoading && rawDiag && rawDiag.totalRecords > 0 && diag.withGeo === 0 && (
+      {!isLoadingData && rawDiag.totalRecords > 0 && diag.withGeo === 0 && (
         <div className={classes.emptyBanner}>
           <InfoRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>
@@ -511,18 +601,18 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         </div>
       )}
 
-      {query.isError && (
+      {isError && (
         <div className={classes.errorBanner}>
           <LockClosedRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>{(query.error as Error)?.message ?? 'Failed to load sign-in data.'}</span>
+          <span>{errorMsg ?? 'Failed to load sign-in data.'}</span>
         </div>
       )}
 
       <div className={classes.bodyRow}>
         <div className={classes.mapCard}>
-          {query.isLoading ? (
+          {isLoadingData ? (
             <div className={classes.loadingWrap}>
-              <Spinner size="small" label="Loading Entra sign-in logs…" />
+              <Spinner size="small" label={useLive ? 'Loading Entra sign-in logs…' : 'Loading cached sign-in data…'} />
               <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>This can take a few seconds for large tenants.</Caption1>
             </div>
           ) : (
@@ -581,7 +671,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
             <RankList
               icon={<GlobeRegular fontSize={14} />}
               items={topCountries}
-              emptyText={query.isLoading ? 'Loading…' : 'No countries in current filter set.'}
+              emptyText={isLoadingData ? 'Loading…' : 'No countries in current filter set.'}
               limit={20}
             />
           )}
@@ -589,7 +679,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
             <RankList
               icon={<GlobeRegular fontSize={14} />}
               items={topCities}
-              emptyText={query.isLoading ? 'Loading…' : 'No cities with location data.'}
+              emptyText={isLoadingData ? 'Loading…' : 'No cities with location data.'}
               limit={20}
             />
           )}
@@ -597,7 +687,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
             <RankList
               icon={<PersonRegular fontSize={14} />}
               items={topUsers}
-              emptyText={query.isLoading ? 'Loading…' : 'No users in current filter set.'}
+              emptyText={isLoadingData ? 'Loading…' : 'No users in current filter set.'}
               limit={20}
               onClick={(label) => setUserSearch(label)}
             />
@@ -606,7 +696,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
             <RankList
               icon={<AppsRegular fontSize={14} />}
               items={topApps}
-              emptyText={query.isLoading ? 'Loading…' : 'No apps in current filter set.'}
+              emptyText={isLoadingData ? 'Loading…' : 'No apps in current filter set.'}
               limit={20}
             />
           )}

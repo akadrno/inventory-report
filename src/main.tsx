@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FluentProvider, webLightTheme, webDarkTheme } from '@fluentui/react-components'
 import { msalInstance } from './auth/msalConfig'
 import { DebugProvider } from './context/DebugContext'
+import { SignInCacheProvider } from './context/SignInCacheContext'
 import { ThemeProvider, useThemeMode } from './context/ThemeContext'
 import App from './App'
 import './index.css'
@@ -22,7 +23,9 @@ function ThemedApp() {
       <MsalProvider instance={msalInstance}>
         <QueryClientProvider client={queryClient}>
           <DebugProvider>
-            <App />
+            <SignInCacheProvider>
+              <App />
+            </SignInCacheProvider>
           </DebugProvider>
         </QueryClientProvider>
       </MsalProvider>
