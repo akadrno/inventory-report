@@ -16,6 +16,7 @@ import {
 } from '../types'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { GUID_RE, SYSTEM_PREFIX, isSystemResource } from '../hooks/useOwnerNames'
+import { accentGlowStyle } from './usageShared'
 
 interface MakerAnalyticsViewProps {
   allResources: ResourceItem[]
@@ -31,26 +32,33 @@ const useClasses = makeStyles({
     gap: '12px',
   },
   summaryCard: {
+    position: 'relative',
+    overflow: 'hidden',
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: '4px',
+    borderRadius: '12px',
     padding: '16px',
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
+    boxShadow: tokens.shadow8,
+    transition: 'transform 0.16s ease, box-shadow 0.16s ease',
+    ':hover': { transform: 'translateY(-2px)', boxShadow: tokens.shadow16 },
   },
   card: {
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: '4px',
+    borderRadius: '12px',
     overflow: 'hidden',
     flexShrink: 0,
+    boxShadow: tokens.shadow8,
   },
   cardHead: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '12px 16px 10px',
+    backgroundImage: `linear-gradient(180deg, ${tokens.colorNeutralBackground2}, transparent)`,
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: tokens.colorNeutralStroke2,
@@ -273,12 +281,12 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
       {/* Summary */}
       <div className={classes.summaryGrid}>
         {[
-          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: makers.length, label: 'Unique Makers' },
-          { icon: <GlobeRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: allEnvironments.length, label: 'Environments' },
-          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />, value: unmanagedMakers.length, label: 'In Unmanaged Envs' },
-          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />, value: avgResources, label: 'Avg Resources/Maker' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: makers.length, label: 'Unique Makers', accent: '#4aa8ff' },
+          { icon: <GlobeRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: allEnvironments.length, label: 'Environments', accent: '#3ad1c4' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />, value: unmanagedMakers.length, label: 'In Unmanaged Envs', accent: '#e6a23c' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />, value: avgResources, label: 'Avg Resources/Maker', accent: '#b07cff' },
         ].map(s => (
-          <div key={s.label} className={classes.summaryCard}>
+          <div key={s.label} className={classes.summaryCard} style={accentGlowStyle(s.accent)}>
             {s.icon}
             <div>
               <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: tokens.colorNeutralForeground1 }}>{s.value}</Text>

@@ -218,11 +218,13 @@ const useClasses = makeStyles({
   sectionCard: {
     backgroundColor: ACTIVE_BG,
     border: `1px solid ${STROKE1}`,
-    borderRadius: '4px', overflow: 'hidden',
+    borderRadius: '12px', overflow: 'hidden',
+    boxShadow: tokens.shadow8,
   },
   cardHead: {
     display: 'flex', alignItems: 'center', gap: '8px',
     padding: '12px 16px 10px',
+    backgroundImage: `linear-gradient(180deg, ${tokens.colorNeutralBackground2}, transparent)`,
     borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
     fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1,
   },
@@ -233,10 +235,15 @@ const useClasses = makeStyles({
     '@media (max-width: 640px)': { gridTemplateColumns: '1fr' },
   },
   summaryCard: {
+    position: 'relative',
+    overflow: 'hidden',
     backgroundColor: ACTIVE_BG,
     border: `1px solid ${STROKE1}`,
-    borderRadius: '4px', padding: '16px 20px',
+    borderRadius: '12px', padding: '16px 20px',
     display: 'flex', alignItems: 'center', gap: '12px',
+    boxShadow: tokens.shadow8,
+    transition: 'transform 0.16s ease, box-shadow 0.16s ease',
+    ':hover': { transform: 'translateY(-2px)', boxShadow: tokens.shadow16 },
   },
   insightRow: {
     display: 'flex', alignItems: 'flex-start', gap: '12px',

@@ -16,6 +16,15 @@ export const PRODUCT: Record<Category, { label: string; accent: string }> = {
   agents: { label: 'Agents', accent: '#3ad1c4' },
 }
 
+// Inline accent tint + left bar for cinematic stat cards — matches the KpiCard
+// look (corner glow + accent edge) without adding extra DOM. Pass a hex accent.
+export function accentGlowStyle(accent: string): React.CSSProperties {
+  return {
+    borderLeft: `3px solid ${accent}`,
+    backgroundImage: `radial-gradient(130% 130% at 100% 0%, ${accent}22, transparent 55%)`,
+  }
+}
+
 // ── Time helpers ─────────────────────────────────────────────────────────────
 
 function getDate(r: ResourceItem, keys: string[]): Date | undefined {
