@@ -61,11 +61,11 @@ const useClasses = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: '16px' },
   introNote: {
     backgroundColor: HOVER_BG,
-    border: `1px solid #cfe4fa`,
+    border: `1px solid ${tokens.colorBrandStroke2}`,
     borderRadius: '4px',
     padding: '10px 14px',
     fontSize: '12px',
-    color: '#003966',
+    color: tokens.colorBrandForeground2,
     display: 'flex', alignItems: 'flex-start', gap: '8px',
   },
   productGrid: {

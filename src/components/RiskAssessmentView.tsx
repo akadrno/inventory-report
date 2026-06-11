@@ -40,19 +40,19 @@ function resolveOwner(raw: string, ownerNames: Map<string, string>): string {
 }
 
 const RISK_CONFIG: Record<RiskLevel, { color: string; bg: string }> = {
-  Critical: { color: '#c50f1f', bg: '#fde7e9' },
-  High:     { color: '#e17800', bg: '#fff4ce' },
-  Medium:   { color: '#8764b8', bg: '#f0ebf8' },
-  Low:      { color: '#107c10', bg: '#dff6dd' },
-  None:     { color: '#616161', bg: '#f3f2f1' },
+  Critical: { color: tokens.colorStatusDangerForeground1, bg: tokens.colorStatusDangerBackground1 },
+  High:     { color: tokens.colorStatusWarningForeground1, bg: tokens.colorStatusWarningBackground1 },
+  Medium:   { color: tokens.colorPalettePurpleForeground2, bg: tokens.colorPalettePurpleBackground2 },
+  Low:      { color: tokens.colorStatusSuccessForeground1, bg: tokens.colorStatusSuccessBackground1 },
+  None:     { color: tokens.colorNeutralForeground3, bg: tokens.colorNeutralBackground3 },
 }
 
 const COMPLIANCE_CONFIG: Record<ComplianceStatus, { color: string; bg: string }> = {
-  'Not Reviewed':  { color: '#616161', bg: '#f3f2f1' },
-  'In Review':     { color: '#004578', bg: '#cfe4fa' },
-  'Compliant':     { color: '#107c10', bg: '#dff6dd' },
-  'Non-Compliant': { color: '#c50f1f', bg: '#fde7e9' },
-  'Exempted':      { color: '#e17800', bg: '#fff4ce' },
+  'Not Reviewed':  { color: tokens.colorNeutralForeground3, bg: tokens.colorNeutralBackground3 },
+  'In Review':     { color: tokens.colorBrandForeground2, bg: tokens.colorBrandBackground2 },
+  'Compliant':     { color: tokens.colorStatusSuccessForeground1, bg: tokens.colorStatusSuccessBackground1 },
+  'Non-Compliant': { color: tokens.colorStatusDangerForeground1, bg: tokens.colorStatusDangerBackground1 },
+  'Exempted':      { color: tokens.colorStatusWarningForeground1, bg: tokens.colorStatusWarningBackground1 },
 }
 
 const RISK_LEVELS: RiskLevel[] = ['None', 'Low', 'Medium', 'High', 'Critical']
@@ -323,7 +323,7 @@ function AssessmentSidePanel({
         ) : (
           <div>
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Level <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Level <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {RISK_LEVELS.map(level => {
                   const active = form.riskLevel === level
@@ -340,12 +340,12 @@ function AssessmentSidePanel({
                 })}
               </div>
               {submitAttempted && form.riskLevel === 'None' && (
-                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Select a risk level</Caption1>
+                <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Select a risk level</Caption1>
               )}
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Compliance Status <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Compliance Status <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <div className={classes.toggleGroup}>
                 {COMPLIANCE_STATUSES.map(status => {
                   const active = form.complianceStatus === status
@@ -362,25 +362,25 @@ function AssessmentSidePanel({
                 })}
               </div>
               {submitAttempted && form.complianceStatus === 'Not Reviewed' && (
-                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Select a compliance status</Caption1>
+                <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Select a compliance status</Caption1>
               )}
             </div>
 
             <div className={classes.formField}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Notes <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <Textarea value={form.riskNotes} onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
                 placeholder="Document specific risk findings, vulnerabilities, or compliance gaps…" resize="vertical" rows={3} />
               {submitAttempted && !form.riskNotes.trim() && (
-                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Risk notes are required</Caption1>
+                <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Risk notes are required</Caption1>
               )}
             </div>
 
             <div className={classes.formField} style={{ marginBottom: isApp ? '14px' : 0 }}>
-              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Admin Notes <span style={{ color: '#c50f1f' }}>*</span></Text>
+              <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Admin Notes <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <Textarea value={form.notes} onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
                 placeholder="General notes, remediation steps, or context for this resource…" resize="vertical" rows={3} />
               {submitAttempted && !form.notes.trim() && (
-                <Caption1 style={{ color: '#c50f1f', display: 'block', marginTop: '4px' }}>Admin notes are required</Caption1>
+                <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Admin notes are required</Caption1>
               )}
             </div>
 
@@ -407,8 +407,8 @@ function AssessmentSidePanel({
                         </span>
                         <span style={{
                           padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, flexShrink: 0,
-                          color: p.roleName === 'Owner' ? '#004578' : p.roleName === 'CanEdit' ? '#8764b8' : '#605e5c',
-                          backgroundColor: p.roleName === 'Owner' ? '#cfe4fa' : p.roleName === 'CanEdit' ? '#f0ebf8' : '#f3f2f1',
+                          color: p.roleName === 'Owner' ? tokens.colorBrandForeground2 : p.roleName === 'CanEdit' ? tokens.colorPalettePurpleForeground2 : tokens.colorNeutralForeground3,
+                          backgroundColor: p.roleName === 'Owner' ? tokens.colorBrandBackground2 : p.roleName === 'CanEdit' ? tokens.colorPalettePurpleBackground2 : tokens.colorNeutralBackground3,
                         }}>{p.roleName}</span>
                       </div>
                     ))}
@@ -531,27 +531,27 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
 
   if (assessmentsError) {
     return (
-      <div style={{ padding: '16px', backgroundColor: '#fde7e9', border: '1px solid #c50f1f', borderRadius: '4px' }}>
-        <Text style={{ fontSize: '13px', fontWeight: 600, color: '#c50f1f' }}>Failed to load assessments from Azure Table Storage</Text>
+      <div style={{ padding: '16px', backgroundColor: tokens.colorStatusDangerBackground1, border: `1px solid ${tokens.colorStatusDangerBorder1}`, borderRadius: '4px' }}>
+        <Text style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorStatusDangerForeground1 }}>Failed to load assessments from Azure Table Storage</Text>
         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>{assessmentsError.message}</Caption1>
       </div>
     )
   }
 
   const riskSummaryItems: Array<{ key: RiskFilter; color: string; label: string; icon: React.ReactNode; count: number }> = [
-    { key: 'Critical',    color: '#c50f1f', label: 'Critical',     icon: <ErrorCircleRegular fontSize={24} style={{ color: '#c50f1f' }} />,   count: riskCounts.Critical },
-    { key: 'High',        color: '#e17800', label: 'High',         icon: <WarningRegular fontSize={24} style={{ color: '#e17800' }} />,        count: riskCounts.High },
-    { key: 'Medium',      color: '#8764b8', label: 'Medium',       icon: <InfoRegular fontSize={24} style={{ color: '#8764b8' }} />,           count: riskCounts.Medium },
-    { key: 'Low',         color: '#107c10', label: 'Low',          icon: <CheckmarkCircleRegular fontSize={24} style={{ color: '#107c10' }} />, count: riskCounts.Low },
-    { key: 'NotAssessed', color: '#616161', label: 'Not Assessed', icon: <ShieldRegular fontSize={24} style={{ color: '#616161' }} />,         count: riskCounts.NotAssessed },
+    { key: 'Critical',    color: tokens.colorStatusDangerForeground1, label: 'Critical',     icon: <ErrorCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,   count: riskCounts.Critical },
+    { key: 'High',        color: tokens.colorStatusWarningForeground1, label: 'High',         icon: <WarningRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,        count: riskCounts.High },
+    { key: 'Medium',      color: tokens.colorPalettePurpleForeground2, label: 'Medium',       icon: <InfoRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />,           count: riskCounts.Medium },
+    { key: 'Low',         color: tokens.colorStatusSuccessForeground1, label: 'Low',          icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />, count: riskCounts.Low },
+    { key: 'NotAssessed', color: tokens.colorNeutralForeground3, label: 'Not Assessed', icon: <ShieldRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,         count: riskCounts.NotAssessed },
   ]
 
   const complianceSummaryItems: Array<{ key: ComplianceStatus; color: string; label: string; icon: React.ReactNode; count: number }> = [
-    { key: 'Non-Compliant', color: '#c50f1f', label: 'Non-Compliant', icon: <DismissCircleRegular fontSize={24} style={{ color: '#c50f1f' }} />,    count: complianceCounts['Non-Compliant'] },
-    { key: 'In Review',     color: '#004578', label: 'In Review',     icon: <ClockRegular fontSize={24} style={{ color: '#004578' }} />,             count: complianceCounts['In Review'] },
-    { key: 'Not Reviewed',  color: '#616161', label: 'Not Reviewed',  icon: <QuestionCircleRegular fontSize={24} style={{ color: '#616161' }} />,    count: complianceCounts['Not Reviewed'] },
-    { key: 'Compliant',     color: '#107c10', label: 'Compliant',     icon: <CheckmarkCircleRegular fontSize={24} style={{ color: '#107c10' }} />,   count: complianceCounts['Compliant'] },
-    { key: 'Exempted',      color: '#e17800', label: 'Exempted',      icon: <ShieldCheckmarkRegular fontSize={24} style={{ color: '#e17800' }} />,   count: complianceCounts['Exempted'] },
+    { key: 'Non-Compliant', color: tokens.colorStatusDangerForeground1, label: 'Non-Compliant', icon: <DismissCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,    count: complianceCounts['Non-Compliant'] },
+    { key: 'In Review',     color: tokens.colorBrandForeground1, label: 'In Review',     icon: <ClockRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />,             count: complianceCounts['In Review'] },
+    { key: 'Not Reviewed',  color: tokens.colorNeutralForeground3, label: 'Not Reviewed',  icon: <QuestionCircleRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,    count: complianceCounts['Not Reviewed'] },
+    { key: 'Compliant',     color: tokens.colorStatusSuccessForeground1, label: 'Compliant',     icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />,   count: complianceCounts['Compliant'] },
+    { key: 'Exempted',      color: tokens.colorStatusWarningForeground1, label: 'Exempted',      icon: <ShieldCheckmarkRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,   count: complianceCounts['Exempted'] },
   ]
 
   const sectionLabel: React.CSSProperties = {
@@ -672,7 +672,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
       {/* Resource table */}
       <div className={classes.card}>
         <div className={classes.cardHead}>
-          <ShieldRegular fontSize={16} style={{ color: '#004578' }} />
+          <ShieldRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />
           Resource Risk Assessments
           <Badge appearance="tint" color="subtle" size="small">{filtered.length} resource{filtered.length !== 1 ? 's' : ''}</Badge>
           {(riskFilter !== 'All' || complianceFilter !== 'All') && (
@@ -723,7 +723,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                               style={{
                                 background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                                 display: 'block', width: '100%', textAlign: 'left',
-                                fontSize: '13px', fontWeight: 600, color: '#0078d4',
+                                fontSize: '13px', fontWeight: 600, color: tokens.colorBrandForeground1,
                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               }}
                             >

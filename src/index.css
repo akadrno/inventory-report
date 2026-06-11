@@ -7,8 +7,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling — neutral translucent so it reads on both light and dark themes */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d1d1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.7); }

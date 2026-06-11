@@ -537,7 +537,7 @@ function EnvironmentListTable({
             <select
               value={pageSize}
               onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
-              style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff', cursor: 'pointer', marginLeft: '4px' }}
+              style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${tokens.colorNeutralStroke1}`, color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1, cursor: 'pointer', marginLeft: '4px' }}
             >
               {ENV_PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n} per page</option>)}
             </select>

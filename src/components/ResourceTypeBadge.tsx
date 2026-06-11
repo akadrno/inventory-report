@@ -1,4 +1,4 @@
-import { Badge } from '@fluentui/react-components'
+import { Badge, tokens } from '@fluentui/react-components'
 import { getResourceCategory } from '../types'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 
@@ -48,7 +48,7 @@ export function ResourceTypeBadge({ type, kind }: ResourceTypeBadgeProps) {
         color="subtle"
         size="small"
         icon={<CategoryIcon category={category} size={12} />}
-        style={{ backgroundColor: '#f0f0f0', color: '#000', borderColor: '#d0d0d0' }}
+        style={{ backgroundColor: tokens.colorNeutralBackground3, color: tokens.colorNeutralForeground1, borderColor: tokens.colorNeutralStroke2 }}
       >
         {label}
       </Badge>

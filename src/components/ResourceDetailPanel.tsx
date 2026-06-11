@@ -225,7 +225,7 @@ const useClasses = makeStyles({
     width: '28px', height: '28px',
     borderRadius: '6px',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: '#fff',
+    color: tokens.colorNeutralForegroundOnBrand,
     fontSize: '12px', fontWeight: 700, lineHeight: 1,
     flexShrink: 0,
   },
@@ -264,12 +264,12 @@ const useClasses = makeStyles({
 
   // Usage tab
   banner: {
-    backgroundColor: '#f3f9fd',
-    border: '1px solid #cfe4fa',
+    backgroundColor: tokens.colorBrandBackground2,
+    border: `1px solid ${tokens.colorBrandStroke2}`,
     borderRadius: '4px',
     padding: '10px 14px',
     fontSize: '12px',
-    color: '#003966',
+    color: tokens.colorBrandForeground2,
     display: 'flex', alignItems: 'flex-start', gap: '8px',
   },
 
@@ -323,7 +323,7 @@ function ConnectorChip({ connectorId, meta }: { connectorId: string; meta?: Conn
     return (
       <span
         className={classes.connectorChip}
-        style={{ backgroundColor: '#fff', border: `1px solid ${tokens.colorNeutralStroke2}`, padding: '3px' }}
+        style={{ backgroundColor: tokens.colorNeutralBackground1, border: `1px solid ${tokens.colorNeutralStroke2}`, padding: '3px' }}
         title={displayName}
         aria-label={displayName}
       >

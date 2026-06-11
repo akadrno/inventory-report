@@ -275,8 +275,8 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
         {[
           { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: makers.length, label: 'Unique Makers' },
           { icon: <GlobeRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />, value: allEnvironments.length, label: 'Environments' },
-          { icon: <PersonRegular fontSize={24} style={{ color: '#e17800' }} />, value: unmanagedMakers.length, label: 'In Unmanaged Envs' },
-          { icon: <PersonRegular fontSize={24} style={{ color: '#8764b8' }} />, value: avgResources, label: 'Avg Resources/Maker' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />, value: unmanagedMakers.length, label: 'In Unmanaged Envs' },
+          { icon: <PersonRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />, value: avgResources, label: 'Avg Resources/Maker' },
         ].map(s => (
           <div key={s.label} className={classes.summaryCard}>
             {s.icon}
@@ -292,7 +292,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
       {(unmanagedMakers.length > 0 || multiEnvMakers.length > 0) && (
         <div className={classes.card}>
           <div className={classes.cardHead}>
-            <WarningRegular fontSize={16} style={{ color: '#e17800' }} />
+            <WarningRegular fontSize={16} style={{ color: tokens.colorStatusWarningForeground1 }} />
             Governance Risk Flags
             <Badge appearance="tint" color="warning" size="small">
               {unmanagedMakers.length + multiEnvMakers.length} issue{unmanagedMakers.length + multiEnvMakers.length !== 1 ? 's' : ''}
@@ -300,7 +300,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
           </div>
           {unmanagedMakers.map(m => (
             <div key={m.id + '-unmanaged'} className={classes.flagRow}>
-              <WarningRegular fontSize={14} style={{ color: '#e17800', flexShrink: 0, marginTop: 2 }} />
+              <WarningRegular fontSize={14} style={{ color: tokens.colorStatusWarningForeground1, flexShrink: 0, marginTop: 2 }} />
               <div>
                 <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>{m.displayName}</Text>
                 <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
@@ -311,7 +311,7 @@ export function MakerAnalyticsView({ allResources, allEnvironments, ownerNames }
           ))}
           {multiEnvMakers.filter(m => !m.hasUnmanagedEnv).map(m => (
             <div key={m.id + '-spread'} className={classes.flagRow}>
-              <GlobeRegular fontSize={14} style={{ color: '#8764b8', flexShrink: 0, marginTop: 2 }} />
+              <GlobeRegular fontSize={14} style={{ color: tokens.colorPalettePurpleForeground2, flexShrink: 0, marginTop: 2 }} />
               <div>
                 <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>{m.displayName}</Text>
                 <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>

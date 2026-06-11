@@ -363,15 +363,49 @@ function NavItem({ icon, label, active, onClick, collapsed }: { icon: React.Reac
   if (collapsed) {
     return (
       <button className={active ? classes.navIconBtnActive : classes.navIconBtn} onClick={onClick} title={label}>
-        <span style={{ fontSize: 20, color: active ? ACTIVE : '#616161', lineHeight: 1 }}>{icon}</span>
+        <span style={{ fontSize: 20, color: active ? ACTIVE : MUTED, lineHeight: 1 }}>{icon}</span>
       </button>
     )
   }
   return (
     <button className={active ? classes.navItemActive : classes.navItem} onClick={onClick}>
-      <span style={{ fontSize: 20, color: active ? ACTIVE : '#616161', flexShrink: 0, lineHeight: 1 }}>{icon}</span>
+      <span style={{ fontSize: 20, color: active ? ACTIVE : MUTED, flexShrink: 0, lineHeight: 1 }}>{icon}</span>
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
     </button>
+  )
+}
+
+// ── Secondary nav panel (shared chrome: title + collapse/expand toggle) ───────
+
+function NavPanel({
+  title, panelOpen, setPanelOpen, children,
+}: {
+  title: string
+  panelOpen: boolean
+  setPanelOpen: (open: boolean) => void
+  children: React.ReactNode
+}) {
+  const classes = useClasses()
+  const toggleBtn = {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: MUTED, display: 'flex', borderRadius: '4px',
+  } as const
+  return (
+    <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
+      {panelOpen ? (
+        <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{title}</span>
+          <button onClick={() => setPanelOpen(false)} style={{ ...toggleBtn, padding: '4px' }} title="Collapse" aria-label="Collapse navigation">
+            <ChevronLeftRegular fontSize={16} />
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => setPanelOpen(true)} style={{ ...toggleBtn, padding: '6px', marginBottom: '4px' }} title="Expand" aria-label="Expand navigation">
+          <ChevronRightRegular fontSize={16} />
+        </button>
+      )}
+      {children}
+    </div>
   )
 }
 
@@ -399,7 +433,6 @@ function GovOverviewPage({
 
   const envCount = allEnvironments.length
   const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
-  const allManaged = envCount > 0 && managedCount === envCount
 
   if (drillDown === 'unmanaged-envs') {
     return <EnvironmentDrillDown allEnvironments={allEnvironments} allResources={allResources} onBack={() => setDrillDown(null)} />
@@ -410,33 +443,36 @@ function GovOverviewPage({
       {/* Summary cards */}
       <div className={classes.summaryGrid}>
         <div className={classes.summaryCard}
-          style={{ backgroundColor: '#fde7e9', borderColor: '#c50f1f', cursor: 'pointer' }}
-          onClick={onRecsClick} role="button"
+          style={{ backgroundColor: tokens.colorStatusDangerBackground1, borderColor: tokens.colorStatusDangerBorder1, cursor: 'pointer' }}
+          onClick={onRecsClick} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRecsClick() } }}
         >
-          <ErrorCircleRegular fontSize={28} style={{ color: '#c50f1f', flexShrink: 0 }} />
+          <ErrorCircleRegular fontSize={28} style={{ color: tokens.colorStatusDangerForeground1, flexShrink: 0 }} />
           <div>
-            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{criticalCount}</Text>
-            <Caption1 style={{ color: '#605e5c' }}>Critical</Caption1>
+            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: tokens.colorStatusDangerForeground1 }}>{criticalCount}</Text>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Critical</Caption1>
           </div>
         </div>
         <div className={classes.summaryCard}
-          style={{ backgroundColor: '#fff4ce', borderColor: '#e17800', cursor: 'pointer' }}
-          onClick={onRecsClick} role="button"
+          style={{ backgroundColor: tokens.colorStatusWarningBackground1, borderColor: tokens.colorStatusWarningBorder1, cursor: 'pointer' }}
+          onClick={onRecsClick} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRecsClick() } }}
         >
-          <WarningRegular fontSize={28} style={{ color: '#e17800', flexShrink: 0 }} />
+          <WarningRegular fontSize={28} style={{ color: tokens.colorStatusWarningForeground1, flexShrink: 0 }} />
           <div>
-            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#242424' }}>{warningCount}</Text>
-            <Caption1 style={{ color: '#605e5c' }}>Warnings</Caption1>
+            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: tokens.colorStatusWarningForeground2 }}>{warningCount}</Text>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Warnings</Caption1>
           </div>
         </div>
         <div className={classes.summaryCard}
-          style={{ backgroundColor: allManaged ? '#cfe4fa' : '#ddeeff', borderWidth: '2px', borderColor: '#004578', cursor: 'pointer' }}
-          onClick={onEnvsClick} role="button"
+          style={{ backgroundColor: tokens.colorBrandBackground2, borderWidth: '2px', borderColor: tokens.colorBrandStroke1, cursor: 'pointer' }}
+          onClick={onEnvsClick} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEnvsClick() } }}
         >
-          <ShieldCheckmarkRegular fontSize={28} style={{ color: '#004578', flexShrink: 0 }} />
+          <ShieldCheckmarkRegular fontSize={28} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
           <div>
-            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: '#004578' }}>{managedCount}/{envCount}</Text>
-            <Caption1 style={{ color: '#003966' }}>Managed Environments</Caption1>
+            <Text style={{ display: 'block', fontSize: '28px', fontWeight: 700, lineHeight: 1, color: tokens.colorBrandForeground1 }}>{managedCount}/{envCount}</Text>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Managed Environments</Caption1>
           </div>
         </div>
       </div>
@@ -457,15 +493,18 @@ function GovOverviewPage({
               <div key={i} className={classes.insightRow}
                 style={{ cursor: clickable ? 'pointer' : 'default' }}
                 onClick={clickable ? () => setDrillDown(insight.drillDownKey!) : undefined}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={clickable ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrillDown(insight.drillDownKey!) } }) : undefined}
               >
                 <div style={{ marginTop: 2, flexShrink: 0 }}>
-                  {insight.severity === 'critical' && <ErrorCircleRegular fontSize={16} style={{ color: '#c50f1f' }} />}
-                  {insight.severity === 'warning' && <WarningRegular fontSize={16} style={{ color: '#e17800' }} />}
-                  {insight.severity === 'info' && <InfoRegular fontSize={16} style={{ color: '#616161' }} />}
+                  {insight.severity === 'critical' && <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorStatusDangerForeground1 }} />}
+                  {insight.severity === 'warning' && <WarningRegular fontSize={16} style={{ color: tokens.colorStatusWarningForeground1 }} />}
+                  {insight.severity === 'info' && <InfoRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3 }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: TEXT }}>{insight.title}</Text>
-                  <Caption1 style={{ color: '#605e5c' }}>{insight.detail}</Caption1>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{insight.detail}</Caption1>
                 </div>
                 {clickable && <ChevronRightRegular fontSize={14} style={{ color: MUTED, flexShrink: 0, marginTop: 2 }} />}
               </div>
@@ -540,30 +579,30 @@ function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: '#fde7e9', borderLeftColor: '#c50f1f' }}>
+        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusDangerBackground1, borderLeftColor: tokens.colorStatusDangerBorder1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: '#c50f1f' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>No DLP policies found — all connectors unrestricted</Text>
+            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorStatusDangerForeground1 }} />
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>No DLP policies found — all connectors unrestricted</Text>
           </div>
-          <Caption1 style={{ color: '#605e5c' }}>Without DLP policies, any connector can communicate with any other. Sensitive data can be exfiltrated with no audit trail.</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Without DLP policies, any connector can communicate with any other. Sensitive data can be exfiltrated with no audit trail.</Caption1>
         </div>
       )}
       {allInGeneral && !hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: '#fde7e9', borderLeftColor: '#c50f1f' }}>
+        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusDangerBackground1, borderLeftColor: tokens.colorStatusDangerBorder1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: '#c50f1f' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>All connectors in General — no data separation</Text>
+            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorStatusDangerForeground1 }} />
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>All connectors in General — no data separation</Text>
           </div>
-          <Caption1 style={{ color: '#605e5c' }}>Move sensitive connectors (Dataverse, SharePoint, SQL, Office 365) to the Confidential group.</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Move sensitive connectors (Dataverse, SharePoint, SQL, Office 365) to the Confidential group.</Caption1>
         </div>
       )}
       {noBlocked && !hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: '#fff4ce', borderLeftColor: '#e17800' }}>
+        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusWarningBackground1, borderLeftColor: tokens.colorStatusWarningBorder1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <WarningRegular fontSize={16} style={{ color: '#e17800' }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: '#242424' }}>No connectors in the Blocked group</Text>
+            <WarningRegular fontSize={16} style={{ color: tokens.colorStatusWarningForeground1 }} />
+            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>No connectors in the Blocked group</Text>
           </div>
-          <Caption1 style={{ color: '#605e5c' }}>Block the HTTP connector and custom connectors to prevent arbitrary external data flows.</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Block the HTTP connector and custom connectors to prevent arbitrary external data flows.</Caption1>
         </div>
       )}
 
@@ -862,7 +901,7 @@ function LicensingProductPage({ product, skus }: { product: LicensingView; skus:
                       <td className={classes.tdR}>{consumed.toLocaleString()}</td>
                       <td className={classes.tdR}>
                         {over ? (
-                          <span style={{ color: '#c50f1f', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                          <span style={{ color: tokens.colorStatusDangerForeground1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                             <WarningRegular fontSize={14} />
                             {consumed.toLocaleString()}
                           </span>
@@ -924,7 +963,7 @@ function LicensingProductPage({ product, skus }: { product: LicensingView; skus:
                   <td className={classes.tdR}>{avail.toLocaleString()}</td>
                   <td className={classes.tdR}>{used.toLocaleString()}</td>
                   <td className={classes.tdR}>
-                    <span style={{ color: over ? '#c50f1f' : pct >= 90 ? '#e17800' : undefined }}>
+                    <span style={{ color: over ? tokens.colorStatusDangerForeground1 : pct >= 90 ? tokens.colorStatusWarningForeground1 : undefined }}>
                       {avail > 0 ? `${pct}%` : '—'}
                     </span>
                   </td>
@@ -1328,19 +1367,7 @@ export function Shell() {
 
         {/* Secondary panel */}
         {rail === 'inventory' && (
-          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
-            {panelOpen ? (
-              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>Inventory</span>
-                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
-                  <ChevronLeftRegular fontSize={16} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
-                <ChevronRightRegular fontSize={16} />
-              </button>
-            )}
+          <NavPanel title="Inventory" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<GridRegular />} label="All Resources" active={invView === 'all'} onClick={() => setInvView('all')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
@@ -1348,23 +1375,11 @@ export function Shell() {
             <NavItem icon={<DatabaseRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
             <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />
-          </div>
+          </NavPanel>
         )}
 
         {rail === 'governance' && (
-          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
-            {panelOpen ? (
-              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>Governance</span>
-                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
-                  <ChevronLeftRegular fontSize={16} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
-                <ChevronRightRegular fontSize={16} />
-              </button>
-            )}
+          <NavPanel title="Governance" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<ShieldCheckmarkRegular />} label="Overview" active={govView === 'overview'} onClick={() => setGovView('overview')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />
             <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />
@@ -1373,67 +1388,31 @@ export function Shell() {
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
             <NavItem icon={<GridRegular />} label="Maker Analytics" active={govView === 'maker-analytics'} onClick={() => setGovView('maker-analytics')} collapsed={!panelOpen} />
             <NavItem icon={<ShieldRegular />} label="Risk Assessments" active={govView === 'risk-assessments'} onClick={() => setGovView('risk-assessments')} collapsed={!panelOpen} />
-          </div>
+          </NavPanel>
         )}
 
         {rail === 'usage' && (
-          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
-            {panelOpen ? (
-              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>Usage</span>
-                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
-                  <ChevronLeftRegular fontSize={16} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
-                <ChevronRightRegular fontSize={16} />
-              </button>
-            )}
+          <NavPanel title="Usage" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<ChartMultipleRegular />} label="Overview" active={usageView === 'overview'} onClick={() => setUsageView('overview')} collapsed={!panelOpen} />
             <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />
-          </div>
+          </NavPanel>
         )}
 
         {rail === 'tags' && (
-          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
-            {panelOpen ? (
-              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>Resource Tagging</span>
-                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
-                  <ChevronLeftRegular fontSize={16} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
-                <ChevronRightRegular fontSize={16} />
-              </button>
-            )}
+          <NavPanel title="Resource Tagging" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<TagRegular />} label="Resources" active={tagView === 'browser'} onClick={() => setTagView('browser')} collapsed={!panelOpen} />
             <NavItem icon={<BookmarkRegular />} label="Term Store" active={tagView === 'termstore'} onClick={() => setTagView('termstore')} collapsed={!panelOpen} />
-          </div>
+          </NavPanel>
         )}
 
         {rail === 'licensing' && (
-          <div className={panelOpen ? classes.panel : classes.panelCollapsed}>
-            {panelOpen ? (
-              <div className={classes.panelHeader} style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>Licensing</span>
-                <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: MUTED, display: 'flex', borderRadius: '4px' }} title="Collapse">
-                  <ChevronLeftRegular fontSize={16} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setPanelOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: MUTED, display: 'flex', borderRadius: '4px', marginBottom: '4px' }} title="Expand">
-                <ChevronRightRegular fontSize={16} />
-              </button>
-            )}
+          <NavPanel title="Licensing" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />
             {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />
             <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Copilot Studio" active={licView === 'copilot-studio'} onClick={() => setLicView('copilot-studio')} collapsed={!panelOpen} />
-          </div>
+          </NavPanel>
         )}
 
         {/* Main content */}

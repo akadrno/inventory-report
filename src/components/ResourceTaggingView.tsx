@@ -596,7 +596,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
                 <select
                   value={pageSize}
                   onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
-                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d1d1', color: '#323130', backgroundColor: '#ffffff', cursor: 'pointer', marginLeft: '4px' }}
+                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${tokens.colorNeutralStroke1}`, color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1, cursor: 'pointer', marginLeft: '4px' }}
                 >
                   {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n} per page</option>)}
                 </select>
@@ -966,10 +966,10 @@ export function ResourceTaggingView({ allResources, allEnvironments, currentUser
     return (
       <div className={classes.root}>
         <div className={classes.setupNotice}>
-          <InfoRegular fontSize={20} style={{ color: '#7a5c00', marginTop: 2, flexShrink: 0 }} />
+          <InfoRegular fontSize={20} style={{ color: tokens.colorStatusWarningForeground1, marginTop: 2, flexShrink: 0 }} />
           <div>
-            <Text weight="semibold" style={{ display: 'block', color: '#7a5c00' }}>Azure Table Storage not configured</Text>
-            <Caption1 style={{ color: '#605e5c', display: 'block', marginTop: 4 }}>
+            <Text weight="semibold" style={{ display: 'block', color: tokens.colorStatusWarningForeground1 }}>Azure Table Storage not configured</Text>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: 4 }}>
               Set <code>VITE_STORAGE_ACCOUNT</code> and <code>VITE_TABLE_SAS</code> to enable cloud storage.
               Tags will be saved to browser local storage in the meantime.
             </Caption1>

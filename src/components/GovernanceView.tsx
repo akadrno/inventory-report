@@ -984,9 +984,9 @@ export function CrossTenantSection({
       </div>
 
       {(isUpdating || generating) && (
-        <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966' }}>
+        <div className={classes.permissionNotice} style={{ backgroundColor: tokens.colorBrandBackground2, color: tokens.colorBrandForeground2 }}>
           <Spinner size="extra-tiny" />
-          <Caption1 style={{ color: '#003966' }}>
+          <Caption1 style={{ color: tokens.colorBrandForeground2 }}>
             {isUpdating
               ? 'The cross-tenant connection report is being updated…'
               : 'The report is still generating on the service. Use Refresh in a moment to pull the latest results.'}
@@ -1162,7 +1162,7 @@ function InlineConnectorChip({ connectorId }: { connectorId: string }) {
       style={{
         width: '22px', height: '22px', borderRadius: '5px',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', fontSize: '11px', fontWeight: 700, lineHeight: 1,
+        color: tokens.colorNeutralForegroundOnBrand, fontSize: '11px', fontWeight: 700, lineHeight: 1,
         backgroundColor: info.color, flexShrink: 0,
       }}
     >
@@ -1547,9 +1547,9 @@ export function ConnectionsSection({
   )
 
   const updatingNotice = isUpdating && (
-    <div className={classes.permissionNotice} style={{ backgroundColor: '#f3f9fd', color: '#003966', borderRadius: tokens.borderRadiusLarge }}>
+    <div className={classes.permissionNotice} style={{ backgroundColor: tokens.colorBrandBackground2, color: tokens.colorBrandForeground2, borderRadius: tokens.borderRadiusLarge }}>
       <Spinner size="extra-tiny" />
-      <Caption1 style={{ color: '#003966' }}>Refreshing connections across all environments…</Caption1>
+      <Caption1 style={{ color: tokens.colorBrandForeground2 }}>Refreshing connections across all environments…</Caption1>
     </div>
   )
 
@@ -1835,14 +1835,14 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
             <div
               className={classes.summaryCard}
               style={{
-                backgroundColor: allManaged ? '#cfe4fa' : '#ddeeff',
-                border: `2px solid #004578`,
+                backgroundColor: allManaged ? tokens.colorBrandBackground2 : tokens.colorBrandBackground2,
+                border: `2px solid ${tokens.colorBrandStroke1}`,
               }}
             >
-              <ShieldCheckmarkRegular fontSize={24} style={{ color: '#004578' }} />
+              <ShieldCheckmarkRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
               <div>
-                <Text size={500} weight="semibold" style={{ display: 'block', color: '#004578' }}>{managedCount}/{envCount}</Text>
-                <Caption1 style={{ color: '#003966' }}>Managed Environments</Caption1>
+                <Text size={500} weight="semibold" style={{ display: 'block', color: tokens.colorBrandForeground1 }}>{managedCount}/{envCount}</Text>
+                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Managed Environments</Caption1>
               </div>
             </div>
           )
