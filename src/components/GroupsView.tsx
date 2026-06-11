@@ -55,9 +55,27 @@ const useClasses = makeStyles({
     gap: tokens.spacingVerticalM,
   },
   groupCard: {
+    position: 'relative',
+    overflow: 'hidden',
     cursor: 'pointer',
     userSelect: 'none',
+    boxShadow: tokens.shadow8,
+    transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+    ':hover': { transform: 'translateY(-3px)', border: '1px solid var(--acc)', boxShadow: tokens.shadow28 },
   },
+  gcGlow: {
+    position: 'absolute', top: '-55px', right: '-45px',
+    width: '180px', height: '180px', borderRadius: '50%',
+    filter: 'blur(50px)', opacity: 0.32, pointerEvents: 'none', zIndex: 0,
+  },
+  gcGrid: {
+    position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+    backgroundImage: 'linear-gradient(rgba(127,127,127,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(127,127,127,0.06) 1px, transparent 1px)',
+    backgroundSize: '22px 22px',
+    maskImage: 'radial-gradient(ellipse 75% 65% at 78% 0%, #000, transparent 72%)',
+    WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 78% 0%, #000, transparent 72%)',
+  },
+  gcContent: { position: 'relative', zIndex: 1 },
   cardIconRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -735,38 +753,51 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
 // Group card
 // ---------------------------------------------------------------------------
 
-function GroupCard({ group, envCount, onClick, onViewRules }: { group: ResourceItem; envCount: number; onClick: () => void; onViewRules: () => void }) {
+const GROUP_ACCENT = '#e6a23c' // warm amber, matching the folder glyph
+
+function GroupCard({ group, envCount, index, onClick, onViewRules }: { group: ResourceItem; envCount: number; index: number; onClick: () => void; onViewRules: () => void }) {
   const classes = useClasses()
   const name = getDisplayName(group)
   const desc = (group.properties?.['description'] as string | undefined) ?? ''
 
+  const cardStyle = {
+    '--acc': GROUP_ACCENT,
+    backgroundImage: `linear-gradient(160deg, ${GROUP_ACCENT}1f, transparent 55%)`,
+    animation: 'ppFadeUp 0.45s both',
+    animationDelay: `${Math.min(index, 12) * 0.04}s`,
+  } as React.CSSProperties
+
   return (
-    <Card className={classes.groupCard} onClick={onClick}>
-      <div className={classes.cardIconRow}>
-        <div className={classes.iconBox}>
-          <FolderOpenRegular />
+    <Card className={classes.groupCard} style={cardStyle} onClick={onClick}>
+      <div className={classes.gcGlow} style={{ background: GROUP_ACCENT }} />
+      <div className={classes.gcGrid} />
+      <div className={classes.gcContent}>
+        <div className={classes.cardIconRow}>
+          <div className={classes.iconBox}>
+            <FolderOpenRegular />
+          </div>
+          <ChevronRightRegular style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }} />
         </div>
-        <ChevronRightRegular style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }} />
-      </div>
-      <Text weight="semibold" block style={{ marginBottom: desc ? tokens.spacingVerticalXS : 0 }}>
-        {name}
-      </Text>
-      {desc && (
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {desc}
-        </Caption1>
-      )}
-      <div className={classes.cardFooter}>
-        <GlobeRegular fontSize={14} />
-        <Caption1>{envCount} environment{envCount !== 1 ? 's' : ''}</Caption1>
-        <div style={{ flex: 1 }} />
-        <Button
-          appearance="subtle"
-          icon={<ShieldRegular fontSize={14} />}
-          size="small"
-          title="View rules & policies"
-          onClick={e => { e.stopPropagation(); onViewRules() }}
-        />
+        <Text weight="semibold" block style={{ marginBottom: desc ? tokens.spacingVerticalXS : 0 }}>
+          {name}
+        </Text>
+        {desc && (
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {desc}
+          </Caption1>
+        )}
+        <div className={classes.cardFooter}>
+          <GlobeRegular fontSize={14} />
+          <Caption1>{envCount} environment{envCount !== 1 ? 's' : ''}</Caption1>
+          <div style={{ flex: 1 }} />
+          <Button
+            appearance="subtle"
+            icon={<ShieldRegular fontSize={14} />}
+            size="small"
+            title="View rules & policies"
+            onClick={e => { e.stopPropagation(); onViewRules() }}
+          />
+        </div>
       </div>
     </Card>
   )
@@ -889,10 +920,11 @@ export function GroupsView({ groups, environments, allResources, ownerNames, isL
         </div>
       ) : (
         <div className={classes.grid}>
-          {filteredGroups.map(group => (
+          {filteredGroups.map((group, i) => (
             <GroupCard
               key={group.id}
               group={group}
+              index={i}
               envCount={envCountByGroup.get(group.id) ?? 0}
               onClick={() => setSelectedGroup(group)}
               onViewRules={() => { setRulesGroup(group); setRulesPanelOpen(true) }}

@@ -1,507 +1,258 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
-import { ChartMultipleRegular } from '@fluentui/react-icons'
+import {
+  ChartMultipleRegular, GlobeRegular, PeopleRegular, ChevronRightRegular,
+  PulseRegular, InfoRegular,
+} from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
-import { getDisplayName, getResourceCategory, getOwnerFromProperties } from '../types'
-import { useThemeMode } from '../context/ThemeContext'
+import { getResourceCategory } from '../types'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
-import { ResourceTypeBadge } from './ResourceTypeBadge'
-import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
-import { formatLocalDateTime } from '../utils/format'
-import { ResourceDetailPanel } from './ResourceDetailPanel'
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type Category = 'apps' | 'flows' | 'agents'
+import { useSignInCache } from '../context/SignInCacheContext'
+import {
+  type Category, PRODUCT,
+  inventoryHealth, creationTrend,
+  powerPlatformSignIns, signInsForCategory, signInStats, dailyTrend, countBy,
+  KpiRow, KpiCard, SectionCard, BarList, SegmentBar, TrendBars, Grid2,
+} from './usageShared'
 
 interface UsageViewProps {
   allResources: ResourceItem[]
   allEnvironments: ResourceItem[]
   ownerNames: Map<string, string>
+  onOpenCategory?: (c: Category) => void
+  onOpenHeatmap?: () => void
 }
 
-const PRODUCT_META: Record<Category, {
-  label: string
-  category: Category
-  icon: React.ReactNode
-  color: string
-  countNoun: string
-  topNoun: string
-}> = {
-  apps: {
-    label: 'Power Apps', category: 'apps',
-    icon: <PowerAppsIcon fontSize={22} />, color: '#742774',
-    countNoun: 'Apps', topNoun: 'Top apps by recent activity',
-  },
-  flows: {
-    label: 'Power Automate', category: 'flows',
-    icon: <PowerAutomateIcon fontSize={22} />, color: '#0066ff',
-    countNoun: 'Flows', topNoun: 'Top flows by recent activity',
-  },
-  agents: {
-    label: 'Copilot Studio', category: 'agents',
-    icon: <CopilotStudioIcon fontSize={22} />, color: '#19c4d4',
-    countNoun: 'Agents', topNoun: 'Top agents by recent activity',
-  },
+const PRODUCT_ICON: Record<Category, React.ReactNode> = {
+  apps: <PowerAppsIcon fontSize={20} />,
+  flows: <PowerAutomateIcon fontSize={20} />,
+  agents: <CopilotStudioIcon fontSize={20} />,
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const STROKE1 = tokens.colorNeutralStroke2
-const MUTED = tokens.colorNeutralForeground3
-const TEXT = tokens.colorNeutralForeground1
-const CARD_BG = tokens.colorNeutralBackground1
-const TH_BG = tokens.colorNeutralBackground3
-const ACTIVE_BLUE = tokens.colorBrandForeground1
-const HOVER_BG = tokens.colorSubtleBackgroundHover
-const BADGE_BG = tokens.colorNeutralBackground3
+// Staggered cinematic entrance for the overview blocks.
+const fadeUp = (delay: number): React.CSSProperties => ({ animation: 'ppFadeUp 0.5s both', animationDelay: `${delay}s` })
 
 const useClasses = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  introNote: {
-    backgroundColor: HOVER_BG,
-    border: `1px solid ${tokens.colorBrandStroke2}`,
-    borderRadius: '4px',
-    padding: '10px 14px',
-    fontSize: '12px',
-    color: tokens.colorBrandForeground2,
+  root: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  note: {
     display: 'flex', alignItems: 'flex-start', gap: '8px',
+    backgroundColor: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: '8px', padding: '10px 14px',
+    fontSize: '12px', color: tokens.colorNeutralForeground3,
   },
-  productGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '12px',
-    '@media (max-width: 960px)': { gridTemplateColumns: '1fr' },
-  },
+  productGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '12px' },
   productCard: {
-    backgroundColor: CARD_BG,
-    border: `1px solid ${STROKE1}`,
-    borderRadius: '8px',
-    padding: '16px',
+    position: 'relative', overflow: 'hidden',
+    minHeight: '520px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: '14px', padding: '18px',
     display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
+    cursor: 'pointer', textAlign: 'left',
+    boxShadow: tokens.shadow8,
+    transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+    ':hover': {
+      transform: 'translateY(-3px)',
+      border: '1px solid var(--acc)',
+      boxShadow: tokens.shadow28,
+    },
   },
-  productHeader: {
-    display: 'flex', alignItems: 'center', gap: '8px',
+  pcGlow: {
+    position: 'absolute', top: '-60px', right: '-50px',
+    width: '200px', height: '200px', borderRadius: '50%',
+    filter: 'blur(55px)', opacity: 0.4, pointerEvents: 'none', zIndex: 0,
   },
-  productTitle: { fontSize: '14px', fontWeight: 600, color: TEXT },
-  metricBlock: {
-    borderLeftWidth: '3px', borderLeftStyle: 'solid',
-    paddingLeft: '10px',
+  pcGrid: {
+    position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+    backgroundImage: 'linear-gradient(rgba(127,127,127,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(127,127,127,0.06) 1px, transparent 1px)',
+    backgroundSize: '24px 24px',
+    maskImage: 'radial-gradient(ellipse 75% 60% at 75% 0%, #000, transparent 72%)',
+    WebkitMaskImage: 'radial-gradient(ellipse 75% 60% at 75% 0%, #000, transparent 72%)',
   },
-  metricLabel: { fontSize: '12px', color: MUTED, display: 'block' },
-  metricValue: { fontSize: '28px', fontWeight: 700, color: TEXT, lineHeight: '1.1', display: 'block' },
-  trendsBox: {
-    border: `1px solid ${STROKE1}`,
-    borderRadius: '4px',
-    padding: '12px',
-    display: 'flex', flexDirection: 'column', gap: '8px',
+  pcContent: {
+    position: 'relative', zIndex: 1, flex: 1,
+    display: 'flex', flexDirection: 'column', gap: '12px',
   },
-  trendsTitle: { fontSize: '12px', color: MUTED },
-  topList: {
-    display: 'flex', flexDirection: 'column', gap: '6px',
-  },
-  topListTitle: { fontSize: '12px', color: MUTED, marginBottom: '4px' },
-  topItem: {
-    border: `1px solid ${STROKE1}`,
-    borderRadius: '4px',
-    padding: '8px 10px',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    gap: '8px',
-    cursor: 'pointer',
-    ':hover': { backgroundColor: HOVER_BG },
-  },
-  topItemBody: { minWidth: 0, flex: 1 },
-  topItemName: { fontSize: '13px', fontWeight: 600, color: TEXT, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  topItemSub: { fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' },
-  topItemBadge: {
-    backgroundColor: BADGE_BG,
-    color: TEXT,
-    border: `1px solid ${STROKE1}`,
-    borderRadius: '999px',
-    fontSize: '11px',
-    padding: '2px 8px',
-    fontWeight: 600,
-    flexShrink: 0,
-  },
-  tableCard: {
-    backgroundColor: CARD_BG,
-    border: `1px solid ${STROKE1}`,
-    borderRadius: '8px',
-    overflow: 'hidden',
-  },
-  tabBar: {
-    display: 'flex', gap: '4px',
-    borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
-    padding: '4px 12px 0',
-  },
-  tabButton: {
-    border: 'none', background: 'transparent',
-    padding: '10px 14px',
-    fontSize: '13px', fontWeight: 600, color: MUTED,
-    cursor: 'pointer',
-    borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: 'transparent',
-    marginBottom: '-1px',
-  },
-  tabButtonActive: {
-    border: 'none', background: 'transparent',
-    padding: '10px 14px',
-    fontSize: '13px', fontWeight: 600, color: ACTIVE_BLUE,
-    cursor: 'pointer',
-    borderBottomWidth: '2px', borderBottomStyle: 'solid', borderBottomColor: ACTIVE_BLUE,
-    marginBottom: '-1px',
-  },
-  tableCaption: {
-    padding: '12px 16px 8px',
-    fontSize: '12px', color: MUTED,
-  },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-  th: {
-    padding: '8px 16px', textAlign: 'left',
-    fontWeight: 600, fontSize: '12px', color: TEXT,
-    backgroundColor: TH_BG,
-    borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
-    whiteSpace: 'nowrap',
-  },
-  td: {
-    padding: '10px 16px',
-    borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
-    verticalAlign: 'middle',
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-    cursor: 'pointer',
-  },
-  tdMuted: {
-    padding: '10px 16px',
-    borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: STROKE1,
-    verticalAlign: 'middle', color: MUTED,
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-  },
-  rowHover: {
-    ':hover td': { backgroundColor: HOVER_BG },
-  },
-  emptyRow: {
-    padding: '32px 16px',
-    textAlign: 'center', color: MUTED, fontSize: '13px',
+  pcChart: { marginTop: 'auto' },
+  pcHead: { display: 'flex', alignItems: 'center', gap: '8px' },
+  pcIcon: { width: '34px', height: '34px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  pcTitle: { fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1, flex: 1 },
+  pcCount: { fontSize: '30px', fontWeight: 700, lineHeight: 1, color: tokens.colorNeutralForeground1, fontVariantNumeric: 'tabular-nums' },
+  pcStats: { display: 'flex', gap: '18px' },
+  pcStatVal: { fontSize: '15px', fontWeight: 600, color: tokens.colorNeutralForeground1, display: 'block', fontVariantNumeric: 'tabular-nums' },
+  pcStatLabel: { fontSize: '11px', color: tokens.colorNeutralForeground3 },
+  linkBtn: {
+    border: 'none', background: 'transparent', cursor: 'pointer',
+    color: tokens.colorBrandForeground1, fontSize: '12px', fontWeight: 600,
+    display: 'inline-flex', alignItems: 'center', gap: '2px', padding: 0,
   },
 })
 
-// ── Helpers: time extraction ──────────────────────────────────────────────────
-
-function getDate(r: ResourceItem, keys: string[]): Date | undefined {
-  const p = r.properties
-  if (!p) return undefined
-  for (const k of keys) {
-    const v = p[k]
-    if (typeof v === 'string' && v) {
-      const d = new Date(v)
-      if (!isNaN(d.getTime())) return d
-    }
-  }
-  return undefined
-}
-
-const CREATED_KEYS = ['createdTime', 'createdOn', 'createdAt', 'createdDateTime']
-const MODIFIED_KEYS = ['lastModifiedTime', 'modifiedOn', 'lastModifiedDateTime', 'modifiedTime', 'lastLaunchedTime']
-
-function getCreatedDate(r: ResourceItem): Date | undefined { return getDate(r, CREATED_KEYS) }
-function getModifiedDate(r: ResourceItem): Date | undefined { return getDate(r, MODIFIED_KEYS) }
-
-function resolveOwnerName(r: ResourceItem, ownerNames: Map<string, string>): string {
-  const raw = getOwnerFromProperties(r)
-  if (raw === '—') return raw
-  if (raw.startsWith(SYSTEM_PREFIX)) return 'System'
-  if (GUID_RE.test(raw)) return ownerNames.get(raw) ?? raw
-  return raw
-}
-
-// 28-day creation histogram, oldest on the left.
-function buildCreationTrend(resources: ResourceItem[]): { buckets: number[]; labels: string[] } {
-  const buckets = new Array(28).fill(0)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  for (const r of resources) {
-    const d = getCreatedDate(r)
-    if (!d) continue
-    const days = Math.floor((today.getTime() - d.getTime()) / 86400000)
-    if (days >= 0 && days < 28) buckets[27 - days]++
-  }
-  const labels: string[] = []
-  for (let i = 27; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    labels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
-  }
-  return { buckets, labels }
-}
-
-// ── TrendsChart: tiny inline SVG bar chart ────────────────────────────────────
-
-function TrendsChart({ values, labels, color }: { values: number[]; labels: string[]; color: string }) {
-  const max = Math.max(1, ...values)
-  const width = 280
-  const height = 80
-  const barGap = 1
-  const barWidth = (width - barGap * (values.length - 1)) / values.length
-  const yTicks = 3
-
-  // Y-axis ticks: 0, max/2, max
-  const ticks: number[] = []
-  for (let i = 0; i <= yTicks; i++) ticks.push(Math.round((max / yTicks) * i))
-
-  return (
-    <svg viewBox={`0 0 ${width + 30} ${height + 24}`} width="100%" height="120" preserveAspectRatio="none">
-      {/* Y-axis labels */}
-      {ticks.map((t, i) => {
-        const y = height - (t / max) * height
-        return (
-          <g key={i}>
-            <line x1={28} y1={y} x2={width + 28} y2={y} stroke={tokens.colorNeutralStroke2} strokeWidth={1} />
-            <text x={24} y={y + 3} fontSize="9" fill={MUTED} textAnchor="end">{t}</text>
-          </g>
-        )
-      })}
-      {/* Bars */}
-      {values.map((v, i) => {
-        const h = (v / max) * height
-        const x = 28 + i * (barWidth + barGap)
-        const y = height - h
-        return (
-          <rect key={i}
-            x={x} y={y}
-            width={Math.max(1, barWidth)} height={Math.max(0, h)}
-            fill={color}
-          >
-            <title>{labels[i]}: {v}</title>
-          </rect>
-        )
-      })}
-      {/* X-axis end labels */}
-      <text x={28} y={height + 14} fontSize="9" fill={MUTED}>{labels[0]}</text>
-      <text x={width + 28} y={height + 14} fontSize="9" fill={MUTED} textAnchor="end">{labels[labels.length - 1]}</text>
-    </svg>
-  )
-}
-
-// ── ProductCard ───────────────────────────────────────────────────────────────
-
-interface ProductCardProps {
+function ProductUsageCard({ category, resources, records, onOpen }: {
   category: Category
   resources: ResourceItem[]
-  envMap: Map<string, string>
-  onSelect: (r: ResourceItem) => void
-}
-
-function ProductCard({ category, resources, envMap, onSelect }: ProductCardProps) {
-  const classes = useClasses()
-  const meta = PRODUCT_META[category]
-
-  const ofCategory = useMemo(
-    () => resources.filter(r => getResourceCategory(r.type) === category),
-    [resources, category],
-  )
-
-  const { buckets, labels } = useMemo(() => buildCreationTrend(ofCategory), [ofCategory])
-
-  // Top 3 by most recent modification (or creation if no modification).
-  const topItems = useMemo(() => {
-    return [...ofCategory]
-      .map(r => ({
-        r,
-        when: getModifiedDate(r) ?? getCreatedDate(r) ?? new Date(0),
-      }))
-      .sort((a, b) => b.when.getTime() - a.when.getTime())
-      .slice(0, 3)
-  }, [ofCategory])
-
-  return (
-    <div className={classes.productCard}>
-      <div className={classes.productHeader}>
-        {meta.icon}
-        <Text className={classes.productTitle}>{meta.label}</Text>
-      </div>
-
-      <div className={classes.metricBlock} style={{ borderLeftColor: meta.color }}>
-        <Caption1 className={classes.metricLabel}>{meta.countNoun}</Caption1>
-        <Text className={classes.metricValue}>{ofCategory.length.toLocaleString()}</Text>
-      </div>
-
-      <div className={classes.trendsBox}>
-        <Caption1 className={classes.trendsTitle}>Created (last 28 days)</Caption1>
-        <TrendsChart values={buckets} labels={labels} color={meta.color} />
-      </div>
-
-      <div className={classes.topList}>
-        <Caption1 className={classes.topListTitle}>{meta.topNoun}</Caption1>
-        {topItems.length === 0 ? (
-          <Caption1 style={{ color: MUTED, padding: '8px 0' }}>No resources</Caption1>
-        ) : topItems.map(({ r, when }) => {
-          const envName = resolveEnvironmentName(r, envMap)
-          return (
-            <div key={r.id} className={classes.topItem} onClick={() => onSelect(r)} role="button">
-              <div className={classes.topItemBody}>
-                <Text className={classes.topItemName}>{getDisplayName(r)}</Text>
-                <Caption1 className={classes.topItemSub}>
-                  Environment: {envName}
-                </Caption1>
-              </div>
-              <span className={classes.topItemBadge} title={when.getTime() > 0 ? formatLocalDateTime(when.toISOString()) : 'No date'}>
-                {when.getTime() > 0
-                  ? when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                  : '—'}
-              </span>
-            </div>
-          )
-        })}
-        {topItems.length === 3 && ofCategory.length > 3 && (
-          <Caption1 style={{ color: MUTED, paddingTop: '4px' }}>+ {(ofCategory.length - 3).toLocaleString()} more</Caption1>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── ResourceListTable ─────────────────────────────────────────────────────────
-
-interface ListTableProps {
-  resources: ResourceItem[]
-  ownerNames: Map<string, string>
-  envMap: Map<string, string>
-  onSelect: (r: ResourceItem) => void
-}
-
-function ResourceListTable({ resources, ownerNames, envMap, onSelect }: ListTableProps) {
-  const classes = useClasses()
-
-  const sorted = useMemo(() => {
-    return [...resources].sort((a, b) => {
-      const at = getModifiedDate(a) ?? getCreatedDate(a) ?? new Date(0)
-      const bt = getModifiedDate(b) ?? getCreatedDate(b) ?? new Date(0)
-      return bt.getTime() - at.getTime()
-    })
-  }, [resources])
-
-  const top = sorted.slice(0, 20)
-
-  if (top.length === 0) {
-    return <div className={classes.emptyRow}>No resources of this type</div>
-  }
-
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className={classes.table}>
-        <thead>
-          <tr>
-            <th className={classes.th}>Name</th>
-            <th className={classes.th}>Type</th>
-            <th className={classes.th}>Owner</th>
-            <th className={classes.th}>Last modified</th>
-            <th className={classes.th}>Environment</th>
-          </tr>
-        </thead>
-        <tbody>
-          {top.map(r => {
-            const modified = getModifiedDate(r) ?? getCreatedDate(r)
-            return (
-              <tr key={r.id} className={classes.rowHover} onClick={() => onSelect(r)}>
-                <td className={classes.td}>
-                  <Text style={{ fontSize: '13px', fontWeight: 600 }}>{getDisplayName(r)}</Text>
-                </td>
-                <td className={classes.td}>
-                  <ResourceTypeBadge type={r.type} kind={r.kind} />
-                </td>
-                <td className={classes.tdMuted}>{resolveOwnerName(r, ownerNames)}</td>
-                <td className={classes.tdMuted}>
-                  {modified ? formatLocalDateTime(modified.toISOString()) : '—'}
-                </td>
-                <td className={classes.tdMuted}>{resolveEnvironmentName(r, envMap)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      {sorted.length > top.length && (
-        <Caption1 style={{ display: 'block', padding: '8px 16px', color: MUTED }}>
-          Showing top {top.length} of {sorted.length}. Open the Inventory section to see all.
-        </Caption1>
-      )}
-    </div>
-  )
-}
-
-// ── Summary tab section (Apps / Flows / Agents tab bar) ──────────────────────
-
-function SummaryTabSection({ resources, ownerNames, envMap, onSelect }: {
-  resources: ResourceItem[]
-  ownerNames: Map<string, string>
-  envMap: Map<string, string>
-  onSelect: (r: ResourceItem) => void
+  records: import('./usageShared').SignInRecord[]
+  onOpen?: (c: Category) => void
 }) {
   const classes = useClasses()
-  const [tab, setTab] = useState<Category>('apps')
+  const meta = PRODUCT[category]
+  const ofCat = useMemo(() => resources.filter(r => getResourceCategory(r.type) === category), [resources, category])
+  const catRecords = useMemo(() => signInsForCategory(records, category), [records, category])
+  const stats = useMemo(() => signInStats(catRecords), [catRecords])
+  const { buckets, labels } = useMemo(() => creationTrend(ofCat), [ofCat])
+  const hasSignIns = records.length > 0
 
-  const filtered = useMemo(
-    () => resources.filter(r => getResourceCategory(r.type) === tab),
-    [resources, tab],
-  )
+  const cardStyle = {
+    '--acc': meta.accent,
+    backgroundImage: `linear-gradient(160deg, ${meta.accent}1f, transparent 55%)`,
+  } as React.CSSProperties
 
   return (
-    <div className={classes.tableCard}>
-      <div className={classes.tabBar}>
-        <button
-          className={tab === 'apps' ? classes.tabButtonActive : classes.tabButton}
-          onClick={() => setTab('apps')}
-        >Apps</button>
-        <button
-          className={tab === 'flows' ? classes.tabButtonActive : classes.tabButton}
-          onClick={() => setTab('flows')}
-        >Flows</button>
-        <button
-          className={tab === 'agents' ? classes.tabButtonActive : classes.tabButton}
-          onClick={() => setTab('agents')}
-        >Agents</button>
-      </div>
-      <Caption1 className={classes.tableCaption}>
-        Showing {Math.min(20, filtered.length)} of {filtered.length} {PRODUCT_META[tab].countNoun.toLowerCase()}, sorted by most recently modified.
-      </Caption1>
-      <ResourceListTable resources={filtered} ownerNames={ownerNames} envMap={envMap} onSelect={onSelect} />
-    </div>
+    <button className={classes.productCard} style={cardStyle} onClick={() => onOpen?.(category)}>
+      <span className={classes.pcGlow} style={{ background: meta.accent }} />
+      <span className={classes.pcGrid} />
+      <span className={classes.pcContent}>
+        <div className={classes.pcHead}>
+          <span className={classes.pcIcon} style={{ color: meta.accent, background: `${meta.accent}22`, border: `1px solid ${meta.accent}55` }}>
+            {PRODUCT_ICON[category]}
+          </span>
+          <span className={classes.pcTitle}>{meta.label}</span>
+          <ChevronRightRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3 }} />
+        </div>
+        <div>
+          <span className={classes.pcCount} style={{ textShadow: `0 0 22px ${meta.accent}55` }}>{ofCat.length.toLocaleString()}</span>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>in inventory</Caption1>
+        </div>
+        {hasSignIns && (
+          <div className={classes.pcStats}>
+            <div>
+              <span className={classes.pcStatVal}>{stats.total.toLocaleString()}</span>
+              <span className={classes.pcStatLabel}>sign-ins (30d)</span>
+            </div>
+            <div>
+              <span className={classes.pcStatVal}>{stats.uniqueUsers.toLocaleString()}</span>
+              <span className={classes.pcStatLabel}>active users</span>
+            </div>
+          </div>
+        )}
+        <div className={classes.pcChart}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '6px' }}>{meta.label} created per day</Caption1>
+          <TrendBars
+            values={buckets} labels={labels} accent={meta.accent} height={300}
+            yLabel="Resources created" xLabel="Date (last 28 days)"
+          />
+        </div>
+      </span>
+    </button>
   )
 }
 
-// ── Main UsageView ────────────────────────────────────────────────────────────
-
-export function UsageView({ allResources, allEnvironments, ownerNames }: UsageViewProps) {
+export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCategory, onOpenHeatmap }: UsageViewProps) {
   const classes = useClasses()
-  const envMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
-  const [selected, setSelected] = useState<ResourceItem | null>(null)
-  const { mode } = useThemeMode()
-  // In dark mode the banner's light-blue pastel is replaced with a very light
-  // blue text on a deeper blue background so it reads clearly against the
-  // dark chrome (per request).
-  const introNoteStyle = mode === 'dark'
-    ? { backgroundColor: '#0a2540', borderColor: '#1e3a5f', color: '#cfe4fa' }
-    : undefined
+  void allEnvironments; void ownerNames
+  const cache = useSignInCache()
+
+  const ppRecords = useMemo(() => powerPlatformSignIns(cache.records), [cache.records])
+  const stats = useMemo(() => signInStats(ppRecords), [ppRecords])
+  const trend = useMemo(() => dailyTrend(ppRecords, 30), [ppRecords])
+  const topCountries = useMemo(() => countBy(ppRecords, r => r.location?.countryOrRegion, 6, 'Unknown'), [ppRecords])
+  const topUsers = useMemo(() => countBy(ppRecords, r => r.userDisplayName || r.userPrincipalName, 6, 'Unknown'), [ppRecords])
+  const health = useMemo(() => inventoryHealth(allResources), [allResources])
+
+  const failed = ppRecords.length - ppRecords.filter(r => (r.status?.errorCode ?? 0) === 0).length
+  const succeeded = ppRecords.length - failed
+  const peak = Math.max(0, ...trend.buckets)
+
+  const hasTelemetry = cache.configured && ppRecords.length > 0
 
   return (
     <div className={classes.root}>
-      <div className={classes.introNote} style={introNoteStyle}>
-        <ChartMultipleRegular fontSize={16} style={{ flexShrink: 0, marginTop: 2 }} />
-        <span>
-          Telemetry-grade usage data (users, runs, sessions) isn't exposed by the Power Platform inventory API.
-          Metrics here are derived from inventory data — counts, creation trends, and recent activity.
-        </span>
+      <div style={fadeUp(0)}>
+        {hasTelemetry ? (
+          <KpiRow>
+            <KpiCard accent="#3ad1c4" label="Active users (30d)" value={stats.uniqueUsers.toLocaleString()} sub="Distinct Power Platform sign-ins" />
+            <KpiCard accent="#4aa8ff" label="Sign-ins (30d)" value={stats.total.toLocaleString()} sub="Sessions across Apps, Flows & Agents" />
+            <KpiCard accent="#b07cff" label="Countries" value={stats.countries.toLocaleString()} sub="Distinct sign-in locations" />
+            <KpiCard accent={succeeded >= failed ? '#5bb26b' : '#e6a23c'} label="Success rate" value={stats.successRate != null ? `${stats.successRate}%` : '—'} sub={`${failed.toLocaleString()} failed sign-ins`} />
+          </KpiRow>
+        ) : (
+          <div className={classes.note}>
+            <InfoRegular fontSize={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              {cache.configured
+                ? 'No Power Platform sign-in data cached yet. Open the Usage → Heatmap and run an update to populate sign-in telemetry (who, how many, and where).'
+                : 'Sign-in telemetry (active users, sessions, locations) requires Azure Storage caching to be configured. Showing inventory-derived metrics below.'}
+            </span>
+          </div>
+        )}
       </div>
-      <div className={classes.productGrid}>
-        <ProductCard category="apps"   resources={allResources} envMap={envMap} onSelect={setSelected} />
-        <ProductCard category="flows"  resources={allResources} envMap={envMap} onSelect={setSelected} />
-        <ProductCard category="agents" resources={allResources} envMap={envMap} onSelect={setSelected} />
-      </div>
-      <SummaryTabSection resources={allResources} ownerNames={ownerNames} envMap={envMap} onSelect={setSelected} />
-      {selected && (
-        <ResourceDetailPanel resource={selected} onClose={() => setSelected(null)} allEnvironments={allEnvironments} />
+
+      {hasTelemetry && (
+        <div style={fadeUp(0.08)}>
+          <Grid2>
+            <SectionCard
+              title="Power Platform sign-in activity"
+              icon={<PulseRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+            >
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '6px' }}>
+                Daily sign-ins, last 30 days · peak {peak.toLocaleString()}
+              </Caption1>
+              <TrendBars values={trend.buckets} labels={trend.labels} accent={tokens.colorBrandBackground} height={120} yLabel="Sign-ins" />
+              <div style={{ marginTop: '12px' }}>
+                <SegmentBar segments={[
+                  { label: 'Successful', value: succeeded, color: '#5bb26b' },
+                  { label: 'Failed', value: failed, color: '#e0626d' },
+                ]} />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Where users sign in"
+              icon={<GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+              action={onOpenHeatmap && <button className={classes.linkBtn} onClick={onOpenHeatmap}>View map <ChevronRightRegular fontSize={12} /></button>}
+            >
+              <BarList items={topCountries} accent="#b07cff" emptyText="No location data in sign-in logs" />
+            </SectionCard>
+          </Grid2>
+        </div>
       )}
+
+      {hasTelemetry && (
+        <div style={fadeUp(0.16)}>
+          <SectionCard
+            title="Most active users"
+            icon={<PeopleRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
+          >
+            <BarList items={topUsers} accent="#4aa8ff" valueSuffix=" sign-ins" emptyText="No user data in sign-in logs" />
+          </SectionCard>
+        </div>
+      )}
+
+      <div style={fadeUp(0.24)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
+          <ChartMultipleRegular fontSize={16} style={{ color: tokens.colorNeutralForeground2 }} />
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>By product</Text>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>— select a product to drill into details</Caption1>
+        </div>
+        <div className={classes.productGrid}>
+          {(['apps', 'flows', 'agents'] as Category[]).map(c => (
+            <ProductUsageCard key={c} category={c} resources={allResources} records={ppRecords} onOpen={onOpenCategory} />
+          ))}
+        </div>
+      </div>
+
+      <div style={fadeUp(0.32)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Inventory health</Text>
+        </div>
+        <KpiRow>
+          <KpiCard label="Total resources" value={health.total.toLocaleString()} />
+          <KpiCard accent="#5bb26b" label="Active (30d)" value={health.active30.toLocaleString()} sub="Changed in the last 30 days" />
+          <KpiCard accent="#e6a23c" label="Stale (90d+)" value={health.stale90.toLocaleString()} sub="No change in 90+ days" />
+          <KpiCard accent="#e0626d" label="Ownerless" value={health.ownerless.toLocaleString()} sub="No owner on record" />
+        </KpiRow>
+      </div>
     </div>
   )
 }

@@ -52,6 +52,7 @@ import { ReportView, RecsTab, buildRecs } from './ReportView'
 import { MakerAnalyticsView } from './MakerAnalyticsView'
 import { RiskAssessmentView } from './RiskAssessmentView'
 import { UsageView } from './UsageView'
+import { UsageDetailView } from './UsageDetail'
 import { UsageHeatmap } from './UsageHeatmap'
 import { ResourceTaggingView } from './ResourceTaggingView'
 import type { TagView } from './ResourceTaggingView'
@@ -101,7 +102,7 @@ type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
 type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'cross-tenant' | 'connections' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
 type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
-type UsageSubView = 'overview' | 'heatmap'
+type UsageSubView = 'overview' | 'apps' | 'flows' | 'agents' | 'heatmap'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -1322,10 +1323,14 @@ export function Shell() {
     }
 
     if (rail === 'usage') {
-      const title = usageView === 'heatmap' ? 'Usage Heatmap' : 'Usage Overview'
-      const sub = usageView === 'heatmap'
-        ? 'Where users are signing in to Power Platform resources (Entra sign-in logs).'
-        : 'Adoption and activity across your Power Platform resources.'
+      const usageMeta: Record<UsageSubView, { title: string; sub: string }> = {
+        overview: { title: 'Usage Overview', sub: 'Adoption, activity, and reach across your Power Platform resources.' },
+        apps:     { title: 'Apps Usage', sub: 'Adoption, activity, owners, and where Power Apps are used.' },
+        flows:    { title: 'Flows Usage', sub: 'Adoption, activity, owners, and where Power Automate flows are used.' },
+        agents:   { title: 'Agents Usage', sub: 'Adoption, activity, owners, and where agents are used.' },
+        heatmap:  { title: 'Usage Heatmap', sub: 'Where users are signing in to Power Platform resources (Entra sign-in logs).' },
+      }
+      const { title, sub } = usageMeta[usageView]
       return (
         <>
           <div className={classes.contentHeader}>
@@ -1334,14 +1339,24 @@ export function Shell() {
               <Caption1 className={classes.pageSub}>{sub}</Caption1>
             </div>
           </div>
-          {usageView === 'heatmap'
-            ? <UsageHeatmap allResources={nonSystemResources} />
-            : <UsageView
-                allResources={nonSystemResources}
-                allEnvironments={allEnvironments}
-                ownerNames={ownerNames}
-              />
-          }
+          {usageView === 'heatmap' ? (
+            <UsageHeatmap allResources={nonSystemResources} />
+          ) : usageView === 'overview' ? (
+            <UsageView
+              allResources={nonSystemResources}
+              allEnvironments={allEnvironments}
+              ownerNames={ownerNames}
+              onOpenCategory={c => setUsageView(c)}
+              onOpenHeatmap={() => setUsageView('heatmap')}
+            />
+          ) : (
+            <UsageDetailView
+              category={usageView}
+              allResources={nonSystemResources}
+              allEnvironments={allEnvironments}
+              ownerNames={ownerNames}
+            />
+          )}
         </>
       )
     }
@@ -1394,6 +1409,10 @@ export function Shell() {
         {rail === 'usage' && (
           <NavPanel title="Usage" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<ChartMultipleRegular />} label="Overview" active={usageView === 'overview'} onClick={() => setUsageView('overview')} collapsed={!panelOpen} />
+            {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
+            <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={usageView === 'apps'} onClick={() => setUsageView('apps')} collapsed={!panelOpen} />
+            <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={usageView === 'flows'} onClick={() => setUsageView('flows')} collapsed={!panelOpen} />
+            <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={usageView === 'agents'} onClick={() => setUsageView('agents')} collapsed={!panelOpen} />
             <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />
           </NavPanel>
         )}
