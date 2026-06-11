@@ -15,6 +15,13 @@ import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { useAdminData } from '../hooks/useAdminData'
 import { useSignInCache } from '../context/SignInCacheContext'
+import { CommandBackdrop, CountUp } from './CommandCenter'
+import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
+import { useThemeMode } from '../context/ThemeContext'
+
+// Hero gradient: a lighter, brighter blue in light mode; the deep near-black
+// command-center navy in dark mode. White hero text stays legible on both.
+const HERO_BG_LIGHT = 'radial-gradient(ellipse 90% 130% at 15% -20%, #3a7cc4 0%, #255596 45%, #173a64 100%)'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
@@ -28,47 +35,122 @@ interface ReportViewProps {
 const useClasses = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: '0' },
   hero: {
-    background: `linear-gradient(135deg, #00162d 0%, ${tokens.colorBrandBackground} 55%, #5b21b6 100%)`,
-    padding: `${tokens.spacingVerticalXXL} ${tokens.spacingHorizontalXL}`,
-    borderRadius: tokens.borderRadiusLarge,
-    marginBottom: tokens.spacingVerticalL,
     position: 'relative',
     overflow: 'hidden',
+    borderRadius: tokens.borderRadiusXLarge,
+    marginBottom: tokens.spacingVerticalL,
+    padding: '30px 32px 26px',
+    background: 'radial-gradient(ellipse 90% 130% at 15% -20%, #16335f 0%, #0b1830 45%, #070d1c 100%)',
+    border: '1px solid rgba(255,255,255,0.06)',
+  },
+  heroInner: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '18px',
+  },
+  heroTopRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  heroEyebrow: {
+    fontFamily: 'Consolas, "SFMono-Regular", monospace',
+    fontSize: '11px',
+    letterSpacing: '2px',
+    textTransform: 'uppercase',
+    color: 'rgba(150,200,255,0.65)',
+  },
+  livePill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '7px',
+    padding: '4px 11px',
+    borderRadius: tokens.borderRadiusCircular,
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.6px',
+    color: 'rgba(220,235,255,0.85)',
+  },
+  liveDot: {
+    width: '7px', height: '7px', borderRadius: '50%',
+    backgroundColor: '#3ad1c4', flexShrink: 0,
   },
   heroTitle: {
-    color: '#ffffff',
-    display: 'block',
-    marginBottom: tokens.spacingVerticalXS,
+    margin: 0,
+    fontSize: '30px',
+    lineHeight: 1.1,
+    fontWeight: 800,
+    letterSpacing: '-0.5px',
+    background: 'linear-gradient(90deg, #ffffff, #bcd8ff)',
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
   },
   heroSub: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(198,216,244,0.7)',
     display: 'block',
-    marginBottom: tokens.spacingVerticalL,
+    fontSize: '14px',
+    marginTop: '6px',
   },
-  statGrid: {
+  pillarRow: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-    gap: tokens.spacingHorizontalM,
-    marginBottom: tokens.spacingVerticalM,
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '12px',
   },
-  statCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: tokens.borderRadiusMedium,
-    padding: tokens.spacingVerticalM,
-    textAlign: 'center',
-    backdropFilter: 'blur(8px)',
-    border: '1px solid rgba(255,255,255,0.15)',
+  pillarCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    padding: '18px 18px 16px',
+    borderRadius: '14px',
+    background: 'linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025))',
+    border: '1px solid rgba(255,255,255,0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
   },
-  statValue: {
-    display: 'block',
+  pillarGlow: {
+    position: 'absolute', top: '-30px', right: '-30px',
+    width: '120px', height: '120px', borderRadius: '50%',
+    filter: 'blur(34px)', opacity: 0.4, pointerEvents: 'none',
+  },
+  pillarTop: { display: 'flex', alignItems: 'center', gap: '10px' },
+  pillarIcon: {
+    width: '38px', height: '38px', borderRadius: '10px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  pillarLabel: {
+    color: 'rgba(210,228,255,0.85)',
+    fontSize: '13px', fontWeight: 600, letterSpacing: '0.3px',
+  },
+  pillarValue: {
     color: '#ffffff',
-    fontWeight: tokens.fontWeightBold,
+    fontSize: '38px', fontWeight: 800, lineHeight: 1,
     fontVariantNumeric: 'tabular-nums',
   },
-  statLabel: {
-    color: 'rgba(255,255,255,0.65)',
-    display: 'block',
-    marginTop: '2px',
+  pillarSub: { color: 'rgba(180,202,234,0.55)', fontSize: '12px' },
+  secondaryRow: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  miniStat: {
+    display: 'flex', flexDirection: 'column', gap: '2px',
+    padding: '10px 16px',
+    borderRadius: '10px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    minWidth: '108px',
+  },
+  miniValue: {
+    color: '#ffffff', fontSize: '20px', fontWeight: 700, lineHeight: 1.1,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  miniLabel: {
+    color: 'rgba(180,202,234,0.6)', fontSize: '11px',
+    textTransform: 'uppercase', letterSpacing: '0.6px',
   },
   healthBar: {
     display: 'flex',
@@ -328,6 +410,27 @@ function HealthChip({ label, color, onClick }: { label: string; color: 'danger' 
     <button onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
       {chip}
     </button>
+  )
+}
+
+// Staggered entrance for the cinematic hero blocks.
+const fadeUp = (delay: number): React.CSSProperties => ({ animation: 'ppFadeUp 0.6s both', animationDelay: `${delay}s` })
+
+// Featured stat for one product pillar (Agents / Apps / Flows) in the hero.
+function HeroPillar({ icon, accent, value, label, sub }: {
+  icon: React.ReactNode; accent: string; value: number; label: string; sub: string
+}) {
+  const classes = useClasses()
+  return (
+    <div className={classes.pillarCard}>
+      <div className={classes.pillarGlow} style={{ background: accent }} />
+      <div className={classes.pillarTop}>
+        <span className={classes.pillarIcon} style={{ color: accent, background: `${accent}22`, border: `1px solid ${accent}55` }}>{icon}</span>
+        <span className={classes.pillarLabel}>{label}</span>
+      </div>
+      <span className={classes.pillarValue}><CountUp value={value} /></span>
+      <span className={classes.pillarSub}>{sub}</span>
+    </div>
   )
 }
 
@@ -855,6 +958,7 @@ const TABS: { id: ReportTab; label: string }[] = [
 export function ReportView({ allResources, allEnvironments, onNavigateToRiskAssessments }: ReportViewProps) {
   const [tab, setTab] = useState<ReportTab>('overview')
   const classes = useClasses()
+  const { mode } = useThemeMode()
 
   const agentCount = allResources.filter(r => getResourceCategory(r.type) === 'agents').length
   const appCount = allResources.filter(r => getResourceCategory(r.type) === 'apps').length
@@ -881,47 +985,56 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
 
   return (
     <div className={classes.root}>
-      {/* Hero */}
-      <div className={classes.hero}>
-        <Text size={600} weight="bold" className={classes.heroTitle}>Inventory and Governance Report</Text>
-        <Caption1 className={classes.heroSub}>
-          Live data from your tenant · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-        </Caption1>
+      {/* Hero — cinematic command center */}
+      <div className={classes.hero} style={mode === 'light' ? { background: HERO_BG_LIGHT } : undefined}>
+        <CommandBackdrop />
+        <div className={classes.heroInner}>
+          <div className={classes.heroTopRow} style={fadeUp(0)}>
+            <span className={classes.heroEyebrow}>Power Platform · Command Center</span>
+            <span className={classes.livePill}>
+              <span className={classes.liveDot} style={{ animation: 'ppPulseRing 2s ease-out infinite' }} />
+              LIVE · {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </div>
 
-        <div className={classes.statGrid}>
-          {[
-            { value: allEnvironments.length, label: 'Environments' },
-            { value: agentCount, label: 'Copilot Agents' },
-            { value: appCount, label: 'Apps' },
-            { value: flowCount, label: 'Flows' },
-            { value: managedCount, label: 'Managed Envs' },
-            { value: allResources.length, label: 'Total Resources' },
-          ].map(s => (
-            <div key={s.label} className={classes.statCard}>
-              <Text size={700} weight="bold" className={classes.statValue}>{s.value}</Text>
-              <Caption1 className={classes.statLabel}>{s.label}</Caption1>
-            </div>
-          ))}
-        </div>
+          <div style={fadeUp(0.06)}>
+            <h1 className={classes.heroTitle}>Inventory &amp; Governance</h1>
+            <Caption1 className={classes.heroSub}>
+              Real-time view of every Agent, App, and Flow across your tenant.
+            </Caption1>
+          </div>
 
-        <div className={classes.healthBar}>
-          {criticalCount > 0 && <HealthChip label={`${criticalCount} Critical`} color="danger" />}
-          {highCount > 0 && <HealthChip label={`${highCount} High Priority`} color="warning" />}
-          {compliantCount > 0 && (
-            <HealthChip
-              label={`${compliantCount} Compliant Resources`}
-              color="success"
-              onClick={onNavigateToRiskAssessments}
-            />
-          )}
-          {notReviewedCount > 0 && (
-            <HealthChip
-              label={`${notReviewedCount} Not Reviewed — Review Now`}
-              color="warning"
-              onClick={onNavigateToRiskAssessments}
-            />
-          )}
-          {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
+          <div className={classes.pillarRow} style={fadeUp(0.12)}>
+            <HeroPillar icon={<CopilotStudioIcon fontSize={22} />} accent="#3ad1c4" value={agentCount} label="Agents" sub="Agents" />
+            <HeroPillar icon={<PowerAppsIcon fontSize={22} />} accent="#b07cff" value={appCount} label="Apps" sub="Canvas & model-driven" />
+            <HeroPillar icon={<PowerAutomateIcon fontSize={22} />} accent="#4aa8ff" value={flowCount} label="Flows" sub="Cloud & desktop" />
+          </div>
+
+          <div className={classes.secondaryRow} style={fadeUp(0.18)}>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allEnvironments.length} /></span><span className={classes.miniLabel}>Environments</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={managedCount} /></span><span className={classes.miniLabel}>Managed Envs</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allResources.length} /></span><span className={classes.miniLabel}>Total Resources</span></div>
+          </div>
+
+          <div className={classes.healthBar} style={fadeUp(0.24)}>
+            {criticalCount > 0 && <HealthChip label={`${criticalCount} Critical`} color="danger" />}
+            {highCount > 0 && <HealthChip label={`${highCount} High Priority`} color="warning" />}
+            {compliantCount > 0 && (
+              <HealthChip
+                label={`${compliantCount} Compliant Resources`}
+                color="success"
+                onClick={onNavigateToRiskAssessments}
+              />
+            )}
+            {notReviewedCount > 0 && (
+              <HealthChip
+                label={`${notReviewedCount} Not Reviewed — Review Now`}
+                color="warning"
+                onClick={onNavigateToRiskAssessments}
+              />
+            )}
+            {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
+          </div>
         </div>
       </div>
 

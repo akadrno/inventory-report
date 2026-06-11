@@ -12,3 +12,48 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.4); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.7); }
+
+/* ── Command-center motion (sign-in screen + home hero) ───────────────────── */
+@keyframes ppGridPan { from { transform: translateY(0); } to { transform: translateY(46px); } }
+@keyframes ppDriftA {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(50px, 40px) scale(1.15); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes ppDriftB {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-50px, -30px) scale(1.1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes ppScan {
+  0%   { top: -25%; opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { top: 115%; opacity: 0; }
+}
+@keyframes ppFadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ppPulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(58, 209, 196, 0.5); }
+  70%  { box-shadow: 0 0 0 9px rgba(58, 209, 196, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(58, 209, 196, 0); }
+}
+@keyframes ppGlyphRing {
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+@keyframes ppShimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+/* Respect users who ask the OS to minimize motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
