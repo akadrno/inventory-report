@@ -198,9 +198,11 @@ export function ruleBasedPolicyHasAcp(p: RuleBasedPolicy): boolean {
 }
 
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
-  const token = await getPowerPlatformToken()
+  // The admin environments + capacity expand lives on the BAP host (same family
+  // as DLP / tenant settings), not api.powerplatform.com — use the BAP token.
+  const token = await getBapToken()
   const res = await fetch(
-    'https://api.powerplatform.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2020-10-01&$expand=properties.capacity,properties.addons',
+    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2020-10-01&$expand=properties.capacity,properties.addons',
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (!res.ok) throw new Error(`Environment capacity fetch failed: ${res.status}`)

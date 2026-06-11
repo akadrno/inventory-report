@@ -133,10 +133,14 @@ export function CapacityBillingView() {
     return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading capacity & billing…" /></div>
   }
   if (capacity.isError) {
+    const msg = capacity.error?.message ?? ''
+    const isAuth = /\b(401|403)\b/.test(msg)
     return (
       <div className={classes.permNotice}>
         <LockClosedRegular fontSize={16} />
-        <span>Requires Power Platform admin permissions to read environment capacity and billing policies.</span>
+        <span>{isAuth
+          ? 'Requires Power Platform admin permissions to read environment capacity.'
+          : `Couldn't load environment capacity${msg ? ` — ${msg}` : ''}.`}</span>
       </div>
     )
   }
