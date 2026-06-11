@@ -172,6 +172,31 @@ export async function fetchAllRuleBasedPolicies(): Promise<{ policies: RuleBased
   return { policies: json.value ?? [] }
 }
 
+// ── Advanced Connector Policy (ACP) detection ────────────────────────────────
+// ACP (GA June 2026) is the modern replacement for classic DLP. It's delivered
+// as a rule set inside an environment-group rule-based policy (Rules tab →
+// "Advanced connector policies"). The public rule-set type enum doesn't yet name
+// it explicitly, so detection is a best-effort match on connector-policy
+// identifiers in the rule set and its rules — positive matches only, so we never
+// assert "not protected" for something we simply can't see.
+export function isAcpRuleSet(rs: PolicyRuleSet): boolean {
+  const parts: unknown[] = [
+    rs.id, rs.ruleSetId, rs.name, rs.displayName,
+    (rs as Record<string, unknown>)['type'], (rs as Record<string, unknown>)['ruleType'],
+  ]
+  for (const r of rs.rules ?? []) {
+    parts.push(r.id, r.name, r.displayName, (r as Record<string, unknown>)['ruleType'])
+  }
+  const hay = parts.filter(v => typeof v === 'string').join(' ').toLowerCase()
+  if (!hay) return false
+  if (/advanced ?connector|connector ?polic|\bacp\b/.test(hay)) return true
+  return hay.includes('connector') && (hay.includes('polic') || hay.includes('advanced'))
+}
+
+export function ruleBasedPolicyHasAcp(p: RuleBasedPolicy): boolean {
+  return (p.ruleSets ?? []).some(isAcpRuleSet)
+}
+
 export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
   const token = await getPowerPlatformToken()
   const res = await fetch(

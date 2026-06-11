@@ -41,8 +41,10 @@ import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
 import {
   useDLPPolicies, useTenantSettings, useLicenses,
   useCrossTenantConnections, useAdvisorRecommendations, useConnectionsReport,
+  useRuleBasedPolicies,
 } from '../hooks/useGovernance'
 import type { SubscribedSku } from '../hooks/useGovernance'
+import { ruleBasedPolicyHasAcp } from '../api/governanceApi'
 import { isPowerPlatformSku } from '../api/graphApi'
 import { ResourceTable } from './ResourceTable'
 import { GroupsView } from './GroupsView'
@@ -54,6 +56,7 @@ import { RiskAssessmentView } from './RiskAssessmentView'
 import { UsageView } from './UsageView'
 import { UsageDetailView } from './UsageDetail'
 import { UsageHeatmap } from './UsageHeatmap'
+import { CapacityBillingView } from './CapacityBillingView'
 import { ResourceTaggingView } from './ResourceTaggingView'
 import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
@@ -101,7 +104,7 @@ type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
 type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
 type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
 type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'cross-tenant' | 'connections' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
-type LicensingView = 'summary' | 'power-apps' | 'power-automate' | 'copilot-studio'
+type LicensingView = 'summary' | 'capacity' | 'power-apps' | 'power-automate' | 'copilot-studio'
 type UsageSubView = 'overview' | 'apps' | 'flows' | 'agents' | 'heatmap'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -747,6 +750,8 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
   const classes = useClasses()
   const [scenario, setScenario] = useState<string | null>(null)
   const advisor = useAdvisorRecommendations(true)
+  const acp = useRuleBasedPolicies(true)
+  const acpMatches = useMemo(() => (acp.data ?? []).filter(ruleBasedPolicyHasAcp), [acp.data])
 
   // The drill-down takes over the whole page (its own breadcrumb back-nav).
   if (scenario) {
@@ -772,6 +777,48 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
           <div style={{ padding: '16px' }}><Spinner size="extra-small" label="Loading Advisor recommendations…" /></div>
         ) : (
           <RecommendationsSection recommendations={advisor.data ?? []} onScenarioClick={setScenario} />
+        )}
+      </CollapsibleCard>
+
+      {/* Advanced Connector Policies (ACP) — the GA replacement for classic DLP */}
+      <CollapsibleCard
+        icon={<PlugConnectedRegular fontSize={16} style={{ color: ACTIVE }} />}
+        title="Advanced Connector Policies (ACP)"
+        badge={acpMatches.length > 0 ? <Badge appearance="tint" color="brand" size="small">{acpMatches.length}</Badge> : undefined}
+      >
+        {acp.isError ? (
+          <div className={classes.permNotice}>
+            <LockClosedRegular fontSize={16} />
+            <Caption1>Requires Power Platform admin permissions to read rule-based policies.</Caption1>
+          </div>
+        ) : acp.isLoading ? (
+          <div style={{ padding: '16px' }}><Spinner size="extra-small" label="Detecting Advanced Connector Policies…" /></div>
+        ) : (
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Caption1 style={{ color: MUTED }}>
+              ACP is the GA replacement for classic DLP — a default-deny connector allowlist with action-level control. Detection here is best-effort, since the rule type is newly GA.
+            </Caption1>
+            {acpMatches.length > 0 ? (
+              <>
+                <Text style={{ fontSize: '13px', fontWeight: 600, color: TEXT }}>
+                  Detected on {acpMatches.length} rule-based polic{acpMatches.length === 1 ? 'y' : 'ies'} (applied to their assigned environment groups):
+                </Text>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {acpMatches.map((p, i) => (
+                    <div key={p.id ?? p.name ?? i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: `1px solid ${STROKE1}`, borderRadius: '4px' }}>
+                      <PlugConnectedRegular fontSize={16} style={{ color: ACTIVE, flexShrink: 0 }} />
+                      <Text style={{ fontSize: '13px', flex: 1 }}>{p.displayName ?? p.name ?? p.id}</Text>
+                      <Badge appearance="tint" color="brand" size="small">ACP</Badge>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <Text style={{ fontSize: '13px', color: MUTED }}>
+                No Advanced Connector Policies detected via the governance API. If you adopted ACP very recently — or set it directly on individual environments — it may not surface here yet. See “Recommended Actions” below to migrate from classic DLP.
+              </Text>
+            )}
+          </div>
         )}
       </CollapsibleCard>
 
@@ -813,6 +860,7 @@ function formatSkuName(partNumber: string): string {
 
 const LICENSING_LABELS: Record<LicensingView, string> = {
   summary: 'Summary',
+  capacity: 'Capacity & Billing',
   'power-apps': 'Power Apps',
   'power-automate': 'Power Automate',
   'copilot-studio': 'Copilot Studio',
@@ -1319,6 +1367,19 @@ export function Shell() {
     }
 
     if (rail === 'licensing') {
+      if (licView === 'capacity') {
+        return (
+          <>
+            <div className={classes.contentHeader}>
+              <div>
+                <Text className={classes.pageTitle}>Capacity &amp; Billing</Text>
+                <Caption1 className={classes.pageSub}>Environment storage consumption, add-on capacity, and pay-as-you-go billing policies.</Caption1>
+              </div>
+            </div>
+            <CapacityBillingView />
+          </>
+        )
+      }
       return <LicensingContent licView={licView} />
     }
 
@@ -1427,6 +1488,7 @@ export function Shell() {
         {rail === 'licensing' && (
           <NavPanel title="Licensing" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />
+            <NavItem icon={<DatabaseRegular />} label="Capacity & Billing" active={licView === 'capacity'} onClick={() => setLicView('capacity')} collapsed={!panelOpen} />
             {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />

@@ -866,6 +866,10 @@ export function buildRecs(
 
     const hasNoBlock = dlp.every(p => !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'blocked' && g.connectors.length > 0))
     if (hasNoBlock) recs.push({ priority: 'Critical', action: 'Block high-risk connectors (HTTP, custom connectors)', why: 'HTTP connector allows calling any external API, bypassing DLP intent.', how: 'Add HTTP connector and custom connectors to the Blocked group in all production policies.' })
+
+    // ACP is the GA replacement for classic DLP. Recommend migration whenever
+    // classic data policies are still in use.
+    if (dlp.length > 0) recs.push({ priority: 'Medium', action: 'Adopt Advanced Connector Policies (ACP) — the modern replacement for classic DLP', why: 'ACP (now GA) uses a default-deny allowlist with action-level control and design-time enforcement, replacing the Business/Non-Business/Blocked model with simpler, stronger connector governance.', how: 'Power Platform admin center → Environment groups → Rules → Advanced connector policies (or per environment: Security → Data and privacy). Run mixed mode during migration, then enable ACP-only mode. Docs: aka.ms/AdvancedConnectorPolicies' })
   }
 
   if (settings) {

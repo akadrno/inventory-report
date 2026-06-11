@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchDLPPolicies, fetchTenantSettings, fetchEnvironmentCapacity, fetchBillingPolicies,
   fetchCrossTenantConnectionReport, fetchAdvisorRecommendations, fetchRecommendationResources,
-  fetchConnections,
+  fetchConnections, fetchAllRuleBasedPolicies,
 } from '../api/governanceApi'
+import type { RuleBasedPolicy } from '../api/governanceApi'
 import {
   tableStorageConfigured, loadGovernanceCache, saveGovernanceCache,
 } from '../api/tableStorageApi'
@@ -19,6 +20,7 @@ import type { SubscribedSku } from '../api/graphApi'
 export type {
   DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy, SubscribedSku,
   CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult, PowerConnection,
+  RuleBasedPolicy,
 }
 
 export function useDLPPolicies() {
@@ -61,6 +63,19 @@ export function useLicenses() {
   return useQuery<SubscribedSku[], Error>({
     queryKey: ['subscribed-skus'],
     queryFn: fetchSubscribedSkus,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// All tenant rule-based policies (the carrier for environment-group rules,
+// including Advanced Connector Policies). Lazy — only fetched when a consumer
+// opts in (e.g. the ACP coverage card).
+export function useRuleBasedPolicies(enabled: boolean) {
+  return useQuery<RuleBasedPolicy[], Error>({
+    queryKey: ['rule-based-policies'],
+    queryFn: async () => (await fetchAllRuleBasedPolicies()).policies,
+    enabled,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })

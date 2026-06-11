@@ -29,7 +29,7 @@ import { EnvironmentBadge } from './EnvironmentBadge'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies } from '../api/governanceApi'
+import { fetchGroupRuleAssignments, fetchAllRuleBasedPolicies, isAcpRuleSet } from '../api/governanceApi'
 import type { PolicyRuleSet } from '../api/governanceApi'
 
 // ---------------------------------------------------------------------------
@@ -715,7 +715,8 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
           {data && data.ruleSets.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {data.ruleSets.map((rs, rsIdx) => {
-                const rsName = rs.displayName ?? humanizeName(rs.id ?? rs.name)
+                const acp = isAcpRuleSet(rs)
+                const rsName = acp ? 'Advanced Connector Policy' : (rs.displayName ?? humanizeName(rs.id ?? rs.name))
                 return (
                   <div
                     key={rs.id ?? rsIdx}
@@ -726,7 +727,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                       gap: tokens.spacingHorizontalS,
                       padding: `8px ${tokens.spacingHorizontalM}`,
                       backgroundColor: tokens.colorNeutralBackground1,
-                      border: `1px solid ${tokens.colorNeutralStroke2}`,
+                      border: `1px solid ${acp ? tokens.colorBrandStroke2 : tokens.colorNeutralStroke2}`,
                       borderRadius: tokens.borderRadiusSmall,
                     }}
                   >
@@ -735,9 +736,10 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
                         {rsName}
                       </Text>
                     </div>
-                    <Badge appearance="tint" color="success" size="small" style={{ flexShrink: 0, marginTop: '2px' }}>
-                      Active
-                    </Badge>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0, marginTop: '2px' }}>
+                      {acp && <Badge appearance="tint" color="brand" size="small">ACP</Badge>}
+                      <Badge appearance="tint" color="success" size="small">Active</Badge>
+                    </div>
                   </div>
                 )
               })}
