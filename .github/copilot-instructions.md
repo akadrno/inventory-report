@@ -23,11 +23,13 @@ This is a **read-only SPA** — a Power Platform admin governance dashboard. It 
 
 ### Provider Stack (main.tsx)
 
-`FluentProvider` → `MsalProvider` → `QueryClientProvider` → `DebugProvider` → `App`
+`ThemeProvider` → `FluentProvider` → `MsalProvider` → `QueryClientProvider` → `DebugProvider` → `SignInCacheProvider` → `App`
 
-- **MSAL** handles Azure AD auth with popup-based consent flows. Token acquisition uses `acquireTokenSilent` with `acquireTokenPopup` fallback for `InteractionRequiredAuthError`.
-- **TanStack Query** manages all API data fetching/caching (5 min `staleTime`, 1 retry).
+- **ThemeContext** drives light/dark mode; `FluentProvider` switches `webLightTheme`/`webDarkTheme`. The choice is persisted in `localStorage`. **Always style with `tokens.*` so both themes work** — avoid hardcoded hex except intentionally-dark "cinematic" surfaces (sign-in screen, home hero) and brand/logo colors.
+- **MSAL** handles Azure AD auth with popup-based consent flows. Token acquisition uses `acquireTokenSilent` with `acquireTokenPopup` fallback for `InteractionRequiredAuthError`. Some scopes (Power Apps sharing, audit logs) are requested incrementally.
+- **TanStack Query** manages most API data fetching/caching (5 min `staleTime`, 1 retry).
 - **DebugContext** captures raw request/response logs for an in-app debug panel.
+- **SignInCacheContext** owns the cached Entra sign-in dataset for the usage heatmap: it loads from Azure Table Storage on mount and auto-refreshes in the background (client-side, ~hourly) — there is no server cron.
 
 ### API Layer (`src/api/`)
 
@@ -37,9 +39,12 @@ Each file targets a different Microsoft API surface with its own OAuth scope:
 |---|---|---|
 | `powerPlatformApi.ts` | Power Platform Resource Query (KQLOM) | `api.powerplatform.com/.default` |
 | `governanceApi.ts` | BAP admin + PP governance endpoints | `api.bap.microsoft.com/.default` + `api.powerplatform.com/.default` |
-| `graphApi.ts` | Microsoft Graph (user/SP name resolution) | `graph.microsoft.com/User.ReadBasic.All` |
+| `graphApi.ts` | Microsoft Graph (user/SP names; license SKUs) | `graph.microsoft.com/User.ReadBasic.All` + `Organization.Read.All` |
+| `signInsApi.ts` / `signInsCache.ts` | Microsoft Graph sign-in logs (usage heatmap) + Azure Table cache | `graph.microsoft.com/AuditLog.Read.All` (read); account SAS (cache) |
 | `sharingApi.ts` | Power Apps sharing/permissions | `service.powerapps.com/.default` |
 | `tableStorageApi.ts` | Azure Table Storage (assessments/tags) | Account-level SAS token (no OAuth) |
+
+Scopes are defined in `src/auth/msalConfig.ts`. Storage APIs are optional — gated on `VITE_STORAGE_ACCOUNT`/`VITE_TABLE_SAS`; without them, assessments/tags use `localStorage` and the heatmap fetches live.
 
 Token acquisition uses a **singleton promise pattern** (`_inFlight`) to prevent concurrent popup races when multiple components request the same scope simultaneously.
 
@@ -51,7 +56,11 @@ Token acquisition uses a **singleton promise pattern** (`_inFlight`) to prevent 
 
 ### Navigation
 
-The app uses a **tab-based SPA** (no router library). `Shell.tsx` manages navigation state via a `ResourceTab` union type: `'all' | 'apps' | 'flows' | 'agents' | 'groups' | 'users' | 'environments' | 'governance' | 'report'`.
+The app uses a **rail-based SPA** (no router library). `Shell.tsx` is the live root (`App` → `AppShell` → `Shell`) and manages all navigation in local state — a `RailSection` (`'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'`) plus a per-section sub-view union (e.g. `InvView`, `GovView`, `UsageSubView`, `LicensingView`, `TagView`). Each rail section renders a secondary `NavPanel` of sub-pages and a page component.
+
+> `src/pages/Dashboard.tsx` and the monolithic `GovernanceView` component are **dead code**. `Shell.tsx` composes the **exported sub-components** from `GovernanceView.tsx` (e.g. `TenantSettingsSection`, `DLPSection`, `ConnectionsSection`). To add/modify a section, wire it into `Shell.tsx`, not just `GovernanceView.tsx`.
+
+Key views: Home (`ReportView`), Usage (`UsageView` overview, `UsageDetail` per-product, `UsageHeatmap`, shared helpers in `usageShared.tsx`), Licensing (in `Shell.tsx`), Tagging (`ResourceTaggingView`), Risk (`RiskAssessmentView`), Maker (`MakerAnalyticsView`). The cinematic sign-in/home visuals live in `CommandCenter.tsx` (+ keyframes in `index.css`).
 
 ## Key Conventions
 

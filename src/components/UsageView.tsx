@@ -169,6 +169,31 @@ export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCat
   return (
     <div className={classes.root}>
       <div style={fadeUp(0)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
+          <ChartMultipleRegular fontSize={16} style={{ color: tokens.colorNeutralForeground2 }} />
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>By product</Text>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>— select a product to drill into details</Caption1>
+        </div>
+        <div className={classes.productGrid}>
+          {(['apps', 'flows', 'agents'] as Category[]).map(c => (
+            <ProductUsageCard key={c} category={c} resources={allResources} records={ppRecords} onOpen={onOpenCategory} />
+          ))}
+        </div>
+      </div>
+
+      <div style={fadeUp(0.06)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Inventory health</Text>
+        </div>
+        <KpiRow>
+          <KpiCard label="Total resources" value={health.total.toLocaleString()} />
+          <KpiCard accent="#5bb26b" label="Active (30d)" value={health.active30.toLocaleString()} sub="Changed in the last 30 days" />
+          <KpiCard accent="#e6a23c" label="Stale (90d+)" value={health.stale90.toLocaleString()} sub="No change in 90+ days" />
+          <KpiCard accent="#e0626d" label="Ownerless" value={health.ownerless.toLocaleString()} sub="No owner on record" />
+        </KpiRow>
+      </div>
+
+      <div style={fadeUp(0.12)}>
         {hasTelemetry ? (
           <KpiRow>
             <KpiCard accent="#3ad1c4" label="Active users (30d)" value={stats.uniqueUsers.toLocaleString()} sub="Distinct Power Platform sign-ins" />
@@ -189,7 +214,7 @@ export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCat
       </div>
 
       {hasTelemetry && (
-        <div style={fadeUp(0.08)}>
+        <div style={fadeUp(0.18)}>
           <Grid2>
             <SectionCard
               title="Power Platform sign-in activity"
@@ -219,7 +244,7 @@ export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCat
       )}
 
       {hasTelemetry && (
-        <div style={fadeUp(0.16)}>
+        <div style={fadeUp(0.24)}>
           <SectionCard
             title="Most active users"
             icon={<PeopleRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
@@ -228,31 +253,6 @@ export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCat
           </SectionCard>
         </div>
       )}
-
-      <div style={fadeUp(0.24)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
-          <ChartMultipleRegular fontSize={16} style={{ color: tokens.colorNeutralForeground2 }} />
-          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>By product</Text>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>— select a product to drill into details</Caption1>
-        </div>
-        <div className={classes.productGrid}>
-          {(['apps', 'flows', 'agents'] as Category[]).map(c => (
-            <ProductUsageCard key={c} category={c} resources={allResources} records={ppRecords} onOpen={onOpenCategory} />
-          ))}
-        </div>
-      </div>
-
-      <div style={fadeUp(0.32)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
-          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Inventory health</Text>
-        </div>
-        <KpiRow>
-          <KpiCard label="Total resources" value={health.total.toLocaleString()} />
-          <KpiCard accent="#5bb26b" label="Active (30d)" value={health.active30.toLocaleString()} sub="Changed in the last 30 days" />
-          <KpiCard accent="#e6a23c" label="Stale (90d+)" value={health.stale90.toLocaleString()} sub="No change in 90+ days" />
-          <KpiCard accent="#e0626d" label="Ownerless" value={health.ownerless.toLocaleString()} sub="No owner on record" />
-        </KpiRow>
-      </div>
     </div>
   )
 }

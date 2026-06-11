@@ -57,9 +57,11 @@ The browser running the app must be able to reach:
 | Host | Purpose |
 |---|---|
 | `login.microsoftonline.com` | Azure AD authentication |
-| `api.powerplatform.com` | Power Platform Resource Query API |
-| `api.bap.microsoft.com` | BAP API — DLP policies and tenant settings |
-| `graph.microsoft.com` | Microsoft Graph — user display names |
+| `api.powerplatform.com` | Power Platform Resource Query API (inventory) |
+| `api.bap.microsoft.com` | BAP API — DLP policies, tenant settings, recommendations, connections |
+| `service.powerapps.com` | Power Apps Service — resource sharing / permissions |
+| `graph.microsoft.com` | Microsoft Graph — user names, license capacity, sign-in logs |
+| `<account>.table.core.windows.net` | Azure Table Storage *(optional)* — persisted assessments, tags, sign-in cache |
 
 No backend server or Azure Function is involved. All calls are made directly from the browser.
 

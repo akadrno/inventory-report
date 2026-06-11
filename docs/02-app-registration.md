@@ -15,7 +15,7 @@ The application uses Microsoft Identity Platform (Azure AD) to authenticate the 
    - **Supported account types:** `Accounts in this organizational directory only (Single tenant)`
    - **Redirect URI:** Select `Single-page application (SPA)` from the drop-down
      - Enter the URL where the app will be hosted.
-     - For local development: `http://localhost:5173`
+     - For local development: `http://localhost:3000`
      - For Azure Static Web Apps: `https://<your-swa-hostname>.azurestaticapps.net`
      - You can add multiple redirect URIs after creation.
 4. Click **Register**.
@@ -47,12 +47,25 @@ In the App Registration, go to **API permissions** → **Add a permission**.
 
 > The BAP API is used for DLP policy and tenant settings reads.
 
+### Power Apps Service (for resource sharing)
+
+1. Click **Add a permission** → **APIs my organization uses**.
+2. Search for `Power Apps Service` or paste the resource URI `https://service.powerapps.com`.
+3. Select **Delegated permissions** and add the available permission (typically `user_impersonation`).
+4. Click **Add permissions**.
+
+> Used to read who an app/flow is shared with (the "Sharing" section of the resource detail panel). The app requests this scope incrementally (a one-time extra consent popup) the first time you open sharing.
+
 ### Microsoft Graph
 
 1. Click **Add a permission** → **Microsoft Graph** → **Delegated permissions**.
 2. Search for and add:
-   - `User.ReadBasic.All` — used to resolve user GUIDs to display names
+   - `User.ReadBasic.All` — resolve user/owner GUIDs to display names (core)
+   - `Organization.Read.All` — read license/SKU capacity for the **Licensing** section
+   - `AuditLog.Read.All` — read Entra sign-in logs for the **Usage Heatmap** and usage analytics
 3. Click **Add permissions**.
+
+> `User.ReadBasic.All` is the only one needed for core inventory. `Organization.Read.All` and `AuditLog.Read.All` light up Licensing and Usage respectively — omit them if you don't need those sections (the app shows a permission notice instead). `AuditLog.Read.All` additionally requires the signed-in user to hold an Entra role that can read audit logs (Reports Reader, Security Reader, Global Reader, or Global Administrator).
 
 ---
 
@@ -85,7 +98,7 @@ If you are hosting on Azure Static Web Apps:
 3. Enter `https://<your-swa-hostname>.azurestaticapps.net`.
 4. Click **Save**.
 
-For local development, add `http://localhost:5173` in the same place.
+For local development, add `http://localhost:3000` in the same place.
 
 You can have multiple redirect URIs active at the same time.
 
@@ -105,10 +118,13 @@ You'll use these in `.env.local` (local dev) or as GitHub secrets (CI/CD).
 ## Checklist
 
 - [ ] App Registration created
-- [ ] Redirect URI(s) added (SPA type)
+- [ ] Redirect URI(s) added (SPA type) — include `http://localhost:3000` for local dev
 - [ ] Power Platform API delegated permissions added
 - [ ] BAP API delegated permissions added
-- [ ] Graph `User.ReadBasic.All` added
+- [ ] Power Apps Service delegated permission added (resource sharing)
+- [ ] Graph `User.ReadBasic.All` added (core)
+- [ ] Graph `Organization.Read.All` added (Licensing — optional)
+- [ ] Graph `AuditLog.Read.All` added (Usage Heatmap — optional; also needs an audit-reader Entra role)
 - [ ] Admin consent granted (green checkmarks on all permissions)
 - [ ] Client ID and Tenant ID noted
 

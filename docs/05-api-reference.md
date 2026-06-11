@@ -1,6 +1,6 @@
 # API Reference
 
-This application calls three Microsoft APIs from the browser using delegated permissions. No backend server is involved — all calls are made directly from the user's browser session using tokens acquired via MSAL.
+This application calls several Microsoft APIs directly from the browser using **delegated** permissions — no backend server is involved. Tokens are acquired per-API via MSAL (`acquireTokenSilent` with popup fallback). An optional Azure Table Storage account (account-level SAS, no OAuth) persists a few features.
 
 ---
 
@@ -107,11 +107,39 @@ https://api.bap.microsoft.com/.default
 
 ---
 
-## 3. Microsoft Graph API
+## 3. Power Apps Service API
+
+**Base URL:** `https://api.powerapps.com`
+
+**Used for:** Reading who an app is shared with (the **Sharing** section of the resource detail panel).
+
+### Endpoint — App permissions
+
+```
+GET https://api.powerapps.com/providers/Microsoft.PowerApps/apps/{appId}/permissions?api-version=2016-11-01
+```
+
+Returns the principals (users, groups, tenant) an app is shared with and their role (`CanView`, `CanEdit`, `Owner`).
+
+### Authentication scope
+
+```
+https://service.powerapps.com/.default
+```
+
+This scope is requested **incrementally** — only when sharing is first opened — which may surface a one-time consent popup.
+
+### Official documentation
+
+- [Power Apps for Admins connector](https://learn.microsoft.com/connectors/powerappsforadmins/)
+
+---
+
+## 4. Microsoft Graph API
 
 **Base URL:** `https://graph.microsoft.com/v1.0`
 
-**Used for:** Resolving Azure AD object IDs (GUIDs) to human-readable display names for resource owners.
+**Used for:** Resolving owner GUIDs to display names, reading license capacity, and reading sign-in logs for the usage heatmap.
 
 ### Endpoint — Batch user/service principal lookup
 
@@ -140,10 +168,28 @@ The app collects all unique owner GUIDs from the Power Platform resources and re
 
 If a GUID is not found as a user, it retries as a service principal (to handle app/SPN ownership). Unknown GUIDs are displayed as-is.
 
-### Authentication scope
+### Endpoint — License capacity (Licensing section)
 
 ```
-https://graph.microsoft.com/User.ReadBasic.All
+GET https://graph.microsoft.com/v1.0/subscribedSkus
+```
+
+Returns the tenant's subscribed SKUs with prepaid/consumed unit counts. The app filters to Power Platform SKUs and renders capacity and utilization. Requires `Organization.Read.All`.
+
+### Endpoint — Sign-in logs (Usage heatmap & analytics)
+
+```
+GET https://graph.microsoft.com/v1.0/auditLogs/signIns?$filter=createdDateTime ge {since}&$top=999
+```
+
+Returns Entra sign-in records (user, app, location/geo, client, status, timestamp). The app aggregates these by location, user, product, and day. Requires `AuditLog.Read.All` **and** an Entra role that can read audit logs (Reports Reader, Security Reader, Global Reader, or Global Administrator). When Azure Storage is configured, results are cached (see section 6) so the heatmap loads instantly.
+
+### Authentication scopes
+
+```
+https://graph.microsoft.com/User.ReadBasic.All      # owner name resolution (core)
+https://graph.microsoft.com/Organization.Read.All    # Licensing (optional)
+https://graph.microsoft.com/AuditLog.Read.All        # Usage heatmap (optional)
 ```
 
 ### Official documentation
@@ -152,8 +198,28 @@ https://graph.microsoft.com/User.ReadBasic.All
 - [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)
 - [Batch requests](https://learn.microsoft.com/graph/json-batching)
 - [List users](https://learn.microsoft.com/graph/api/user-list)
-- [List service principals](https://learn.microsoft.com/graph/api/serviceprincipal-list)
-- [`User.ReadBasic.All` permission](https://learn.microsoft.com/graph/permissions-reference#user-permissions)
+- [List subscribedSkus](https://learn.microsoft.com/graph/api/subscribedsku-list)
+- [List signIns](https://learn.microsoft.com/graph/api/signin-list)
+- [Graph permissions reference](https://learn.microsoft.com/graph/permissions-reference)
+
+---
+
+## 5. Azure Table Storage *(optional)*
+
+**Base URL:** `https://{account}.table.core.windows.net`
+
+**Used for:** Persisting risk assessments, resource tags, and a cached Entra sign-in dataset for the usage heatmap. Configured via `VITE_STORAGE_ACCOUNT` and an account-level Table SAS (`VITE_TABLE_SAS`). When unset, risk assessments and tags fall back to `localStorage` and the heatmap fetches sign-ins live.
+
+### Authentication
+
+Account-level **SAS token** (not OAuth) appended to each request. The SAS needs Read, Add, Create, Update, Delete, and List permissions on the Table service. Tables must be provisioned out-of-band (an object/container-scoped SAS cannot create tables).
+
+> **Security note:** A Table SAS is a credential. Scope it narrowly (Table service only), set a sensible expiry, and rotate it. It is embedded in the built client bundle, so treat the hosted app's storage as non-sensitive cache data.
+
+### Official documentation
+
+- [Table Service REST API](https://learn.microsoft.com/rest/api/storageservices/table-service-rest-api)
+- [Create an account SAS](https://learn.microsoft.com/rest/api/storageservices/create-account-sas)
 
 ---
 
@@ -161,11 +227,15 @@ https://graph.microsoft.com/User.ReadBasic.All
 
 The table below matches each API to the permissions that must be configured in the Azure AD App Registration:
 
-| API | Permission type | Scope / Permission name | Admin consent required |
-|---|---|---|---|
-| Power Platform API | Delegated | `https://api.powerplatform.com/.default` | Yes |
-| BAP API | Delegated | `https://api.bap.microsoft.com/.default` | Yes |
-| Microsoft Graph | Delegated | `User.ReadBasic.All` | No (but recommended) |
+| API | Permission type | Scope / Permission name | Admin consent required | Powers |
+|---|---|---|---|---|
+| Power Platform API | Delegated | `https://api.powerplatform.com/.default` | Yes | Inventory |
+| BAP API | Delegated | `https://api.bap.microsoft.com/.default` | Yes | Governance |
+| Power Apps Service | Delegated | `https://service.powerapps.com/.default` | Yes | Sharing |
+| Microsoft Graph | Delegated | `User.ReadBasic.All` | No (but recommended) | Owner names (core) |
+| Microsoft Graph | Delegated | `Organization.Read.All` | Yes | Licensing (optional) |
+| Microsoft Graph | Delegated | `AuditLog.Read.All` | Yes | Usage heatmap (optional) — also needs an audit-reader Entra role |
+| Azure Table Storage | Account SAS | `VITE_TABLE_SAS` | n/a | Persisted assessments, tags, sign-in cache (optional) |
 
 ---
 
@@ -181,10 +251,11 @@ The table below matches each API to the permissions that must be configured in t
 
 ## Data residency and privacy
 
-- All API calls are made to Microsoft-owned infrastructure.
+- All API calls are made to Microsoft-owned infrastructure (Microsoft Graph, Power Platform, BAP, and — if configured — your own Azure Storage account).
 - No data is sent to any third-party service.
-- No data is persisted beyond the browser session (tokens in `sessionStorage`, API responses in React Query's in-memory cache).
-- The application is read-only; it does not write, modify, or delete any resource.
+- By default no data is persisted beyond the browser session (tokens in `sessionStorage`, API responses in React Query's in-memory cache).
+- **If** `VITE_STORAGE_ACCOUNT`/`VITE_TABLE_SAS` are configured, the app persists risk assessments, resource tags, and a trimmed sign-in cache to **your** Azure Table Storage; otherwise assessments/tags use `localStorage`.
+- The application is read-only with respect to Power Platform — it does not create, modify, or delete apps, flows, agents, environments, or policies. The only data it writes is your risk assessments and tags, to your own storage.
 
 ---
 
