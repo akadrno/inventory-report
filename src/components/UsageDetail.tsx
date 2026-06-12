@@ -18,7 +18,7 @@ import {
   inventoryHealth, creationTrend, byRecentActivity, getActivityDate, daysSince,
   subtypeBreakdown, topOwners, topEnvironments,
   signInsForCategory, signInStats, dailyTrend, countBy,
-  KpiRow, KpiCard, SectionCard, BarList, SegmentBar, TrendBars, Grid2,
+  KpiRow, KpiCard, SectionCard, BarList, TrendBars, Grid2,
 } from './usageShared'
 
 interface UsageDetailProps {
@@ -33,9 +33,6 @@ const PRODUCT_ICON: Record<Category, React.ReactNode> = {
   flows: <PowerAutomateIcon fontSize={22} />,
   agents: <CopilotStudioIcon fontSize={22} />,
 }
-
-// Subtype segment palette derived from the product accent + neutral support tones.
-const SEG_COLORS = ['#4aa8ff', '#b07cff', '#3ad1c4', '#e6a23c', '#8a8886']
 
 const useClasses = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: '14px' },
@@ -106,8 +103,6 @@ export function UsageDetailView({ category, allResources, allEnvironments, owner
   const topUsers = useMemo(() => countBy(catRecords, r => r.userDisplayName || r.userPrincipalName, 6, 'Unknown'), [catRecords])
   const hasTelemetry = cache.configured && catRecords.length > 0
 
-  const segments = breakdown.map((b, i) => ({ label: b.label, value: b.value, color: SEG_COLORS[i % SEG_COLORS.length] }))
-
   return (
     <div className={classes.root}>
       <div className={classes.banner}>
@@ -145,7 +140,7 @@ export function UsageDetailView({ category, allResources, allEnvironments, owner
         </SectionCard>
 
         <SectionCard title="Breakdown by type" icon={<AppsListRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}>
-          <SegmentBar segments={segments} />
+          <BarList items={breakdown} accent={meta.accent} emptyText="No resources to break down" />
         </SectionCard>
       </Grid2>
 
