@@ -771,6 +771,7 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
       <CollapsibleCard
         icon={<LightbulbRegular fontSize={16} style={{ color: ACTIVE }} />}
         title="Advisor Recommendations"
+        defaultOpen={false}
         badge={advisor.data && advisor.data.length > 0
           ? <Badge appearance="tint" color="informative" size="small">{advisor.data.length}</Badge>
           : undefined}
