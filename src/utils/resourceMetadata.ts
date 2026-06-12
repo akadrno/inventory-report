@@ -99,6 +99,14 @@ export function isM365BuilderAgent(r: ResourceItem): boolean {
     || createdIn.includes('copilot studio lite')
 }
 
+// Friendly "Created in" label: M365 agent-builder / Copilot Studio Lite agents
+// surface as "Agent Builder"; everything else keeps its reported value.
+export function getAgentCreatedInLabel(r: ResourceItem): string | undefined {
+  const raw = getAgentCreatedIn(r)
+  if (!raw) return raw
+  return isM365BuilderAgent(r) ? 'Agent Builder' : raw
+}
+
 // Dataverse schema name of an agent (e.g. "cr5e3_agentName").
 export function getAgentSchemaName(r: ResourceItem): string | undefined {
   if (getResourceCategory(r.type) !== 'agents') return undefined

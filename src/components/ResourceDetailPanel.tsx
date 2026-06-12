@@ -28,7 +28,7 @@ import {
   getCreatedBy, getModifiedBy, getPublishedBy,
   getCreatedDate, getModifiedDate, getPublishedDate,
   getOwnerPerson, getAgentId, getAgentModel,
-  getAgentOrchestration, getAgentAuthentication, getAgentCreatedIn, getAgentSchemaName,
+  getAgentOrchestration, getAgentAuthentication, getAgentCreatedInLabel, getAgentSchemaName,
   getIsQuarantined, getFlowWorkflowEntityId, getAppModuleId, getAppLogicalName,
   getEnvironmentGroupId, getEnvironmentGroupName,
   getConnectorsWithOperations, getFlowTrigger,
@@ -452,7 +452,7 @@ function OverviewTab({ resource, allEnvironments, nameMap }: OverviewProps) {
   const agentModel = getAgentModel(resource)
   const agentOrchestration = getAgentOrchestration(resource)
   const agentAuthentication = getAgentAuthentication(resource)
-  const agentCreatedIn = getAgentCreatedIn(resource)
+  const agentCreatedIn = getAgentCreatedInLabel(resource)
   const agentSchemaName = getAgentSchemaName(resource)
   const isQuarantined = getIsQuarantined(resource)
   const flowWorkflowEntityId = getFlowWorkflowEntityId(resource)
@@ -1057,7 +1057,7 @@ function buildOverviewText(resource: ResourceItem, allEnvironments: ResourceItem
   add('Model', getAgentModel(resource))
   add('Orchestration', getAgentOrchestration(resource))
   add('Authentication', getAgentAuthentication(resource))
-  add('Created in', getAgentCreatedIn(resource))
+  add('Created in', getAgentCreatedInLabel(resource))
   add('Resource GUID', getResourceGuid(resource))
   add('Schema name', getAgentSchemaName(resource))
   add('App module ID', getAppModuleId(resource))
