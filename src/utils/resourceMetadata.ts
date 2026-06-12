@@ -89,6 +89,16 @@ export function getAgentCreatedIn(r: ResourceItem): string | undefined {
   return pickString(r.properties, ['createdIn', 'CreatedIn'])
 }
 
+// True when an agent was authored in the lightweight M365 agent builder
+// (a.k.a. "Copilot Studio Lite") rather than full Copilot Studio. Used to
+// classify/filter agents as "M365 Agent Builder" in the inventory.
+export function isM365BuilderAgent(r: ResourceItem): boolean {
+  const createdIn = (getAgentCreatedIn(r) ?? '').toLowerCase()
+  return createdIn.includes('agent builder')
+    || createdIn.includes('microsoft 365')
+    || createdIn.includes('copilot studio lite')
+}
+
 // Dataverse schema name of an agent (e.g. "cr5e3_agentName").
 export function getAgentSchemaName(r: ResourceItem): string | undefined {
   if (getResourceCategory(r.type) !== 'agents') return undefined

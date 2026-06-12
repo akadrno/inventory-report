@@ -1,6 +1,7 @@
 import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
 import type { ResourceItem } from '../types'
 import { getResourceCategory } from '../types'
+import { isM365BuilderAgent } from '../utils/resourceMetadata'
 import type { SignInRecord } from '../api/signInsApi'
 
 // ── Shared usage analytics + presentation kit ───────────────────────────────
@@ -113,7 +114,7 @@ export function subtypeBreakdown(resources: ResourceItem[], category: Category):
       else bump('Cloud flows')
     } else {
       const createdIn = String(r.properties?.['createdIn'] ?? r.properties?.['CreatedIn'] ?? '').toLowerCase()
-      if (createdIn.includes('agent builder') || createdIn.includes('microsoft 365')) bump('M365 Agent Builder')
+      if (isM365BuilderAgent(r)) bump('M365 Agent Builder')
       else if (createdIn) bump('Copilot Studio')
       else bump('Copilot agents')
     }

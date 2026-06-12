@@ -67,6 +67,7 @@ import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getOwnerF
 import { GUID_RE } from '../hooks/useOwnerNames'
 import { buildEnvMap, resolveEnvironmentName } from '../utils/environment'
 import { formatRegion } from '../utils/regions'
+import { isM365BuilderAgent } from '../utils/resourceMetadata'
 import { friendlyType } from './ResourceTypeBadge'
 import {
   computeInsights,
@@ -1136,10 +1137,7 @@ export function Shell() {
     }
     if (invView === 'agents' && agentSubView !== 'all') {
       items = items.filter(r => {
-        const createdIn = String(
-          (r.properties?.['createdIn'] ?? r.properties?.['CreatedIn'] ?? '') as string,
-        ).toLowerCase()
-        const isM365Builder = createdIn.includes('agent builder') || createdIn.includes('microsoft 365')
+        const isM365Builder = isM365BuilderAgent(r)
         if (agentSubView === 'm365builder') return isM365Builder
         // 'copilotstudio' = everything that isn't explicitly M365 Agent Builder
         return !isM365Builder
