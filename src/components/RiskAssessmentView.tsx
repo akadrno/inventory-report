@@ -544,20 +544,20 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
     )
   }
 
-  const riskSummaryItems: Array<{ key: RiskFilter; color: string; label: string; icon: React.ReactNode; count: number }> = [
-    { key: 'Critical',    color: tokens.colorStatusDangerForeground1, label: 'Critical',     icon: <ErrorCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,   count: riskCounts.Critical },
-    { key: 'High',        color: tokens.colorStatusWarningForeground1, label: 'High',         icon: <WarningRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,        count: riskCounts.High },
-    { key: 'Medium',      color: tokens.colorPalettePurpleForeground2, label: 'Medium',       icon: <InfoRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />,           count: riskCounts.Medium },
-    { key: 'Low',         color: tokens.colorStatusSuccessForeground1, label: 'Low',          icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />, count: riskCounts.Low },
-    { key: 'NotAssessed', color: tokens.colorNeutralForeground3, label: 'Not Assessed', icon: <ShieldRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,         count: riskCounts.NotAssessed },
+  const riskSummaryItems: Array<{ key: RiskFilter; color: string; accent: string; label: string; icon: React.ReactNode; count: number }> = [
+    { key: 'Critical',    color: tokens.colorStatusDangerForeground1, accent: '#e0626d', label: 'Critical',     icon: <ErrorCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,   count: riskCounts.Critical },
+    { key: 'High',        color: tokens.colorStatusWarningForeground1, accent: '#e6a23c', label: 'High',         icon: <WarningRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,        count: riskCounts.High },
+    { key: 'Medium',      color: tokens.colorPalettePurpleForeground2, accent: '#b07cff', label: 'Medium',       icon: <InfoRegular fontSize={24} style={{ color: tokens.colorPalettePurpleForeground2 }} />,           count: riskCounts.Medium },
+    { key: 'Low',         color: tokens.colorStatusSuccessForeground1, accent: '#5bb26b', label: 'Low',          icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />, count: riskCounts.Low },
+    { key: 'NotAssessed', color: tokens.colorNeutralForeground3, accent: '#8a8886', label: 'Not Assessed', icon: <ShieldRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,         count: riskCounts.NotAssessed },
   ]
 
-  const complianceSummaryItems: Array<{ key: ComplianceStatus; color: string; label: string; icon: React.ReactNode; count: number }> = [
-    { key: 'Non-Compliant', color: tokens.colorStatusDangerForeground1, label: 'Non-Compliant', icon: <DismissCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,    count: complianceCounts['Non-Compliant'] },
-    { key: 'In Review',     color: tokens.colorBrandForeground1, label: 'In Review',     icon: <ClockRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />,             count: complianceCounts['In Review'] },
-    { key: 'Not Reviewed',  color: tokens.colorNeutralForeground3, label: 'Not Reviewed',  icon: <QuestionCircleRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,    count: complianceCounts['Not Reviewed'] },
-    { key: 'Compliant',     color: tokens.colorStatusSuccessForeground1, label: 'Compliant',     icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />,   count: complianceCounts['Compliant'] },
-    { key: 'Exempted',      color: tokens.colorStatusWarningForeground1, label: 'Exempted',      icon: <ShieldCheckmarkRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,   count: complianceCounts['Exempted'] },
+  const complianceSummaryItems: Array<{ key: ComplianceStatus; color: string; accent: string; label: string; icon: React.ReactNode; count: number }> = [
+    { key: 'Non-Compliant', color: tokens.colorStatusDangerForeground1, accent: '#e0626d', label: 'Non-Compliant', icon: <DismissCircleRegular fontSize={24} style={{ color: tokens.colorStatusDangerForeground1 }} />,    count: complianceCounts['Non-Compliant'] },
+    { key: 'In Review',     color: tokens.colorBrandForeground1, accent: '#4aa8ff', label: 'In Review',     icon: <ClockRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />,             count: complianceCounts['In Review'] },
+    { key: 'Not Reviewed',  color: tokens.colorNeutralForeground3, accent: '#8a8886', label: 'Not Reviewed',  icon: <QuestionCircleRegular fontSize={24} style={{ color: tokens.colorNeutralForeground3 }} />,    count: complianceCounts['Not Reviewed'] },
+    { key: 'Compliant',     color: tokens.colorStatusSuccessForeground1, accent: '#5bb26b', label: 'Compliant',     icon: <CheckmarkCircleRegular fontSize={24} style={{ color: tokens.colorStatusSuccessForeground1 }} />,   count: complianceCounts['Compliant'] },
+    { key: 'Exempted',      color: tokens.colorStatusWarningForeground1, accent: '#e6a23c', label: 'Exempted',      icon: <ShieldCheckmarkRegular fontSize={24} style={{ color: tokens.colorStatusWarningForeground1 }} />,   count: complianceCounts['Exempted'] },
   ]
 
   const sectionLabel: React.CSSProperties = {
@@ -586,13 +586,14 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <span style={sectionLabel}>Risk Level</span>
         <div className={classes.summaryGrid}>
-          {riskSummaryItems.map(({ key, color, label, icon, count }) => (
+          {riskSummaryItems.map(({ key, accent, label, icon, count }) => (
             <div
               key={key}
               className={classes.summaryCard}
               style={{
-                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: color,
-                outline: riskFilter === key ? `2px solid ${color}` : undefined,
+                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: accent,
+                backgroundImage: `radial-gradient(130% 130% at 100% 0%, ${accent}22, transparent 55%)`,
+                outline: riskFilter === key ? `2px solid ${accent}` : undefined,
               }}
               onClick={() => setRiskFilter(riskFilter === key ? 'All' : key)}
               role="button"
@@ -611,13 +612,14 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <span style={sectionLabel}>Compliance Status</span>
         <div className={classes.summaryGrid}>
-          {complianceSummaryItems.map(({ key, color, label, icon, count }) => (
+          {complianceSummaryItems.map(({ key, accent, label, icon, count }) => (
             <div
               key={key}
               className={classes.summaryCard}
               style={{
-                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: color,
-                outline: complianceFilter === key ? `2px solid ${color}` : undefined,
+                borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: accent,
+                backgroundImage: `radial-gradient(130% 130% at 100% 0%, ${accent}22, transparent 55%)`,
+                outline: complianceFilter === key ? `2px solid ${accent}` : undefined,
               }}
               onClick={() => setComplianceFilter(complianceFilter === key ? 'All' : key)}
               role="button"
