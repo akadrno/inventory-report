@@ -21,7 +21,7 @@ A browser-based inventory, governance, and usage dashboard for Power Platform ad
 
 | Section | Description |
 |---|---|
-| **Home** | Cinematic "command center" overview: live Agent / App / Flow counts, governance health (critical, warnings, compliance), and tabs for resource breakdown, tenant governance, DLP, and recommendations |
+| **Home** | Overview: live Agent / App / Flow counts, governance health (critical, warnings, compliance), and tabs for resource breakdown, tenant governance, DLP, and recommendations |
 | **Inventory** | Browse all resources — Apps (canvas / model-driven / code), Flows (cloud / agent), Agents (Copilot Studio / M365), Environments, Environment Groups, and Users — with search and a detail panel (configuration, sharing, activity) |
 | **Governance** | Overview & resource insights, Tenant Settings, DLP Policies, Cross-Tenant Connections, Connections, Recommendations (Advisor + computed), Maker Analytics, and Risk Assessments |
 | **Usage** | Adoption analytics from Entra sign-ins + inventory: active users, sessions, success rate, geography, top users; per-product (Apps / Flows / Agents) drill-ins; and a world **Heatmap** of where users sign in |
