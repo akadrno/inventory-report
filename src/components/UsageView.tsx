@@ -183,7 +183,7 @@ export function UsageView({ allResources, allEnvironments, ownerNames, onOpenCat
 
       <div style={fadeUp(0.06)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 2px 10px' }}>
-          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Inventory health</Text>
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Tenant health</Text>
         </div>
         <KpiRow>
           <KpiCard label="Total resources" value={health.total.toLocaleString()} />
