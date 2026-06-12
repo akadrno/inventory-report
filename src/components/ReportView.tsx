@@ -4,7 +4,6 @@ import {
   ErrorCircleRegular,
   WarningRegular,
   CheckmarkCircleRegular,
-  LockClosedRegular,
   ArrowClockwiseRegular,
   DatabaseRegular,
 } from '@fluentui/react-icons'
@@ -502,9 +501,6 @@ function BarCell({ value, max }: { value: number; max: number }) {
   )
 }
 
-function DashIfZero({ n }: { n: number }) {
-  return <>{n}</>
-}
 
 // ── Tab: Overview ─────────────────────────────────────────────────────────────
 
@@ -738,116 +734,6 @@ function GovernanceTab() {
   )
 }
 
-// ── Tab: DLP ──────────────────────────────────────────────────────────────────
-
-function DLPTab({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
-  const { data, isLoading, isError } = useDLPPolicies()
-  const classes = useClasses()
-
-  const envMap = useMemo(() => buildEnvMap(allEnvironments), [allEnvironments])
-
-  if (isLoading) return <div style={{ padding: tokens.spacingVerticalXL }}><Spinner size="small" label="Loading DLP policies…" /></div>
-  if (isError || !data) return (
-    <div className={classes.finding} style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, backgroundColor: tokens.colorNeutralBackground3, borderLeftColor: tokens.colorNeutralStroke1 }}>
-      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Requires Power Platform admin permissions (BAP API). Sign in with an admin account.</Caption1>
-    </div>
-  )
-
-  const hasNoBlocklist = data.every(p => !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'blocked' && g.connectors.length > 0))
-  const allInGeneral = data.length > 0 && data.every(p => {
-    const groups = p.connectorGroups ?? []
-    const conf = groups.find(g => g.classification.toLowerCase() === 'confidential')
-    return !conf || conf.connectors.length === 0
-  })
-
-  return (
-    <div className={classes.section}>
-      {data.length === 0 && (
-        <div className={`${classes.finding} ${classes.findingCritical}`}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
-            <Text size={300} weight="semibold">No DLP policies found — all connectors unrestricted</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-            Without DLP policies, any connector can communicate with any other connector. Sensitive data could be exfiltrated with no audit trail.
-          </Caption1>
-        </div>
-      )}
-
-      {allInGeneral && data.length > 0 && (
-        <div className={`${classes.finding} ${classes.findingCritical}`}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
-            <Text size={300} weight="semibold">All connectors classified as General — no data separation</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-            Move sensitive connectors (Dataverse, SharePoint, SQL, Office 365) to the Confidential group to prevent cross-category data flows.
-          </Caption1>
-        </div>
-      )}
-
-      {hasNoBlocklist && data.length > 0 && (
-        <div className={`${classes.finding} ${classes.findingWarn}`}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
-            <WarningRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
-            <Text size={300} weight="semibold">No connectors in the Blocked group</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-            HTTP and custom connectors can call any external API. Block high-risk connectors in production and default environments.
-          </Caption1>
-        </div>
-      )}
-
-      <div>
-        <div className={classes.sectionHead}>
-          <LockClosedRegular style={{ color: tokens.colorBrandForeground1 }} />
-          <Text weight="semibold" size={400}>DLP Policies ({data.length})</Text>
-        </div>
-        {data.length === 0 ? (
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No policies configured.</Caption1>
-        ) : (
-          <div className={classes.card} style={{ overflowX: 'auto' }}>
-            <table className={classes.table}>
-              <thead className={classes.thead}>
-                <tr>
-                  <th className={classes.th}>Policy Name</th>
-                  <th className={classes.th}>Scope</th>
-                  <th className={classes.thR}>Confidential</th>
-                  <th className={classes.thR}>General</th>
-                  <th className={classes.thR}>Blocked</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((p, i) => {
-                  const isAll = p.environmentType === 'AllEnvironments' || p.type === 'AllEnvironments'
-                  const groups = p.connectorGroups ?? []
-                  const conf = groups.find(g => g.classification.toLowerCase() === 'confidential')?.connectors.length ?? 0
-                  const gen = groups.find(g => g.classification.toLowerCase() === 'general')?.connectors.length ?? 0
-                  const blocked = groups.find(g => g.classification.toLowerCase() === 'blocked')?.connectors.length ?? 0
-                  return (
-                    <tr key={p.name ?? i}>
-                      <td className={classes.td}><Text size={200} weight="semibold">{p.displayName ?? p.name}</Text></td>
-                      <td className={classes.td}>
-                        {isAll
-                          ? <Badge appearance="tint" color="informative" size="small">All Environments</Badge>
-                          : <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{p.environments?.map(e => envMap.get(e.name) ?? e.name).join(', ') || '—'}</Caption1>
-                        }
-                      </td>
-                      <td className={classes.tdR}><DashIfZero n={conf} /></td>
-                      <td className={classes.tdR}><DashIfZero n={gen} /></td>
-                      <td className={classes.tdR}><DashIfZero n={blocked} /></td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Tab: Recommendations ──────────────────────────────────────────────────────
 
 type Rec = { priority: 'Critical' | 'High' | 'Medium' | 'Low'; action: string; why: string; how: string }
@@ -950,12 +836,11 @@ export function RecsTab({ allEnvironments }: { allEnvironments: ResourceItem[] }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type ReportTab = 'overview' | 'governance' | 'dlp' | 'recommendations'
+type ReportTab = 'overview' | 'governance' | 'recommendations'
 
 const TABS: { id: ReportTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'governance', label: 'Tenant Governance' },
-  { id: 'dlp', label: 'DLP Policies' },
   { id: 'recommendations', label: 'Recommendations' },
 ]
 
@@ -1061,7 +946,6 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
       {/* Tab content */}
       {tab === 'overview' && <OverviewTab allResources={allResources} allEnvironments={allEnvironments} />}
       {tab === 'governance' && <GovernanceTab />}
-      {tab === 'dlp' && <DLPTab allEnvironments={allEnvironments} />}
       {tab === 'recommendations' && <RecsTab allEnvironments={allEnvironments} />}
 
       <div style={{ textAlign: 'center', padding: tokens.spacingVerticalL, color: tokens.colorNeutralForeground3, borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: tokens.colorNeutralStroke2, marginTop: tokens.spacingVerticalL }}>
