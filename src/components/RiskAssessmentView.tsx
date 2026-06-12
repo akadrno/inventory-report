@@ -375,6 +375,7 @@ function AssessmentSidePanel({
             <div className={classes.formField}>
               <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Risk Notes <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <Textarea value={form.riskNotes} onChange={(_, d) => setForm(f => ({ ...f, riskNotes: d.value }))}
+                aria-label="Risk Notes"
                 placeholder="Document specific risk findings, vulnerabilities, or compliance gaps…" resize="vertical" rows={3} />
               {submitAttempted && !form.riskNotes.trim() && (
                 <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Risk notes are required</Caption1>
@@ -384,6 +385,7 @@ function AssessmentSidePanel({
             <div className={classes.formField} style={{ marginBottom: isApp ? '14px' : 0 }}>
               <Text style={{ fontSize: '12px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>Admin Notes <span style={{ color: tokens.colorStatusDangerForeground1 }}>*</span></Text>
               <Textarea value={form.notes} onChange={(_, d) => setForm(f => ({ ...f, notes: d.value }))}
+                aria-label="Admin Notes"
                 placeholder="General notes, remediation steps, or context for this resource…" resize="vertical" rows={3} />
               {submitAttempted && !form.notes.trim() && (
                 <Caption1 style={{ color: tokens.colorStatusDangerForeground1, display: 'block', marginTop: '4px' }}>Admin notes are required</Caption1>
@@ -597,6 +599,8 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
               }}
               onClick={() => setRiskFilter(riskFilter === key ? 'All' : key)}
               role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRiskFilter(riskFilter === key ? 'All' : key) } }}
             >
               {icon}
               <div>
@@ -623,6 +627,8 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
               }}
               onClick={() => setComplianceFilter(complianceFilter === key ? 'All' : key)}
               role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setComplianceFilter(complianceFilter === key ? 'All' : key) } }}
             >
               {icon}
               <div>
@@ -638,6 +644,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <Input
           contentBefore={<SearchRegular />}
+          aria-label="Search resources"
           placeholder="Search resources…"
           value={search}
           onChange={(_, d) => setSearch(d.value)}
@@ -793,6 +800,7 @@ export function RiskAssessmentView({ allResources, ownerNames, currentUser }: Ri
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               >Next →</Button>
               <select
+                aria-label="Resources per page"
                 value={pageSize}
                 onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                 style={{

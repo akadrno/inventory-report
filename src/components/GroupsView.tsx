@@ -336,7 +336,7 @@ function EnvironmentTable({
                 const name = getDisplayName(env)
                 const region = env.environmentRegion ?? env.location ?? '—'
                 return (
-                  <tr key={env.id} className={classes.tr} onClick={() => onEnvClick(env)}>
+                  <tr key={env.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { onEnvClick(env) } }} onClick={() => onEnvClick(env)}>
                     <td className={classes.td}>
                       <div className={classes.nameCell}>
                         <GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
@@ -371,6 +371,7 @@ function EnvironmentTable({
                         appearance="subtle"
                         icon={<MoreHorizontalRegular />}
                         size="small"
+                        aria-label="View environment details"
                         title="View environment details"
                         onClick={e => { e.stopPropagation(); setDetailEnv(env) }}
                       />
@@ -490,7 +491,7 @@ function EnvironmentResourcesView({
                   const rawOwner = getOwnerFromProperties(item)
                   const owner = resolveOwner(rawOwner, ownerNames)
                   return (
-                    <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
+                    <tr key={item.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { setSelected(item) } }} onClick={() => setSelected(item)}>
                       <td className={classes.td}>
                         <Text weight="semibold" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }} title={displayName}>
                           {displayName}
@@ -679,7 +680,7 @@ function GroupRulesPanel({ group, isOpen, onClose }: { group: ResourceItem | nul
     <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '460px' }}>
       <DrawerHeader>
         <DrawerHeaderTitle
-          action={<Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />}
+          action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
             <ShieldRegular style={{ color: tokens.colorBrandForeground1, fontSize: '18px' }} />
@@ -796,6 +797,7 @@ function GroupCard({ group, envCount, index, onClick, onViewRules }: { group: Re
             appearance="subtle"
             icon={<ShieldRegular fontSize={14} />}
             size="small"
+            aria-label="View rules & policies"
             title="View rules & policies"
             onClick={e => { e.stopPropagation(); onViewRules() }}
           />

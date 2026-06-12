@@ -293,7 +293,7 @@ export function ResourceTable({ resources, isLoading, ownerNames, allEnvironment
                     const owner = resolveOwner(rawOwner, ownerNames)
                     const region = formatRegion(item.environmentRegion ?? item.location) || '—'
                     return (
-                      <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
+                      <tr key={item.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { setSelected(item) } }} onClick={() => setSelected(item)}>
                         <td className={classes.td}>
                           <div className={classes.nameCell}>
                             <ResourceIcon type={item.type} />

@@ -370,7 +370,7 @@ function EnvironmentResourcesView({
               </thead>
               <tbody>
                 {sorted.map(item => (
-                  <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
+                  <tr key={item.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { setSelected(item) } }} onClick={() => setSelected(item)}>
                     <td className={classes.td}>
                       <div className={classes.resourceNameCell}>
                         <ResourceIcon type={item.type} />
@@ -484,7 +484,7 @@ function EnvironmentListTable({
                 const region = formatRegion(env.environmentRegion ?? env.location)
                 const count = resourceCounts.get(env.name) ?? 0
                 return (
-                  <tr key={env.id} className={classes.tr} onClick={() => onEnvClick(env)}>
+                  <tr key={env.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { onEnvClick(env) } }} onClick={() => onEnvClick(env)}>
                     <td className={classes.td}>
                       <div className={classes.nameCell}>
                         <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
@@ -494,7 +494,7 @@ function EnvironmentListTable({
                     <td className={classes.td} onClick={e => e.stopPropagation()} style={{ width: '40px', padding: '4px 0' }}>
                       <Menu>
                         <MenuTrigger>
-                          <Button appearance="subtle" icon={<MoreVerticalRegular />} size="small" title="Options" />
+                          <Button appearance="subtle" icon={<MoreVerticalRegular />} size="small" aria-label="Options" title="Options" />
                         </MenuTrigger>
                         <MenuPopover>
                           <MenuList>

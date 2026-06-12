@@ -136,7 +136,7 @@ const useClasses = makeStyles({
 })
 
 const MicrosoftLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+  <svg width="18" height="18" viewBox="0 0 21 21" fill="none" aria-hidden>
     <rect x="1" y="1" width="9" height="9" fill="#F25022" />
     <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
     <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
@@ -170,7 +170,7 @@ export function SignInPage() {
           <div className={classes.glyphWrap}>
             <div className={classes.glyphRing} style={{ animation: 'ppGlyphRing 2.8s ease-out infinite' }} />
             <div className={classes.glyph}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z" fill="white" fillOpacity=".95" />
               </svg>
             </div>

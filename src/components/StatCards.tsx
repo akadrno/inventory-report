@@ -73,7 +73,9 @@ interface StatCardProps {
 function StatCard({ label, value, icon, iconBg, iconColor, isLoading, onClick }: StatCardProps) {
   const classes = useClasses()
   return (
-    <div className={classes.card} onClick={onClick} role="button" tabIndex={0}>
+    <div className={classes.card} onClick={onClick} role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+    >
       <div className={classes.iconBox} style={{ backgroundColor: iconBg, color: iconColor }}>
         {icon}
       </div>

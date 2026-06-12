@@ -372,6 +372,7 @@ function UserResourcesView({
           <div style={{ flex: 1 }} />
           <Input
             contentBefore={<SearchRegular />}
+            aria-label="Search by name, type, or environment"
             placeholder="Search by name, type, or environment…"
             value={search}
             onChange={(_, d) => setSearch(d.value)}
@@ -397,7 +398,7 @@ function UserResourcesView({
               {sorted.length === 0 ? (
                 <tr><td colSpan={3} className={classes.emptyState}><Caption1>{search.trim() ? 'No resources match your search.' : 'No resources'}</Caption1></td></tr>
               ) : sorted.map(item => (
-                <tr key={item.id} className={classes.tr} onClick={() => setSelected(item)}>
+                <tr key={item.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { setSelected(item) } }} onClick={() => setSelected(item)}>
                   <td className={classes.td}>
                     <div className={classes.resourceNameCell}>
                       <ResourceIcon type={item.type} />
@@ -490,7 +491,7 @@ function UserListTable({ users, onUserClick }: { users: UserEntry[]; onUserClick
           </thead>
           <tbody>
             {pageItems.map(user => (
-              <tr key={user.id} className={classes.tr} onClick={() => onUserClick(user)}>
+              <tr key={user.id} className={classes.tr} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { onUserClick(user) } }} onClick={() => onUserClick(user)}>
                 <td className={classes.td}>
                   <div className={classes.nameCell}>
                     <PersonRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />

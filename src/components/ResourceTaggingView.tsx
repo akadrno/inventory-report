@@ -273,7 +273,7 @@ function TagPickerPanel({
   return (
     <OverlayDrawer position="end" open={isOpen} onOpenChange={(_, s) => { if (!s.open) onClose() }} style={{ width: '400px' }}>
       <DrawerHeader>
-        <DrawerHeaderTitle action={<Button appearance="subtle" icon={<DismissRegular />} onClick={onClose} />}>
+        <DrawerHeaderTitle action={<Button appearance="subtle" icon={<DismissRegular />} aria-label="Close" onClick={onClose} />}>
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
             <TagRegular style={{ color: tokens.colorBrandForeground1, fontSize: '18px' }} />
             Tag Resource
@@ -318,6 +318,7 @@ function TagPickerPanel({
           <Input
             contentBefore={<SearchRegular />}
             placeholder="Search terms…"
+            aria-label="Search terms"
             value={search}
             onChange={(_, d) => setSearch(d.value)}
           />
@@ -337,7 +338,10 @@ function TagPickerPanel({
               <div key={group.id}>
                 <div
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', cursor: 'pointer', userSelect: 'none' }}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => toggleGroup(group.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroup(group.id) } }}
                 >
                   {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
                   <Badge appearance="tint" color={color} size="small">{group.name}</Badge>
@@ -478,18 +482,19 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
         <Input
           contentBefore={<SearchRegular />}
           placeholder="Search resources…"
+          aria-label="Search resources"
           value={search}
           onChange={(_, d) => { setSearch(d.value); setCurrentPage(1) }}
           style={{ width: '220px' }}
         />
-        <Select size="small" value={typeFilter} onChange={(_, d) => { setTypeFilter(d.value); setCurrentPage(1) }}>
+        <Select size="small" aria-label="Filter by type" value={typeFilter} onChange={(_, d) => { setTypeFilter(d.value); setCurrentPage(1) }}>
           <option value="all">All types</option>
           <option value="apps">Apps</option>
           <option value="flows">Flows</option>
           <option value="agents">Agents</option>
         </Select>
         {termStore.groups.length > 0 && (
-          <Select size="small" value={groupFilter} onChange={(_, d) => { setGroupFilter(d.value); setCurrentPage(1) }}>
+          <Select size="small" aria-label="Filter by group" value={groupFilter} onChange={(_, d) => { setGroupFilter(d.value); setCurrentPage(1) }}>
             <option value="">All groups</option>
             {termStore.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </Select>
@@ -571,6 +576,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
                               <Button
                                 appearance="subtle" size="small" icon={<AddRegular fontSize={12} />}
                                 title="Add tags"
+                                aria-label="Add tags"
                                 onClick={() => setPanelResource(r)}
                                 style={{ minWidth: 0, padding: '0 4px', height: '20px' }}
                               />
@@ -595,6 +601,7 @@ function TagBrowserView({ allResources, allEnvironments, currentUser }: { allRes
                 <Button size="small" appearance="secondary" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next →</Button>
                 <select
                   value={pageSize}
+                  aria-label="Results per page"
                   onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                   style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${tokens.colorNeutralStroke1}`, color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1, cursor: 'pointer', marginLeft: '4px' }}
                 >
@@ -741,11 +748,11 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
 
   const InlineForm = (
     <div className={classes.inlineForm}>
-      <Input placeholder="Name *" value={formName} onChange={(_, d) => setFormName(d.value)} size="small" />
-      <Input placeholder="Description (optional)" value={formDesc} onChange={(_, d) => setFormDesc(d.value)} size="small" />
+      <Input placeholder="Name *" aria-label="Name" value={formName} onChange={(_, d) => setFormName(d.value)} size="small" />
+      <Input placeholder="Description (optional)" aria-label="Description" value={formDesc} onChange={(_, d) => setFormDesc(d.value)} size="small" />
       {(adding?.kind === 'term' || editing?.kind === 'term') && (
         <>
-          <Input placeholder="Synonyms (comma separated)" value={formSynonyms} onChange={(_, d) => setFormSynonyms(d.value)} size="small" />
+          <Input placeholder="Synonyms (comma separated)" aria-label="Synonyms (comma separated)" value={formSynonyms} onChange={(_, d) => setFormSynonyms(d.value)} size="small" />
           <Checkbox label="Available for tagging" checked={formIsActive} onChange={(_, d) => setFormIsActive(!!d.checked)} />
         </>
       )}
@@ -797,7 +804,7 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
         <div className={classes.tsTree}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacingVerticalS, padding: '0 4px' }}>
             <Text weight="semibold" style={{ fontSize: tokens.fontSizeBase200, color: tokens.colorNeutralForeground2 }}>GROUPS</Text>
-            <Button size="small" appearance="subtle" icon={<AddRegular fontSize={12} />} onClick={() => startAdd({ kind: 'group' })} title="Add group" />
+            <Button size="small" appearance="subtle" icon={<AddRegular fontSize={12} />} onClick={() => startAdd({ kind: 'group' })} title="Add group" aria-label="Add group" />
           </div>
 
           {adding?.kind === 'group' && <div style={{ marginBottom: tokens.spacingVerticalXS }}>{InlineForm}</div>}
@@ -818,6 +825,8 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
               <div key={group.id} className={classes.treeGroup}>
                 <div
                   className={selectedGroupId === group.id ? classes.treeGroupHeaderActive : classes.treeGroupHeader}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => {
                     setSelectedGroupId(group.id)
                     setExpandedGroups(prev => {
@@ -826,6 +835,14 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
                       return next
                     })
                   }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault();
+                    setSelectedGroupId(group.id)
+                    setExpandedGroups(prev => {
+                      const next = new Set(prev)
+                      if (next.has(group.id)) next.delete(group.id); else next.add(group.id)
+                      return next
+                    })
+                  } }}
                 >
                   {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
                   <Badge appearance="tint" color={color} size="small" style={{ flexShrink: 0 }}>{group.name}</Badge>
@@ -845,7 +862,10 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
                         <div key={ts.id}>
                           <div
                             className={selectedTermSetId === ts.id ? classes.treeTermSetActive : classes.treeTermSet}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => { setSelectedTermSetId(ts.id); setSelectedGroupId(group.id) }}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedTermSetId(ts.id); setSelectedGroupId(group.id) } }}
                           >
                             <BookmarkRegular fontSize={14} style={{ flexShrink: 0 }} />
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ts.name}</span>
@@ -864,8 +884,8 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
                       <AddRegular fontSize={12} /> Add term set
                     </button>
                     <div style={{ display: 'flex', gap: 4, padding: '2px 8px', justifyContent: 'flex-end' }}>
-                      <Button size="small" appearance="subtle" icon={<EditRegular fontSize={12} />} onClick={e => { e.stopPropagation(); startEdit({ kind: 'group', item: group }) }} title="Edit group" />
-                      <Button size="small" appearance="subtle" icon={<DeleteRegular fontSize={12} />} onClick={e => { e.stopPropagation(); deleteGroup(group) }} title="Delete group" />
+                      <Button size="small" appearance="subtle" icon={<EditRegular fontSize={12} />} onClick={e => { e.stopPropagation(); startEdit({ kind: 'group', item: group }) }} title="Edit group" aria-label="Edit group" />
+                      <Button size="small" appearance="subtle" icon={<DeleteRegular fontSize={12} />} onClick={e => { e.stopPropagation(); deleteGroup(group) }} title="Delete group" aria-label="Delete group" />
                     </div>
                   </div>
                 )}
@@ -942,8 +962,8 @@ function TermStoreManager({ allResources, allEnvironments, currentUser }: TermSt
                     </div>
                     {!isEditingTerm && (
                       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        <Button size="small" appearance="subtle" icon={<EditRegular fontSize={14} />} onClick={() => startEdit({ kind: 'term', item: term })} title="Edit" />
-                        <Button size="small" appearance="subtle" icon={<DeleteRegular fontSize={14} />} onClick={() => deleteTerm(term)} title="Delete" />
+                        <Button size="small" appearance="subtle" icon={<EditRegular fontSize={14} />} onClick={() => startEdit({ kind: 'term', item: term })} title="Edit" aria-label="Edit term" />
+                        <Button size="small" appearance="subtle" icon={<DeleteRegular fontSize={14} />} onClick={() => deleteTerm(term)} title="Delete" aria-label="Delete term" />
                       </div>
                     )}
                   </div>

@@ -196,7 +196,7 @@ export function UsageDetailView({ category, allResources, allEnvironments, owner
                   const act = getActivityDate(r)
                   const n = daysSince(act)
                   return (
-                    <tr key={r.id} className={classes.row} onClick={() => setSelected(r)}>
+                    <tr key={r.id} className={classes.row} tabIndex={0} onClick={() => setSelected(r)} onKeyDown={e => { if (e.key === 'Enter') { setSelected(r) } }}>
                       <td className={classes.td}><Text style={{ fontSize: '13px', fontWeight: 600 }}>{getDisplayName(r)}</Text></td>
                       <td className={classes.td}><ResourceTypeBadge type={r.type} kind={r.kind} /></td>
                       <td className={classes.tdMuted}>{resolveOwnerName(r, ownerNames)}</td>

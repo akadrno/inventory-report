@@ -430,6 +430,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
           <Dropdown
             selectedOptions={[timeWindow]}
             value={`Last ${timeWindow} days`}
+            aria-label="Time window"
             onOptionSelect={(_, d) => d.optionValue && setTimeWindow(d.optionValue as TimeWindow)}
             style={{ minWidth: '130px' }}
           >
@@ -443,6 +444,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
           <Dropdown
             selectedOptions={[scopeKey]}
             value={scopeLabel}
+            aria-label="Scope"
             onOptionSelect={(_, d) => d.optionValue && setScopeKey(d.optionValue)}
             style={{ minWidth: '220px' }}
           >
@@ -508,6 +510,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         <Input
           contentBefore={<SearchRegular />}
           placeholder="Filter by user (UPN or name)…"
+          aria-label="Filter by user (UPN or name)"
           size="small"
           value={userSearch}
           onChange={(_, d) => setUserSearch(d.value)}
@@ -725,7 +728,10 @@ function RankList({
         <div
           key={item.label}
           className={onClick ? classes.rankRowClickable : classes.rankRow}
+          role={onClick ? 'button' : undefined}
+          tabIndex={onClick ? 0 : undefined}
           onClick={onClick ? () => onClick(item.label) : undefined}
+          onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(item.label) } } : undefined}
           title={onClick ? `Filter to ${item.label}` : undefined}
         >
           <span style={{ color: tokens.colorBrandForeground1, display: 'inline-flex' }}>{icon}</span>

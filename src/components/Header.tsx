@@ -96,6 +96,7 @@ export function Header() {
               icon={<SettingsRegular />}
               onClick={() => setIsOpen(!isOpen)}
               title="Debug panel"
+              aria-label="Debug panel"
             />
             {errorCount > 0 && !isOpen && (
               <Badge

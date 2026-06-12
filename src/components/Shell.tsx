@@ -312,7 +312,7 @@ function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: s
         />
         <span style={{ fontSize: '13px', color: tokens.colorNeutralForeground3, marginRight: '4px' }}>{userName}</span>
         <div style={{ position: 'relative' }}>
-          <Button appearance="subtle" icon={<SettingsRegular />} size="small" onClick={() => setIsOpen(!isOpen)} title="Debug panel" />
+          <Button appearance="subtle" icon={<SettingsRegular />} size="small" onClick={() => setIsOpen(!isOpen)} title="Debug panel" aria-label="Debug panel" />
           {errorCount > 0 && !isOpen && (
             <Badge size="tiny" color="danger" style={{ position: 'absolute', top: 2, right: 2 }} />
           )}
@@ -738,6 +738,8 @@ function CollapsibleCard({
         onClick={() => setOpen(o => !o)}
         role="button"
         aria-expanded={open}
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o) } }}
       >
         {icon}
         <span style={{ flex: 1 }}>{title}</span>
@@ -1231,6 +1233,7 @@ export function Shell() {
                 <Input
                   contentBefore={<SearchRegular />}
                   placeholder="Search name, type, environment, owner, region…"
+                  aria-label="Search name, type, environment, owner, region"
                   value={search}
                   onChange={(_, d) => setSearch(d.value)}
                   style={{ width: '320px' }}
@@ -1250,6 +1253,7 @@ export function Shell() {
                 icon={<ArrowClockwiseRegular style={{ transform: isRefreshing ? 'rotate(360deg)' : undefined, transition: 'transform 1s linear' }} />}
                 size="small"
                 onClick={() => { resources.refetch(); groups.refetch() }}
+                aria-label="Refresh"
               />
             </div>
           </div>

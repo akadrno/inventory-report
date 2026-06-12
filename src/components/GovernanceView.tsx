@@ -593,7 +593,7 @@ export function DLPSection({
         const isAllEnv = p.environmentType === 'AllEnvironments' || p.type === 'AllEnvironments'
         const connectorTotal = p.connectorGroups?.reduce((sum, g) => sum + g.connectors.length, 0) ?? 0
         return (
-          <div key={p.name ?? i} className={classes.insightRowClickable} onClick={() => onPolicyClick(p)}>
+          <div key={p.name ?? i} className={classes.insightRowClickable} onClick={() => onPolicyClick(p)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPolicyClick(p) } }}>
             <ShieldCheckmarkRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <Text size={200} weight="semibold" style={{ display: 'block' }}>{p.displayName ?? p.name}</Text>
@@ -1064,7 +1064,7 @@ export function RecommendationsSection({
       {sorted.map(rec => {
         const count = rec.resourceCount ?? 0
         return (
-          <div key={rec.scenario} className={classes.insightRowClickable} onClick={() => onScenarioClick(rec.scenario)}>
+          <div key={rec.scenario} className={classes.insightRowClickable} onClick={() => onScenarioClick(rec.scenario)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onScenarioClick(rec.scenario) } }}>
             <LightbulbRegular fontSize={16} style={{ color: count > 0 ? tokens.colorPaletteMarigoldForeground2 : tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <Text size={200} weight="semibold" style={{ display: 'block' }}>{humanizeScenario(rec.scenario)}</Text>
@@ -1472,7 +1472,7 @@ export function ConnectionsSection({
           const open = openPaths.has(path)
           return (
             <div key={path}>
-              <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" aria-expanded={open}>
+              <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleKey(setOpenPaths, path) } }} aria-expanded={open}>
                 <div className={classes.rowLeft} style={{ minWidth: 0 }}>
                   {chevron(open)}
                   <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightMatch(c.displayName || '(unnamed connection)', q)}</Text>
@@ -1493,7 +1493,7 @@ export function ConnectionsSection({
       const open = openPaths.has(path)
       return (
         <div key={path}>
-          <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" aria-expanded={open}>
+          <div className={classes.row} style={{ cursor: 'pointer', paddingLeft: pad }} onClick={() => toggleKey(setOpenPaths, path)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleKey(setOpenPaths, path) } }} aria-expanded={open}>
             <div className={classes.rowLeft} style={{ minWidth: 0 }}>{chevron(open)}{b.header}</div>
             {b.right && <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexShrink: 0 }}>{b.right}</div>}
           </div>
@@ -1522,12 +1522,13 @@ export function ConnectionsSection({
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
         <Input
           size="small"
+          aria-label="Search connectors, users, or environments"
           placeholder="Search connectors, users, or environments…"
           value={query}
           onChange={(_, d) => setQuery(d.value)}
           contentBefore={<SearchRegular />}
           contentAfter={query
-            ? <DismissRegular aria-label="Clear search" style={{ cursor: 'pointer' }} onClick={() => setQuery('')} />
+            ? <DismissRegular aria-label="Clear search" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setQuery('')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQuery('') } }} />
             : undefined}
           style={{ width: '300px', maxWidth: '40vw' }}
         />
@@ -1662,7 +1663,7 @@ export function ConnectionsSection({
             </thead>
             <tbody>
               {sortedGroups.map(env => (
-                <tr key={env.envId} className={classes.envTr} onClick={() => drillInto(env.envId)}>
+                <tr key={env.envId} className={classes.envTr} onClick={() => drillInto(env.envId)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') { drillInto(env.envId) } }}>
                   <td className={classes.envTd}>
                     <div className={classes.envNameCell}>
                       <DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground2, flexShrink: 0 }} />
@@ -1728,6 +1729,10 @@ function CollapsibleSection({
       <div
         className={open ? classes.sectionHeaderClickableOpen : classes.sectionHeaderClickable}
         onClick={toggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
       >
         {icon}
         <Text weight="semibold" style={{ flex: 1 }}>{title}</Text>
@@ -1863,6 +1868,9 @@ export function GovernanceView({ allResources, allEnvironments }: GovernanceView
                 key={i}
                 className={clickable ? classes.insightRowClickable : classes.insightRow}
                 onClick={clickable ? () => setDrillDown(insight.drillDownKey!) : undefined}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={clickable ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrillDown(insight.drillDownKey!) } }) : undefined}
               >
                 <div className={classes.insightIcon}><SeverityIcon severity={insight.severity} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>

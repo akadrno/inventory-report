@@ -86,6 +86,7 @@ export function Filters({ filters, environments, onChange }: FiltersProps) {
           <Input
             className={classes.searchInput}
             contentBefore={<SearchRegular />}
+            aria-label="Search by name, environment, owner, or region"
             placeholder="Search by name, environment, owner, or region..."
             value={filters.search}
             onChange={(_, d) => set({ search: d.value })}
@@ -93,6 +94,7 @@ export function Filters({ filters, environments, onChange }: FiltersProps) {
           {environments.length > 0 && (
             <Dropdown
               className={classes.dropdown}
+              aria-label="Filter by environment"
               placeholder="All Environments"
               value={filters.environment || undefined}
               selectedOptions={filters.environment ? [filters.environment] : []}

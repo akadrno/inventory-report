@@ -715,6 +715,7 @@ function ConfigurationTab({ resource, nameMap }: { resource: ResourceItem; nameM
             <Input
               contentBefore={<SearchRegular />}
               placeholder="Search"
+              aria-label="Search"
               value={search}
               onChange={(_, d) => setSearch(d.value)}
               size="small"
