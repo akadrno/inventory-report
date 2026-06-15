@@ -21,6 +21,14 @@ import {
 } from '../api/signInsApi'
 import { useSignInCache } from '../context/SignInCacheContext'
 import { getAgentId } from '../utils/resourceMetadata'
+import { useThemeMode } from '../context/ThemeContext'
+import { accentGlowStyle } from './usageShared'
+
+// CARTO basemaps — light "positron" / dark "dark-matter". Free, theme-aware,
+// production-appropriate licensing (vs. the OSM public tile server).
+const CARTO_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+const CARTO_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+const CARTO_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 
 // Compact "x ago" formatter for the cache's last-updated timestamp.
 function formatRelative(iso: string | null): string {
@@ -172,20 +180,23 @@ const useClasses = makeStyles({
     '@media (max-width: 960px)': { gridTemplateColumns: '1fr' },
   },
   mapCard: {
+    position: 'relative',
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: '8px',
+    borderRadius: '12px',
     overflow: 'hidden',
     minHeight: '520px',
+    boxShadow: tokens.shadow8,
   },
   sideCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: '8px',
+    borderRadius: '12px',
     padding: '12px 14px',
     display: 'flex', flexDirection: 'column', gap: '8px',
     overflowY: 'auto',
     minHeight: 0,
+    boxShadow: tokens.shadow8,
   },
   rankRow: {
     display: 'flex', alignItems: 'center', gap: '8px',
@@ -240,10 +251,16 @@ const useClasses = makeStyles({
     marginBottom: '4px',
   },
   statBlock: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: '6px',
-    padding: '8px 10px',
+    position: 'relative', overflow: 'hidden',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: '10px',
+    padding: '10px 12px',
     display: 'flex', flexDirection: 'column', gap: '2px',
+    cursor: 'pointer',
+    boxShadow: tokens.shadow4,
+    transition: 'transform 0.16s ease, box-shadow 0.16s ease',
+    ':hover': { transform: 'translateY(-2px)', boxShadow: tokens.shadow8 },
   },
   statValue: {
     fontSize: '20px', fontWeight: 700, lineHeight: 1.1,
@@ -280,6 +297,7 @@ const PP_APP_IDS: Record<string, string[]> = {
 export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
   const classes = useClasses()
   const { instance } = useMsal()
+  const { mode } = useThemeMode()
 
   // Server-side query knobs
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('7')
@@ -611,7 +629,7 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         </div>
       )}
 
-      <div className={classes.bodyRow}>
+      <div className={classes.bodyRow} style={{ animation: 'ppFadeUp 0.5s both' }}>
         <div className={classes.mapCard}>
           {isLoadingData ? (
             <div className={classes.loadingWrap}>
@@ -626,10 +644,14 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
               maxZoom={12}
               style={{ height: '100%', width: '100%', minHeight: '520px' }}
               worldCopyJump
+              attributionControl={false}
             >
               <TileLayer
-                attribution='&copy; OpenStreetMap'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                key={mode}
+                attribution={CARTO_ATTRIBUTION}
+                url={mode === 'dark' ? CARTO_DARK : CARTO_LIGHT}
+                subdomains="abcd"
+                detectRetina
               />
               <HeatLayer points={heatPoints} />
               <MarkerLayer buckets={buckets} />
@@ -641,22 +663,27 @@ export function UsageHeatmap({ allResources }: UsageHeatmapProps) {
         {/* Side panel: stats + tabbed lists */}
         <div className={classes.sideCard}>
           <div className={classes.statRow}>
-            <div className={classes.statBlock}>
-              <Text className={classes.statValue}>{diag.totalRecords.toLocaleString()}</Text>
-              <span className={classes.statLabel}>Sign-ins</span>
-            </div>
-            <div className={classes.statBlock}>
-              <Text className={classes.statValue}>{diag.distinctUsers.toLocaleString()}</Text>
-              <span className={classes.statLabel}>Users</span>
-            </div>
-            <div className={classes.statBlock}>
-              <Text className={classes.statValue}>{buckets.length.toLocaleString()}</Text>
-              <span className={classes.statLabel}>Cities</span>
-            </div>
-            <div className={classes.statBlock}>
-              <Text className={classes.statValue}>{topCountries.length.toLocaleString()}</Text>
-              <span className={classes.statLabel}>Countries</span>
-            </div>
+            {([
+              { tab: 'apps' as const,      accent: '#4aa8ff', value: diag.totalRecords,   label: 'Sign-ins', hint: 'Show top apps' },
+              { tab: 'users' as const,     accent: '#3ad1c4', value: diag.distinctUsers,  label: 'Users',    hint: 'Show top users' },
+              { tab: 'cities' as const,    accent: '#b07cff', value: buckets.length,      label: 'Cities',   hint: 'Show top cities' },
+              { tab: 'countries' as const, accent: '#e6a23c', value: topCountries.length, label: 'Countries', hint: 'Show top countries' },
+            ]).map(s => (
+              <div
+                key={s.tab}
+                className={classes.statBlock}
+                style={{ ...accentGlowStyle(s.accent), outline: sideTab === s.tab ? `2px solid ${s.accent}` : undefined, outlineOffset: '-1px' }}
+                onClick={() => setSideTab(s.tab)}
+                role="button"
+                tabIndex={0}
+                aria-pressed={sideTab === s.tab}
+                title={s.hint}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSideTab(s.tab) } }}
+              >
+                <Text className={classes.statValue}>{s.value.toLocaleString()}</Text>
+                <span className={classes.statLabel}>{s.label}</span>
+              </div>
+            ))}
           </div>
 
           <TabList
