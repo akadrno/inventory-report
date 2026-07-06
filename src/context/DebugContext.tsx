@@ -14,6 +14,8 @@ export interface DebugEntry {
 interface DebugContextValue {
   entries: DebugEntry[]
   addEntry: (entry: Omit<DebugEntry, 'id'>) => void
+  unknownTypes: string[]
+  setUnknownTypes: (types: string[]) => void
   clear: () => void
   isOpen: boolean
   setIsOpen: (open: boolean) => void
@@ -23,6 +25,7 @@ const DebugContext = createContext<DebugContextValue | null>(null)
 
 export function DebugProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<DebugEntry[]>([])
+  const [unknownTypes, setUnknownTypes] = useState<string[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const counter = useRef(0)
 
@@ -34,7 +37,7 @@ export function DebugProvider({ children }: { children: React.ReactNode }) {
   const clear = useCallback(() => setEntries([]), [])
 
   return (
-    <DebugContext.Provider value={{ entries, addEntry, clear, isOpen, setIsOpen }}>
+    <DebugContext.Provider value={{ entries, addEntry, unknownTypes, setUnknownTypes, clear, isOpen, setIsOpen }}>
       {children}
     </DebugContext.Provider>
   )

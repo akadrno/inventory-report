@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { makeStyles, tokens, Text, Caption1, Button, Badge, Spinner, Input } from '@fluentui/react-components'
 import {
   HomeRegular,
@@ -38,6 +38,7 @@ import { useResources } from '../hooks/useResources'
 import { useEnvironmentGroups } from '../hooks/useEnvironmentGroups'
 import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
+import { useResourceTypeCanary } from '../hooks/useResourceTypeCanary'
 import {
   useDLPPolicies, useTenantSettings, useLicenses,
   useCrossTenantConnections, useAdvisorRecommendations, useConnectionsReport,
@@ -99,7 +100,7 @@ const STROKE1 = tokens.colorNeutralStroke2
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
-type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
+type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'other' | 'environments' | 'groups' | 'users'
 type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
 type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
@@ -293,9 +294,10 @@ const useClasses = makeStyles({
 
 function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: string }) {
   const classes = useClasses()
-  const { isOpen, setIsOpen, entries } = useDebug()
+  const { isOpen, setIsOpen, entries, unknownTypes } = useDebug()
   const { mode, toggleMode } = useThemeMode()
   const errorCount = entries.filter(e => e.error || (e.status !== undefined && e.status >= 400)).length
+  const unknownTypeCount = unknownTypes.length
   const isDark = mode === 'dark'
 
   return (
@@ -314,6 +316,9 @@ function AppHeader({ onSignOut, userName }: { onSignOut: () => void; userName: s
         <span style={{ fontSize: '13px', color: tokens.colorNeutralForeground3, marginRight: '4px' }}>{userName}</span>
         <div style={{ position: 'relative' }}>
           <Button appearance="subtle" icon={<SettingsRegular />} size="small" onClick={() => setIsOpen(!isOpen)} title="Debug panel" aria-label="Debug panel" />
+          {unknownTypeCount > 0 && !isOpen && (
+            <Badge size="tiny" color="warning" style={{ position: 'absolute', top: 2, right: 14 }} title={`${unknownTypeCount} unknown resource type${unknownTypeCount === 1 ? '' : 's'} detected`} />
+          )}
           {errorCount > 0 && !isOpen && (
             <Badge size="tiny" color="danger" style={{ position: 'absolute', top: 2, right: 2 }} />
           )}
@@ -1069,6 +1074,7 @@ function LicensingContent({ licView }: { licView: LicensingView }) {
 
 const INV_LABELS: Record<InvView, string> = {
   all: 'All Resources', apps: 'Apps', flows: 'Flows', agents: 'Agents',
+  other: 'Other/New',
   environments: 'Environments', groups: 'Environment Groups', users: 'Users',
 }
 
@@ -1092,7 +1098,14 @@ export function Shell() {
   const resources = useResources()
   const groups = useEnvironmentGroups()
   const environmentsQuery = useEnvironments()
-  const { isOpen } = useDebug()
+  const { isOpen, setUnknownTypes } = useDebug()
+
+  const canaryEnabled = isOpen || import.meta.env.DEV
+  const { result: canary } = useResourceTypeCanary(canaryEnabled)
+
+  useEffect(() => {
+    setUnknownTypes(canary.unknownTypes)
+  }, [canary.unknownTypes, setUnknownTypes])
 
   const { instance, accounts } = useMsal()
   const account = accounts[0]
@@ -1114,7 +1127,11 @@ export function Shell() {
     let items = allResources
     if (hideSystemInv) items = items.filter(r => !isSystemResource(r))
     if (invView !== 'all' && invView !== 'environments' && invView !== 'groups' && invView !== 'users') {
-      items = items.filter(r => getResourceCategory(r.type) === invView)
+      if (invView === 'other') {
+        items = items.filter(r => getResourceCategory(r.type) === 'all')
+      } else {
+        items = items.filter(r => getResourceCategory(r.type) === invView)
+      }
     }
     if (invView === 'flows' && flowSubView !== 'all') {
       items = items.filter(r => {
@@ -1209,7 +1226,7 @@ export function Shell() {
 
     if (rail === 'inventory') {
       const label = INV_LABELS[invView]
-      const showTable = invView === 'all' || invView === 'apps' || invView === 'flows' || invView === 'agents'
+      const showTable = invView === 'all' || invView === 'apps' || invView === 'flows' || invView === 'agents' || invView === 'other'
 
       return (
         <>
@@ -1255,6 +1272,16 @@ export function Shell() {
               />
             </div>
           </div>
+
+          {canary.unknownTypes.length > 0 && (
+            <div className={classes.permNotice} style={{ color: tokens.colorStatusWarningForeground1 }}>
+              <WarningRegular fontSize={16} />
+              <Caption1>
+                {canary.unknownTypes.length} unrecognized inventory resource type{canary.unknownTypes.length === 1 ? '' : 's'} detected by canary scan.
+                Update resource mappings to avoid under-reporting.
+              </Caption1>
+            </div>
+          )}
 
           {invView === 'flows' && (
             <SubFilterRow
@@ -1458,6 +1485,7 @@ export function Shell() {
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
             <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
+            <NavItem icon={<InfoRegular />} label="Other/New" active={invView === 'other'} onClick={() => setInvView('other')} collapsed={!panelOpen} />
             <NavItem icon={<DatabaseRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
             <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />

@@ -243,7 +243,7 @@ function EntryRow({ entry }: { entry: DebugEntry }) {
 }
 
 export function DebugPanel() {
-  const { entries, clear, setIsOpen } = useDebug()
+  const { entries, clear, setIsOpen, unknownTypes } = useDebug()
   const classes = useClasses()
   const errorCount = entries.filter(e => e.error || (e.status !== undefined && e.status >= 400)).length
 
@@ -285,7 +285,19 @@ export function DebugPanel() {
         <div className={classes.configText}>
           <strong>Tenant:</strong> {import.meta.env.VITE_TENANT_ID || '⚠ not set'}
         </div>
+        <div className={classes.configText}>
+          <strong>Unknown inventory types:</strong> {unknownTypes.length}
+        </div>
       </div>
+
+      {unknownTypes.length > 0 && (
+        <div className={classes.entrySection} style={{ margin: tokens.spacingVerticalXS }}>
+          <div className={classes.sectionLabel} style={{ color: tokens.colorStatusWarningForeground1 }}>
+            New resource types not mapped in UI
+          </div>
+          <pre className={classes.prePre}>{unknownTypes.join('\n')}</pre>
+        </div>
+      )}
 
       <div className={classes.entriesList}>
         {entries.length === 0 ? (

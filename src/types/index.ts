@@ -1,3 +1,8 @@
+import {
+  INVENTORY_RESOURCE_TYPES,
+  isKnownInventoryResourceType,
+} from '../config/resourceCatalog'
+
 export interface ResourceItem {
   id: string
   name: string
@@ -38,30 +43,11 @@ export interface ResourceFilters {
   resourceTab: ResourceTab
 }
 
-export const RESOURCE_TYPES = {
-  apps: [
-    'microsoft.powerapps/apps',
-    'microsoft.powerapps/canvasapps',
-    'microsoft.powerapps/modeldrivenapps',
-    'microsoft.powerapps/codeapps',
-  ],
-  flows: [
-    'microsoft.flow/flows',
-    'microsoft.powerapps/flows',
-    'microsoft.powerautomate/cloudflows',
-    'microsoft.powerautomate/agentflows',
-    'microsoft.powerautomate/m365agentflows',
-    'microsoft.logic/workflows',
-  ],
-  agents: [
-    'microsoft.powerva/bots',
-    'microsoft.powerva/agents',
-    'microsoft.copilotstudio/agents',
-    'microsoft.copilotstudio/bots',
-    'microsoft.powerapps/agents',
-    'microsoft.powervirtualagents/bots',
-  ],
-} as const
+export const RESOURCE_TYPES = INVENTORY_RESOURCE_TYPES
+
+export function isKnownType(type: string): boolean {
+  return isKnownInventoryResourceType(type)
+}
 
 export function getResourceCategory(type: string): ResourceTab {
   const lower = type.toLowerCase()

@@ -2,6 +2,7 @@ import { IPublicClientApplication } from '@azure/msal-browser'
 import { powerPlatformScopes } from '../auth/msalConfig'
 import type { ResourceItem, ResourceQueryResponse } from '../types'
 import type { DebugEntry } from '../context/DebugContext'
+import { INVENTORY_QUERY_MATCH_VALUES } from '../config/resourceCatalog'
 
 const API_BASE = 'https://api.powerplatform.com'
 const API_VERSION = '2024-10-01'
@@ -27,31 +28,19 @@ interface OrderByClause {
 
 type KustoClause = WhereClause | ProjectClause | OrderByClause
 
-// Explicit resource types per the 2024-10-01 API. Legacy names included for any
-// resources created before the namespace rename.
+// Namespace-level inventory filter so newly introduced resource types can
+// flow into the UI without waiting for an allowlist update.
 const DEFAULT_CLAUSES: WhereClause[] = [
   {
     $type: 'where',
     FieldName: 'type',
-    Operator: 'in~',
-    Values: [
-      // Current canonical types (api-version 2024-10-01)
-      "'microsoft.powerapps/canvasapps'",
-      "'microsoft.powerapps/modeldrivenapps'",
-      "'microsoft.powerapps/codeapps'",
-      "'microsoft.powerautomate/cloudflows'",
-      "'microsoft.powerautomate/agentflows'",
-      "'microsoft.powerautomate/m365agentflows'",
-      "'microsoft.copilotstudio/agents'",
-      // Legacy type names from earlier API versions
-      "'microsoft.powerapps/apps'",
-      "'microsoft.flow/flows'",
-      "'microsoft.powerapps/flows'",
-      "'microsoft.powerva/bots'",
-      "'microsoft.powervirtualagents/bots'",
-      "'microsoft.logic/workflows'",
-    ],
+    Operator: 'contains',
+    Values: INVENTORY_QUERY_MATCH_VALUES,
   },
+]
+
+const TYPE_CENSUS_CLAUSES: ProjectClause[] = [
+  { $type: 'project', FieldList: ['type'] },
 ]
 
 const GROUPS_CLAUSES: WhereClause[] = [
@@ -87,6 +76,19 @@ export interface QueryOptions {
   top?: number
   clauses?: KustoClause[]
   onDebug?: (entry: Omit<DebugEntry, 'id'>) => void
+}
+
+export interface TypeCensusOptions {
+  maxPages?: number
+  top?: number
+  onDebug?: (entry: Omit<DebugEntry, 'id'>) => void
+}
+
+export interface TypeCensusResult {
+  distinctTypes: string[]
+  pagesScanned: number
+  recordsScanned: number
+  hasMore: boolean
 }
 
 async function queryResources(
@@ -196,4 +198,41 @@ export async function fetchAllResources(
   } while (skipToken)
 
   return all
+}
+
+export async function fetchResourceTypeCensus(
+  msalInstance: IPublicClientApplication,
+  options?: TypeCensusOptions,
+): Promise<TypeCensusResult> {
+  const token = await getAccessToken(msalInstance)
+  const maxPages = Math.max(1, options?.maxPages ?? 10)
+  const top = options?.top ?? 500
+  const found = new Set<string>()
+  let skipToken: string | undefined
+  let pagesScanned = 0
+  let recordsScanned = 0
+
+  do {
+    const result = await queryResources(token, {
+      top,
+      skipToken,
+      clauses: TYPE_CENSUS_CLAUSES,
+      onDebug: options?.onDebug,
+    })
+    pagesScanned += 1
+    recordsScanned += result.data.length
+    for (const r of result.data) {
+      if (typeof r.type === 'string' && r.type.trim()) {
+        found.add(r.type.toLowerCase())
+      }
+    }
+    skipToken = result.skipToken
+  } while (skipToken && pagesScanned < maxPages)
+
+  return {
+    distinctTypes: [...found].sort(),
+    pagesScanned,
+    recordsScanned,
+    hasMore: Boolean(skipToken),
+  }
 }
