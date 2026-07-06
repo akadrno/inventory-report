@@ -2,7 +2,7 @@ import { IPublicClientApplication } from '@azure/msal-browser'
 import { powerPlatformScopes } from '../auth/msalConfig'
 import type { ResourceItem, ResourceQueryResponse } from '../types'
 import type { DebugEntry } from '../context/DebugContext'
-import { INVENTORY_QUERY_MATCH_VALUES } from '../config/resourceCatalog'
+import { KNOWN_INVENTORY_RESOURCE_TYPES } from '../config/resourceCatalog'
 
 const API_BASE = 'https://api.powerplatform.com'
 const API_VERSION = '2024-10-01'
@@ -28,14 +28,15 @@ interface OrderByClause {
 
 type KustoClause = WhereClause | ProjectClause | OrderByClause
 
-// Namespace-level inventory filter so newly introduced resource types can
-// flow into the UI without waiting for an allowlist update.
+// Explicit type matching for inventory resources. `contains` with multiple
+// values is rejected by the API parser, so we keep a valid `in~` allowlist
+// for the primary fetch path.
 const DEFAULT_CLAUSES: WhereClause[] = [
   {
     $type: 'where',
     FieldName: 'type',
-    Operator: 'contains',
-    Values: INVENTORY_QUERY_MATCH_VALUES,
+    Operator: 'in~',
+    Values: KNOWN_INVENTORY_RESOURCE_TYPES.map(t => `'${t}'`),
   },
 ]
 
