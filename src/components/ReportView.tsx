@@ -1,14 +1,13 @@
-import { useMemo } from 'react'
-import { makeStyles, tokens, Text, Caption1, Badge, Spinner, Button } from '@fluentui/react-components'
+import { useEffect, useMemo } from 'react'
+import { makeStyles, tokens, Text, Caption1, Badge, Spinner } from '@fluentui/react-components'
 import {
   ErrorCircleRegular,
   WarningRegular,
   CheckmarkCircleRegular,
-  ArrowClockwiseRegular,
-  DatabaseRegular,
 } from '@fluentui/react-icons'
+import { useMsal } from '@azure/msal-react'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath } from '../types'
+import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath, getOwnerFromProperties } from '../types'
 import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
 import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
@@ -18,6 +17,8 @@ import { CommandBackdrop, CountUp } from './CommandCenter'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useThemeMode } from '../context/ThemeContext'
 import { HomeDashboardSnapshot } from './HomeDashboardSnapshot'
+import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
+import { getIsQuarantined } from '../utils/resourceMetadata'
 
 // Hero gradient: a lighter, brighter blue in light mode; the deep near-black
 // command-center navy in dark mode. White hero text stays legible on both.
@@ -358,19 +359,6 @@ function fmtDate(iso: string | null): string {
   try { return new Date(iso).toLocaleDateString() } catch { return iso }
 }
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return 'never'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return 'just now'
-  const min = Math.floor(ms / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min} minute${min !== 1 ? 's' : ''} ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} hour${hr !== 1 ? 's' : ''} ago`
-  const d = Math.floor(hr / 24)
-  return `${d} day${d !== 1 ? 's' : ''} ago`
-}
-
 function buildEnvMap(envs: ResourceItem[]): Map<string, string> {
   const m = new Map<string, string>()
   for (const e of envs) {
@@ -431,64 +419,6 @@ function HeroPillar({ icon, accent, value, label, sub }: {
       </div>
       <span className={classes.pillarValue}><CountUp value={value} /></span>
       <span className={classes.pillarSub}>{sub}</span>
-    </div>
-  )
-}
-
-// Usage sign-in cache status strip. Shows when the heatmap's cached sign-in
-// data was last refreshed by the background job, surfaces in-progress updates,
-// and lets the user trigger a manual refresh of the login data.
-function UsageCacheStatus() {
-  const classes = useClasses()
-  const cache = useSignInCache()
-
-  // Nothing to manage if Azure Storage caching isn't configured.
-  if (!cache.configured) return null
-
-  const refreshing = cache.status === 'refreshing'
-  const errored = cache.status === 'error'
-
-  let icon: React.ReactNode
-  let text: React.ReactNode
-  if (refreshing) {
-    icon = <Spinner size="tiny" />
-    text = <>Updating usage sign-in data in the background…</>
-  } else if (errored) {
-    icon = <WarningRegular style={{ color: tokens.colorStatusWarningForeground1 }} />
-    text = (
-      <>
-        Couldn't update usage data{cache.error ? ` — ${cache.error}` : ''}.
-        {cache.cachedAt ? ` Showing data cached ${formatRelative(cache.cachedAt)}.` : ''}
-      </>
-    )
-  } else if (cache.cachedAt) {
-    icon = <CheckmarkCircleRegular style={{ color: tokens.colorPaletteGreenForeground1 }} />
-    text = (
-      <>
-        Usage sign-in data updated {formatRelative(cache.cachedAt)} ·{' '}
-        {cache.recordCount.toLocaleString()} sign-ins cached (last {cache.cacheDays} days)
-      </>
-    )
-  } else {
-    icon = <DatabaseRegular style={{ color: tokens.colorNeutralForeground3 }} />
-    text = <>No usage sign-in data cached yet. Run an update to populate the heatmap.</>
-  }
-
-  return (
-    <div className={classes.cacheCard}>
-      <span className={classes.cacheCardInfo}>
-        {icon}
-        <span>{text}</span>
-      </span>
-      <Button
-        size="small"
-        appearance="secondary"
-        icon={<ArrowClockwiseRegular />}
-        onClick={cache.refreshNow}
-        disabled={refreshing}
-      >
-        {refreshing ? 'Updating…' : 'Update now'}
-      </Button>
     </div>
   )
 }
@@ -846,11 +776,14 @@ export function RecsTab({ allEnvironments }: { allEnvironments: ResourceItem[] }
 export function ReportView({ allResources, allEnvironments, allGroups, ownerNames, onNavigateToRiskAssessments }: ReportViewProps) {
   const classes = useClasses()
   const { mode } = useThemeMode()
+  const { accounts } = useMsal()
+  const cache = useSignInCache()
 
   const agentCount = allResources.filter(r => getResourceCategory(r.type) === 'agents').length
   const appCount = allResources.filter(r => getResourceCategory(r.type) === 'apps').length
   const flowCount = allResources.filter(r => getResourceCategory(r.type) === 'flows').length
   const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
+  const envGroupCount = allGroups?.length ?? 0
   const { data: settings } = useTenantSettings()
   const { data: dlp } = useDLPPolicies()
   const { data: assessments } = useAdminData()
@@ -869,6 +802,42 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
     }).length,
     [allResources, assessments],
   )
+
+  const { makerCount, orphanedCount } = useMemo(() => {
+    const makers = new Set<string>()
+    let orphaned = 0
+    for (const r of allResources) {
+      const raw = getOwnerFromProperties(r)
+      if (!raw || raw === '—') {
+        orphaned++
+        continue
+      }
+      if (raw.startsWith(SYSTEM_PREFIX)) continue
+      const resolved = GUID_RE.test(raw) ? ownerNames?.get(raw) ?? raw : raw
+      const key = resolved.trim()
+      if (key) makers.add(key)
+    }
+    return { makerCount: makers.size, orphanedCount: orphaned }
+  }, [allResources, ownerNames])
+
+  const quarantinedCount = useMemo(
+    () => allResources.filter(r => getIsQuarantined(r) === true).length,
+    [allResources],
+  )
+
+  // Silent refresh trigger: when a different signed-in account lands on Home,
+  // refresh the sign-in cache in the background and surface only failures in
+  // the Debug panel (via SignInCacheContext debug entries).
+  useEffect(() => {
+    if (!cache.configured) return
+    const accountKey = accounts[0]?.homeAccountId ?? accounts[0]?.localAccountId ?? accounts[0]?.username
+    if (!accountKey) return
+    const storageKey = 'ppac:signins:last-home-refresh-account'
+    const last = localStorage.getItem(storageKey)
+    if (last === accountKey) return
+    void cache.refreshNow('home-login')
+    localStorage.setItem(storageKey, accountKey)
+  }, [accounts, cache])
 
   return (
     <div className={classes.root}>
@@ -901,6 +870,10 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
             <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allEnvironments.length} /></span><span className={classes.miniLabel}>Environments</span></div>
             <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={managedCount} /></span><span className={classes.miniLabel}>Managed Envs</span></div>
             <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allResources.length} /></span><span className={classes.miniLabel}>Total Resources</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={envGroupCount} /></span><span className={classes.miniLabel}>Env Groups</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={makerCount} /></span><span className={classes.miniLabel}>Makers</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={orphanedCount} /></span><span className={classes.miniLabel}>Orphaned</span></div>
+            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={quarantinedCount} /></span><span className={classes.miniLabel}>Quarantined</span></div>
           </div>
 
           <div className={classes.healthBar} style={fadeUp(0.24)}>
@@ -925,14 +898,10 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
         </div>
       </div>
 
-      {/* Usage sign-in cache status + manual refresh */}
-      <UsageCacheStatus />
-
       {/* Home dashboard snapshot (replaces old Overview/Governance/Recommendations tabs) */}
       <HomeDashboardSnapshot
         allResources={allResources}
         allEnvironments={allEnvironments}
-        allGroups={allGroups}
         ownerNames={ownerNames}
       />
 

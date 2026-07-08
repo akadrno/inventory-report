@@ -7,6 +7,7 @@ import {
   refreshSignInCache,
   signInCacheConfigured,
 } from '../api/signInsCache'
+import { useDebug } from './DebugContext'
 
 // Shared state for the cached Entra sign-in data that powers the Usage heatmap.
 // One provider owns the cache lifecycle so both the heatmap and the home page
@@ -31,8 +32,8 @@ export interface SignInCacheValue {
   configured: boolean
   /** Number of days the cache covers. */
   cacheDays: number
-  /** Manually kick off a background refresh (the "Update now" button). */
-  refreshNow: () => void
+  /** Kick off a background refresh. Source is used for debug diagnostics. */
+  refreshNow: (source?: 'manual' | 'home-login' | 'startup-stale') => Promise<void>
 }
 
 const SignInCacheContext = createContext<SignInCacheValue | null>(null)
@@ -42,6 +43,7 @@ const REFRESH_AFTER_MS = 60 * 60 * 1000 // 1 hour
 
 export function SignInCacheProvider({ children }: { children: React.ReactNode }) {
   const { instance } = useMsal()
+  const { addEntry } = useDebug()
 
   const [records, setRecords] = useState<SignInRecord[]>([])
   const [cachedAt, setCachedAt] = useState<string | null>(null)
@@ -53,8 +55,9 @@ export function SignInCacheProvider({ children }: { children: React.ReactNode })
   // Guards against overlapping refreshes (manual click while auto-refresh runs).
   const refreshingRef = useRef(false)
 
-  const doRefresh = useCallback(async () => {
+  const doRefresh = useCallback(async (source: 'manual' | 'home-login' | 'startup-stale' = 'manual') => {
     if (!signInCacheConfigured || refreshingRef.current) return
+    const startedAt = performance.now()
     refreshingRef.current = true
     setStatus('refreshing')
     setError(null)
@@ -67,19 +70,27 @@ export function SignInCacheProvider({ children }: { children: React.ReactNode })
       setStatus('idle')
     } catch (e) {
       // Keep showing the previous cache; just surface that the update failed.
-      setError((e as Error)?.message ?? 'Failed to update sign-in data.')
+      const err = (e as Error)?.message ?? 'Failed to update sign-in data.'
+      setError(err)
       setStatus('error')
+      addEntry({
+        timestamp: new Date(),
+        requestUrl: 'signInsCache/refresh',
+        requestBody: { source, cacheDays: CACHE_DAYS },
+        durationMs: Math.round(performance.now() - startedAt),
+        error: err,
+      })
     } finally {
       refreshingRef.current = false
     }
-  }, [instance])
+  }, [instance, addEntry])
 
   // Keep a stable ref so the mount effect can call the latest doRefresh without
   // re-running on every render.
   const doRefreshRef = useRef(doRefresh)
   doRefreshRef.current = doRefresh
 
-  const refreshNow = useCallback(() => { void doRefreshRef.current() }, [])
+  const refreshNow = useCallback((source: 'manual' | 'home-login' | 'startup-stale' = 'manual') => doRefreshRef.current(source), [])
 
   // On mount: read the cache for an instant render, then auto-refresh in the
   // background if it's missing or stale.
@@ -104,7 +115,7 @@ export function SignInCacheProvider({ children }: { children: React.ReactNode })
       }
       if (cancelled) return
       const age = loaded?.cachedAt ? Date.now() - new Date(loaded.cachedAt).getTime() : Infinity
-      if (age > REFRESH_AFTER_MS) void doRefreshRef.current()
+      if (age > REFRESH_AFTER_MS) void doRefreshRef.current('startup-stale')
     })()
     return () => { cancelled = true }
   }, [])

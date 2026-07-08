@@ -1,16 +1,5 @@
 import { useMemo } from 'react'
 import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
-import {
-  CubeRegular,
-  AppGenericRegular,
-  FlowRegular,
-  BotRegular,
-  GlobeRegular,
-  FolderOpenRegular,
-  PersonRegular,
-  WarningRegular,
-  ShieldErrorRegular,
-} from '@fluentui/react-icons'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getEnvironmentIdFromPath, getOwnerFromProperties, getResourceCategory } from '../types'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
@@ -20,7 +9,6 @@ import { getConnectorInfo } from '../utils/connectors'
 interface HomeDashboardSnapshotProps {
   allResources: ResourceItem[]
   allEnvironments: ResourceItem[]
-  allGroups?: ResourceItem[]
   ownerNames?: Map<string, string>
 }
 
@@ -50,48 +38,6 @@ const useClasses = makeStyles({
     flexDirection: 'column',
     gap: '16px',
   },
-  statGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(9, minmax(0, 1fr))',
-    gap: '10px',
-    '@media (max-width: 1600px)': { gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' },
-    '@media (max-width: 1200px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
-    '@media (max-width: 700px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
-  },
-  statCard: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusLarge,
-    boxShadow: tokens.shadow4,
-    padding: '12px 14px',
-    minHeight: '84px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    gap: '8px',
-  },
-  statHead: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    color: tokens.colorNeutralForeground3,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    fontSize: tokens.fontSizeBase100,
-    lineHeight: tokens.lineHeightBase200,
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  statValue: {
-    fontSize: '40px',
-    lineHeight: 1,
-    fontWeight: tokens.fontWeightBold,
-    color: tokens.colorNeutralForeground1,
-    fontVariantNumeric: 'tabular-nums',
-  },
-  statSub: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-  },
   panelGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
@@ -100,15 +46,33 @@ const useClasses = makeStyles({
     '@media (max-width: 860px)': { gridTemplateColumns: '1fr' },
   },
   panel: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundImage: `radial-gradient(120% 95% at 0% -8%, rgba(58,124,196,0.22), transparent 52%), linear-gradient(165deg, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralBackground2})`,
+    border: `1px solid rgba(123, 158, 201, 0.45)`,
     borderRadius: tokens.borderRadiusLarge,
-    boxShadow: tokens.shadow4,
+    boxShadow: `${tokens.shadow8}, inset 0 1px 0 rgba(255,255,255,0.18)`,
     padding: '16px 18px',
     minHeight: '280px',
     display: 'flex',
     flexDirection: 'column',
     gap: '10px',
+    transitionProperty: 'transform, box-shadow, border-color',
+    transitionDuration: tokens.durationNormal,
+    transitionTimingFunction: tokens.curveEasyEase,
+    ':hover': {
+      transform: 'translateY(-2px)',
+      border: '1px solid rgba(140, 183, 235, 0.55)',
+      boxShadow: `${tokens.shadow16}, inset 0 1px 0 rgba(255,255,255,0.22)`,
+    },
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      pointerEvents: 'none',
+      backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.2), transparent 40%)',
+      opacity: 0.35,
+    },
   },
   panelTitle: {
     fontSize: tokens.fontSizeBase400,
@@ -136,8 +100,8 @@ const useClasses = makeStyles({
     width: '72px',
     height: '72px',
     borderRadius: '50%',
-    backgroundColor: tokens.colorNeutralBackground1,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    border: '1px solid rgba(132,164,204,0.45)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -227,8 +191,8 @@ const useClasses = makeStyles({
   },
   chartWrap: {
     borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
+    border: '1px solid rgba(123, 158, 201, 0.35)',
+    backgroundImage: `linear-gradient(165deg, ${tokens.colorNeutralBackground2}, ${tokens.colorNeutralBackground3})`,
     padding: '10px',
     marginTop: '4px',
   },
@@ -275,12 +239,10 @@ function RingStat({ slices, centerValue, centerLabel }: { slices: DonutSlice[]; 
   )
 }
 
-export function HomeDashboardSnapshot({ allResources, allEnvironments, allGroups = [], ownerNames }: HomeDashboardSnapshotProps) {
+export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerNames }: HomeDashboardSnapshotProps) {
   const classes = useClasses()
 
   const appCount = useMemo(() => allResources.filter(r => getResourceCategory(r.type) === 'apps').length, [allResources])
-  const flowCount = useMemo(() => allResources.filter(r => getResourceCategory(r.type) === 'flows').length, [allResources])
-  const agentCount = useMemo(() => allResources.filter(r => getResourceCategory(r.type) === 'agents').length, [allResources])
 
   const makerInfo = useMemo(() => {
     const map = new Map<string, number>()
@@ -307,7 +269,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, allGroups
     return { makerCount: map.size, topMakers: top, orphaned }
   }, [allResources, ownerNames])
 
-  const quarantinedCount = useMemo(() => allResources.filter(r => getIsQuarantined(r) === true).length, [allResources])
+  useMemo(() => allResources.filter(r => getIsQuarantined(r) === true).length, [allResources])
 
   const envNameMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -467,18 +429,6 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, allGroups
 
   return (
     <div className={classes.root}>
-      <div className={classes.statGrid}>
-        <div className={classes.statCard}><div className={classes.statHead}><CubeRegular fontSize={14} /> Total resources</div><div className={classes.statValue}>{allResources.length.toLocaleString()}</div><Caption1 className={classes.statSub}>apps, flows, agents</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><AppGenericRegular fontSize={14} /> Apps</div><div className={classes.statValue}>{appCount.toLocaleString()}</div><Caption1 className={classes.statSub}>{safePct(appCount, allResources.length)}% of total</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><FlowRegular fontSize={14} /> Flows</div><div className={classes.statValue}>{flowCount.toLocaleString()}</div><Caption1 className={classes.statSub}>{safePct(flowCount, allResources.length)}% of total</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><BotRegular fontSize={14} /> Agents</div><div className={classes.statValue}>{agentCount.toLocaleString()}</div><Caption1 className={classes.statSub}>{safePct(agentCount, allResources.length)}% of total</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><GlobeRegular fontSize={14} /> Environments</div><div className={classes.statValue}>{allEnvironments.length.toLocaleString()}</div><Caption1 className={classes.statSub}>in tenant</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><FolderOpenRegular fontSize={14} /> Env groups</div><div className={classes.statValue}>{allGroups.length.toLocaleString()}</div><Caption1 className={classes.statSub}>in tenant</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><PersonRegular fontSize={14} /> Makers</div><div className={classes.statValue}>{makerInfo.makerCount.toLocaleString()}</div><Caption1 className={classes.statSub}>unique creators</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><WarningRegular fontSize={14} /> Orphaned</div><div className={classes.statValue}>{makerInfo.orphaned.toLocaleString()}</div><Caption1 className={classes.statSub}>no owner on record</Caption1></div>
-        <div className={classes.statCard}><div className={classes.statHead}><ShieldErrorRegular fontSize={14} /> Quarantined</div><div className={classes.statValue}>{quarantinedCount.toLocaleString()}</div><Caption1 className={classes.statSub}>flagged resources</Caption1></div>
-      </div>
-
       <div className={classes.panelGrid}>
         <section className={classes.panel}>
           <Text className={classes.panelTitle}>Resource composition</Text>
