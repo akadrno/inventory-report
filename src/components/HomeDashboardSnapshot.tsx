@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components'
 import type { ResourceItem } from '../types'
 import { getDisplayName, getEnvironmentIdFromPath, getOwnerFromProperties, getResourceCategory } from '../types'
@@ -13,6 +13,17 @@ interface HomeDashboardSnapshotProps {
 }
 
 type DonutSlice = { label: string; value: number; color: string }
+type PanelCardId =
+  | 'resource-composition'
+  | 'adoption-over-time'
+  | 'top-makers'
+  | 'flow-status'
+  | 'top-environments'
+  | 'top-connectors'
+  | 'environments-by-type'
+  | 'premium-vs-standard'
+
+const PANEL_ORDER_KEY = 'ppac:home:panelCardOrder:v1'
 
 const PREMIUM_CONNECTOR_IDS = new Set([
   'sql',
@@ -73,6 +84,13 @@ const useClasses = makeStyles({
       backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.2), transparent 40%)',
       opacity: 0.35,
     },
+  },
+  panelDragging: {
+    opacity: 0.7,
+    transform: 'scale(0.995)',
+  },
+  panelDropHint: {
+    border: '1px dashed rgba(140, 183, 235, 0.85)',
   },
   panelTitle: {
     fontSize: tokens.fontSizeBase400,
@@ -241,6 +259,48 @@ function RingStat({ slices, centerValue, centerLabel }: { slices: DonutSlice[]; 
 
 export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerNames }: HomeDashboardSnapshotProps) {
   const classes = useClasses()
+
+  const defaultPanelOrder: PanelCardId[] = [
+    'resource-composition',
+    'adoption-over-time',
+    'top-makers',
+    'flow-status',
+    'top-environments',
+    'top-connectors',
+    'environments-by-type',
+    'premium-vs-standard',
+  ]
+  const [panelOrder, setPanelOrder] = useState<PanelCardId[]>(defaultPanelOrder)
+  const [draggingPanel, setDraggingPanel] = useState<PanelCardId | null>(null)
+  const [panelDropTarget, setPanelDropTarget] = useState<PanelCardId | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PANEL_ORDER_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as PanelCardId[]
+      if (!Array.isArray(parsed)) return
+      const valid = parsed.filter((id): id is PanelCardId => defaultPanelOrder.includes(id))
+      const merged = [...valid, ...defaultPanelOrder.filter(id => !valid.includes(id))]
+      if (merged.length === defaultPanelOrder.length) setPanelOrder(merged)
+    } catch {
+      // Ignore malformed preference and keep default order.
+    }
+  }, [])
+
+  const movePanelCard = (from: PanelCardId, to: PanelCardId) => {
+    if (from === to) return
+    setPanelOrder(prev => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(from)
+      const toIdx = next.indexOf(to)
+      if (fromIdx < 0 || toIdx < 0) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, from)
+      localStorage.setItem(PANEL_ORDER_KEY, JSON.stringify(next))
+      return next
+    })
+  }
 
   const appCount = useMemo(() => allResources.filter(r => getResourceCategory(r.type) === 'apps').length, [allResources])
 
@@ -427,10 +487,9 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     })
     .join(' ')
 
-  return (
-    <div className={classes.root}>
-      <div className={classes.panelGrid}>
-        <section className={classes.panel}>
+  const panelCards: Record<PanelCardId, JSX.Element> = {
+    'resource-composition': (
+      <>
           <Text className={classes.panelTitle}>Resource composition</Text>
           <Caption1 className={classes.panelSub}>Apps, flows and agents</Caption1>
           <div className={classes.split}>
@@ -446,9 +505,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               ))}
             </div>
           </div>
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'adoption-over-time': (
+      <>
           <Text className={classes.panelTitle}>Adoption over time</Text>
           <Caption1 className={classes.panelSub}>New resources per year and cumulative total</Caption1>
           <div className={classes.chartWrap}>
@@ -488,9 +548,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               <Caption1 key={p.year} style={{ color: tokens.colorNeutralForeground3 }}>{p.year}</Caption1>
             ))}
           </div>
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'top-makers': (
+      <>
           <Text className={classes.panelTitle}>Top makers</Text>
           <Caption1 className={classes.panelSub}>Most resources created or owned</Caption1>
           {makerInfo.topMakers.length === 0 ? (
@@ -506,9 +567,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               ))}
             </div>
           )}
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'flow-status': (
+      <>
           <Text className={classes.panelTitle}>Flow status</Text>
           <Caption1 className={classes.panelSub}>Activated, deactivated, suspended</Caption1>
           <div className={classes.split}>
@@ -525,9 +587,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
             </div>
           </div>
           <Caption1 className={classes.mutedCallout}>Flow status applies to flows only.</Caption1>
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'top-environments': (
+      <>
           <Text className={classes.panelTitle}>Top environments</Text>
           <Caption1 className={classes.panelSub}>Apps, flows and agents by environment</Caption1>
           {topEnvironments.length === 0 ? (
@@ -543,9 +606,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               ))}
             </div>
           )}
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'top-connectors': (
+      <>
           <Text className={classes.panelTitle}>Top connectors</Text>
           <Caption1 className={classes.panelSub}>Used across apps and flows</Caption1>
           {topConnectors.length === 0 ? (
@@ -569,9 +633,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               ))}
             </div>
           )}
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'environments-by-type': (
+      <>
           <Text className={classes.panelTitle}>Environments by type</Text>
           <Caption1 className={classes.panelSub}>Production, Sandbox, Trial, Developer</Caption1>
           <div className={classes.split}>
@@ -587,9 +652,10 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
               ))}
             </div>
           </div>
-        </section>
-
-        <section className={classes.panel}>
+      </>
+    ),
+    'premium-vs-standard': (
+      <>
           <Text className={classes.panelTitle}>Premium vs Standard</Text>
           <Caption1 className={classes.panelSub}>Connector profile across apps and flows</Caption1>
           <div className={classes.split}>
@@ -610,7 +676,43 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
             </div>
           </div>
           <Caption1 className={classes.mutedCallout}>Premium classification uses connector heuristics in inventory metadata.</Caption1>
-        </section>
+      </>
+    ),
+  }
+
+  return (
+    <div className={classes.root}>
+      <div className={classes.panelGrid}>
+        {panelOrder.map(id => {
+          const className = [
+            classes.panel,
+            draggingPanel === id ? classes.panelDragging : '',
+            panelDropTarget === id ? classes.panelDropHint : '',
+          ].filter(Boolean).join(' ')
+          return (
+            <section
+              key={id}
+              className={className}
+              draggable
+              onDragStart={() => setDraggingPanel(id)}
+              onDragOver={(e) => { e.preventDefault(); setPanelDropTarget(id) }}
+              onDragLeave={() => setPanelDropTarget(prev => (prev === id ? null : prev))}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (draggingPanel) movePanelCard(draggingPanel, id)
+                setDraggingPanel(null)
+                setPanelDropTarget(null)
+              }}
+              onDragEnd={() => {
+                setDraggingPanel(null)
+                setPanelDropTarget(null)
+              }}
+              title="Drag to reorder"
+            >
+              {panelCards[id]}
+            </section>
+          )
+        })}
       </div>
     </div>
   )

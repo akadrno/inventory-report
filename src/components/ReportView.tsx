@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { makeStyles, tokens, Text, Caption1, Badge, Spinner } from '@fluentui/react-components'
 import {
   ErrorCircleRegular,
@@ -23,6 +23,7 @@ import { getIsQuarantined } from '../utils/resourceMetadata'
 // Hero gradient: a lighter, brighter blue in light mode; the deep near-black
 // command-center navy in dark mode. White hero text stays legible on both.
 const HERO_BG_LIGHT = 'radial-gradient(ellipse 90% 130% at 15% -20%, #3a7cc4 0%, #255596 45%, #173a64 100%)'
+const HERO_CARD_ORDER_KEY = 'ppac:home:heroMiniCardOrder:v1'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
@@ -145,6 +146,15 @@ const useClasses = makeStyles({
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.08)',
     minWidth: '108px',
+    cursor: 'grab',
+    userSelect: 'none',
+  },
+  miniStatDragging: {
+    opacity: 0.7,
+    cursor: 'grabbing',
+  },
+  miniStatDropHint: {
+    border: '1px dashed rgba(122, 190, 255, 0.9)',
   },
   miniValue: {
     color: '#ffffff', fontSize: '20px', fontWeight: 700, lineHeight: 1.1,
@@ -825,6 +835,50 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
     [allResources],
   )
 
+  type HeroMiniCardId = 'environments' | 'managed' | 'total' | 'groups' | 'makers' | 'orphaned' | 'quarantined'
+  const defaultHeroOrder: HeroMiniCardId[] = ['environments', 'managed', 'total', 'groups', 'makers', 'orphaned', 'quarantined']
+  const [heroOrder, setHeroOrder] = useState<HeroMiniCardId[]>(defaultHeroOrder)
+  const [draggingHero, setDraggingHero] = useState<HeroMiniCardId | null>(null)
+  const [heroDropTarget, setHeroDropTarget] = useState<HeroMiniCardId | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HERO_CARD_ORDER_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as HeroMiniCardId[]
+      if (!Array.isArray(parsed)) return
+      const valid = parsed.filter((id): id is HeroMiniCardId => defaultHeroOrder.includes(id))
+      const merged = [...valid, ...defaultHeroOrder.filter(id => !valid.includes(id))]
+      if (merged.length === defaultHeroOrder.length) setHeroOrder(merged)
+    } catch {
+      // Ignore malformed preference and use default order.
+    }
+  }, [])
+
+  const heroCards: Record<HeroMiniCardId, { label: string; value: number }> = {
+    environments: { label: 'Environments', value: allEnvironments.length },
+    managed: { label: 'Managed Envs', value: managedCount },
+    total: { label: 'Total Resources', value: allResources.length },
+    groups: { label: 'Env Groups', value: envGroupCount },
+    makers: { label: 'Makers', value: makerCount },
+    orphaned: { label: 'Orphaned', value: orphanedCount },
+    quarantined: { label: 'Quarantined', value: quarantinedCount },
+  }
+
+  const moveHeroCard = (from: HeroMiniCardId, to: HeroMiniCardId) => {
+    if (from === to) return
+    setHeroOrder(prev => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(from)
+      const toIdx = next.indexOf(to)
+      if (fromIdx < 0 || toIdx < 0) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, from)
+      localStorage.setItem(HERO_CARD_ORDER_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
   // Silent refresh trigger: when a different signed-in account lands on Home,
   // refresh the sign-in cache in the background and surface only failures in
   // the Debug panel (via SignInCacheContext debug entries).
@@ -867,13 +921,38 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
           </div>
 
           <div className={classes.secondaryRow} style={fadeUp(0.18)}>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allEnvironments.length} /></span><span className={classes.miniLabel}>Environments</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={managedCount} /></span><span className={classes.miniLabel}>Managed Envs</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={allResources.length} /></span><span className={classes.miniLabel}>Total Resources</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={envGroupCount} /></span><span className={classes.miniLabel}>Env Groups</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={makerCount} /></span><span className={classes.miniLabel}>Makers</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={orphanedCount} /></span><span className={classes.miniLabel}>Orphaned</span></div>
-            <div className={classes.miniStat}><span className={classes.miniValue}><CountUp value={quarantinedCount} /></span><span className={classes.miniLabel}>Quarantined</span></div>
+            {heroOrder.map(id => {
+              const card = heroCards[id]
+              const className = [
+                classes.miniStat,
+                draggingHero === id ? classes.miniStatDragging : '',
+                heroDropTarget === id ? classes.miniStatDropHint : '',
+              ].filter(Boolean).join(' ')
+              return (
+                <div
+                  key={id}
+                  className={className}
+                  draggable
+                  onDragStart={() => setDraggingHero(id)}
+                  onDragOver={(e) => { e.preventDefault(); setHeroDropTarget(id) }}
+                  onDragLeave={() => setHeroDropTarget(prev => (prev === id ? null : prev))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (draggingHero) moveHeroCard(draggingHero, id)
+                    setDraggingHero(null)
+                    setHeroDropTarget(null)
+                  }}
+                  onDragEnd={() => {
+                    setDraggingHero(null)
+                    setHeroDropTarget(null)
+                  }}
+                  title="Drag to reorder"
+                >
+                  <span className={classes.miniValue}><CountUp value={card.value} /></span>
+                  <span className={classes.miniLabel}>{card.label}</span>
+                </div>
+              )
+            })}
           </div>
 
           <div className={classes.healthBar} style={fadeUp(0.24)}>
