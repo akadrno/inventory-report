@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { makeStyles, tokens, Text, Caption1, Badge, Spinner, Button } from '@fluentui/react-components'
 import {
   ErrorCircleRegular,
@@ -17,6 +17,7 @@ import { useSignInCache } from '../context/SignInCacheContext'
 import { CommandBackdrop, CountUp } from './CommandCenter'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { useThemeMode } from '../context/ThemeContext'
+import { HomeDashboardSnapshot } from './HomeDashboardSnapshot'
 
 // Hero gradient: a lighter, brighter blue in light mode; the deep near-black
 // command-center navy in dark mode. White hero text stays legible on both.
@@ -25,6 +26,7 @@ const HERO_BG_LIGHT = 'radial-gradient(ellipse 90% 130% at 15% -20%, #3a7cc4 0%,
 interface ReportViewProps {
   allResources: ResourceItem[]
   allEnvironments: ResourceItem[]
+  allGroups?: ResourceItem[]
   ownerNames?: Map<string, string>
   onNavigateToRiskAssessments?: () => void
 }
@@ -734,6 +736,11 @@ function GovernanceTab() {
   )
 }
 
+// Keep legacy tab implementations available for potential reuse while the
+// home page now renders the screenshot-style dashboard snapshot.
+void OverviewTab
+void GovernanceTab
+
 // ── Tab: Recommendations ──────────────────────────────────────────────────────
 
 type Rec = { priority: 'Critical' | 'High' | 'Medium' | 'Low'; action: string; why: string; how: string }
@@ -836,16 +843,7 @@ export function RecsTab({ allEnvironments }: { allEnvironments: ResourceItem[] }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type ReportTab = 'overview' | 'governance' | 'recommendations'
-
-const TABS: { id: ReportTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'governance', label: 'Tenant Governance' },
-  { id: 'recommendations', label: 'Recommendations' },
-]
-
-export function ReportView({ allResources, allEnvironments, onNavigateToRiskAssessments }: ReportViewProps) {
-  const [tab, setTab] = useState<ReportTab>('overview')
+export function ReportView({ allResources, allEnvironments, allGroups, ownerNames, onNavigateToRiskAssessments }: ReportViewProps) {
   const classes = useClasses()
   const { mode } = useThemeMode()
 
@@ -930,23 +928,13 @@ export function ReportView({ allResources, allEnvironments, onNavigateToRiskAsse
       {/* Usage sign-in cache status + manual refresh */}
       <UsageCacheStatus />
 
-      {/* Nav tabs */}
-      <div className={classes.navRow}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={tab === t.id ? classes.navBtnActive : classes.navBtn}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {tab === 'overview' && <OverviewTab allResources={allResources} allEnvironments={allEnvironments} />}
-      {tab === 'governance' && <GovernanceTab />}
-      {tab === 'recommendations' && <RecsTab allEnvironments={allEnvironments} />}
+      {/* Home dashboard snapshot (replaces old Overview/Governance/Recommendations tabs) */}
+      <HomeDashboardSnapshot
+        allResources={allResources}
+        allEnvironments={allEnvironments}
+        allGroups={allGroups}
+        ownerNames={ownerNames}
+      />
 
       <div style={{ textAlign: 'center', padding: tokens.spacingVerticalL, color: tokens.colorNeutralForeground3, borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: tokens.colorNeutralStroke2, marginTop: tokens.spacingVerticalL }}>
         <Caption1>Inventory and Governance Report · Generated {new Date().toLocaleString()}</Caption1>
