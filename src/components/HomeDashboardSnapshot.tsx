@@ -488,7 +488,16 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
   const maxEnv = topEnvironments[0]?.count ?? 1
   const maxConnector = topConnectors[0]?.count ?? 1
 
-  const maxAdoptionSeries = Math.max(...adoptionSeries.map(p => Math.max(p.apps, p.flows, p.agents)), 1)
+  const maxAdoptionSeries = Math.max(...adoptionSeries.map(p => p.total), 1)
+  const adoptionGrowth = useMemo(() => {
+    let running = 0
+    const points = adoptionSeries.map((p) => {
+      running += p.total
+      return { year: p.year, cumulative: running }
+    })
+    const maxCumulative = Math.max(...points.map(p => p.cumulative), 1)
+    return { points, maxCumulative }
+  }, [adoptionSeries])
   const adoptionTotals = useMemo(
     () => adoptionSeries.reduce((acc, p) => ({ apps: acc.apps + p.apps, flows: acc.flows + p.flows, agents: acc.agents + p.agents }), { apps: 0, flows: 0, agents: 0 }),
     [adoptionSeries],
@@ -517,7 +526,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     'adoption-over-time': (
       <>
           <Text className={classes.panelTitle}>Adoption over time</Text>
-          <Caption1 className={classes.panelSub}>App, flow and agent creations by year (inventory created dates)</Caption1>
+          <Caption1 className={classes.panelSub}>Stacked app, flow and agent creations by year with cumulative growth trend</Caption1>
           <div className={classes.chartWrap}>
             {adoptionSeries.length === 0 ? (
               <div className={classes.emptyState}><Caption1>No created-date data found in inventory records.</Caption1></div>
@@ -526,43 +535,59 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
                 {adoptionSeries.map((p, idx) => {
                   const slot = adoptionSeries.length === 0 ? 100 : 100 / adoptionSeries.length
                   const x0 = idx * slot
-                  const barW = Math.max(1.4, slot * 0.22)
-                  const gap = Math.max(0.4, slot * 0.08)
-                  const appH = (p.apps / maxAdoptionSeries) * 36
-                  const flowH = (p.flows / maxAdoptionSeries) * 36
-                  const agentH = (p.agents / maxAdoptionSeries) * 36
+                  const barW = Math.max(2.2, slot * 0.56)
+                  const barX = x0 + (slot - barW) / 2
+                  const appH = (p.apps / maxAdoptionSeries) * 42
+                  const flowH = (p.flows / maxAdoptionSeries) * 42
+                  const agentH = (p.agents / maxAdoptionSeries) * 42
+                  const stackBaseY = 98
+                  const totalH = appH + flowH + agentH
                   return (
                     <g key={p.year}>
                       <rect
-                        x={x0 + gap}
-                        y={98 - appH}
+                        x={barX}
+                        y={stackBaseY - appH}
                         width={barW}
                         height={appH}
                         rx={1.1}
                         fill="#b07cff"
-                        opacity={0.95}
+                        opacity={0.92}
                       />
                       <rect
-                        x={x0 + gap + barW + gap}
-                        y={98 - flowH}
+                        x={barX}
+                        y={stackBaseY - appH - flowH}
                         width={barW}
                         height={flowH}
-                        rx={1.1}
+                        rx={0.8}
                         fill="#4aa8ff"
-                        opacity={0.95}
+                        opacity={0.92}
                       />
                       <rect
-                        x={x0 + gap + (barW + gap) * 2}
-                        y={98 - agentH}
+                        x={barX}
+                        y={stackBaseY - totalH}
                         width={barW}
                         height={agentH}
-                        rx={1.1}
+                        rx={0.8}
                         fill="#3ad1c4"
-                        opacity={0.95}
+                        opacity={0.92}
                       />
                     </g>
                   )
                 })}
+                <polyline
+                  points={adoptionGrowth.points.map((p, idx) => {
+                    const slot = adoptionSeries.length === 0 ? 100 : 100 / adoptionSeries.length
+                    const x = idx * slot + slot / 2
+                    const y = 98 - (p.cumulative / adoptionGrowth.maxCumulative) * 56
+                    return `${x},${y}`
+                  }).join(' ')}
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="1.3"
+                  vectorEffect="non-scaling-stroke"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             )}
           </div>
@@ -570,6 +595,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
             <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#b07cff' }}>Apps</span>: {adoptionTotals.apps.toLocaleString()}</Caption1>
             <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#4aa8ff' }}>Flows</span>: {adoptionTotals.flows.toLocaleString()}</Caption1>
             <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#3ad1c4' }}>Agents</span>: {adoptionTotals.agents.toLocaleString()}</Caption1>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#f59e0b' }}>Growth trend</span>: cumulative</Caption1>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
             {adoptionSeries.map(p => (

@@ -25,7 +25,7 @@ import { getIsQuarantined } from '../utils/resourceMetadata'
 const HERO_BG_LIGHT = 'radial-gradient(ellipse 90% 130% at 15% -20%, #3a7cc4 0%, #255596 45%, #173a64 100%)'
 const HERO_CARD_ORDER_KEY = 'ppac:home:heroMiniCardOrder:v1'
 
-type HomeFilter = 'all' | 'environments' | 'managed' | 'groups' | 'makers' | 'orphaned' | 'quarantined'
+type HomeFilter = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'managed' | 'groups' | 'makers' | 'orphaned' | 'quarantined'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
@@ -118,6 +118,19 @@ const useClasses = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
+    cursor: 'pointer',
+    transitionProperty: 'transform, border-color, box-shadow',
+    transitionDuration: tokens.durationNormal,
+    transitionTimingFunction: tokens.curveEasyEase,
+    ':hover': {
+      transform: 'translateY(-2px)',
+      border: '1px solid rgba(170,220,255,0.45)',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+    },
+  },
+  pillarCardActive: {
+    border: '1px solid rgba(148, 214, 255, 0.95)',
+    boxShadow: '0 0 0 1px rgba(148,214,255,0.45), 0 10px 28px rgba(0,0,0,0.34)',
   },
   pillarGlow: {
     position: 'absolute', top: '-30px', right: '-30px',
@@ -443,12 +456,25 @@ function HealthChip({ label, color, onClick }: { label: string; color: 'danger' 
 const fadeUp = (delay: number): React.CSSProperties => ({ animation: 'ppFadeUp 0.6s both', animationDelay: `${delay}s` })
 
 // Featured stat for one product pillar (Agents / Apps / Flows) in the hero.
-function HeroPillar({ icon, accent, value, label, sub }: {
-  icon: React.ReactNode; accent: string; value: number; label: string; sub: string
+function HeroPillar({ icon, accent, value, label, sub, active, onClick }: {
+  icon: React.ReactNode; accent: string; value: number; label: string; sub: string; active?: boolean; onClick?: () => void
 }) {
   const classes = useClasses()
   return (
-    <div className={classes.pillarCard}>
+    <div
+      className={[classes.pillarCard, active ? classes.pillarCardActive : ''].filter(Boolean).join(' ')}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      title="Click to filter"
+    >
       <div className={classes.pillarGlow} style={{ background: accent }} />
       <div className={classes.pillarTop}>
         <span className={classes.pillarIcon} style={{ color: accent, background: `${accent}22`, border: `1px solid ${accent}55` }}>{icon}</span>
@@ -952,6 +978,10 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
       const hasOwner = !!owner && owner !== '—'
       const envKey = resourceEnvKey(r)
       switch (homeFilter) {
+        case 'apps':
+        case 'flows':
+        case 'agents':
+          return getResourceCategory(r.type) === homeFilter
         case 'environments':
           return !!envKey
         case 'managed':
@@ -984,6 +1014,9 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
 
   const filterLabel: Record<HomeFilter, string> = {
     all: 'All resources',
+    apps: 'Apps',
+    flows: 'Flows',
+    agents: 'Agents',
     environments: 'Environment-linked resources',
     managed: 'Managed environment resources',
     groups: 'Environment group resources',
@@ -1042,9 +1075,33 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
           </div>
 
           <div className={classes.pillarRow} style={fadeUp(0.12)}>
-            <HeroPillar icon={<CopilotStudioIcon fontSize={22} />} accent="#3ad1c4" value={agentCount} label="Agents" sub="Agents" />
-            <HeroPillar icon={<PowerAppsIcon fontSize={22} />} accent="#b07cff" value={appCount} label="Apps" sub="Canvas & model-driven" />
-            <HeroPillar icon={<PowerAutomateIcon fontSize={22} />} accent="#4aa8ff" value={flowCount} label="Flows" sub="Cloud & desktop" />
+            <HeroPillar
+              icon={<CopilotStudioIcon fontSize={22} />}
+              accent="#3ad1c4"
+              value={agentCount}
+              label="Agents"
+              sub="Agents"
+              active={homeFilter === 'agents'}
+              onClick={() => setHomeFilter(prev => (prev === 'agents' ? 'all' : 'agents'))}
+            />
+            <HeroPillar
+              icon={<PowerAppsIcon fontSize={22} />}
+              accent="#b07cff"
+              value={appCount}
+              label="Apps"
+              sub="Canvas & model-driven"
+              active={homeFilter === 'apps'}
+              onClick={() => setHomeFilter(prev => (prev === 'apps' ? 'all' : 'apps'))}
+            />
+            <HeroPillar
+              icon={<PowerAutomateIcon fontSize={22} />}
+              accent="#4aa8ff"
+              value={flowCount}
+              label="Flows"
+              sub="Cloud & desktop"
+              active={homeFilter === 'flows'}
+              onClick={() => setHomeFilter(prev => (prev === 'flows' ? 'all' : 'flows'))}
+            />
           </div>
 
           <div className={classes.secondaryRow} style={fadeUp(0.18)}>
