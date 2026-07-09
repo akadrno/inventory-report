@@ -1,4 +1,4 @@
-# Power Platform Inventory Report
+# Platform 360: A Power Platform Inventory and Governance App
 
 A browser-based inventory, governance, and usage dashboard for Power Platform admins. It surfaces apps, cloud flows, Copilot Studio agents, environments, DLP policies, tenant settings, licensing, sign-in usage, and resource tagging in a single read-only view — authenticated through your own Azure AD app registration. It ships with a light/dark theme and a "command center" home screen.
 
