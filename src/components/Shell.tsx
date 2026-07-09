@@ -1506,6 +1506,7 @@ export function Shell() {
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={usageView === 'apps'} onClick={() => setUsageView('apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={usageView === 'flows'} onClick={() => setUsageView('flows')} collapsed={!panelOpen} />
             <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={usageView === 'agents'} onClick={() => setUsageView('agents')} collapsed={!panelOpen} />
+            {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sign Ins</Caption1>}
             <NavItem icon={<GlobeRegular />} label="Heatmap" active={usageView === 'heatmap'} onClick={() => setUsageView('heatmap')} collapsed={!panelOpen} />
           </NavPanel>
         )}
