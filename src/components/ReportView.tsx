@@ -191,6 +191,28 @@ const useClasses = makeStyles({
     flexWrap: 'wrap',
     marginTop: '-2px',
   },
+  heroActionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    flexWrap: 'wrap',
+    marginTop: '-2px',
+  },
+  heroRightGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginLeft: 'auto',
+  },
+  heroActionLabel: {
+    color: 'rgba(220,235,255,0.92)',
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '0.3px',
+    textTransform: 'uppercase',
+  },
   filterPill: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -1142,38 +1164,43 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
             })}
           </div>
 
-          <div className={classes.filterBar} style={fadeUp(0.21)}>
-            <span className={classes.filterPill}>Filter: {filterLabel[homeFilter]}</span>
-            {homeFilter !== 'all' && (
-              <Button
-                appearance="subtle"
-                size="small"
-                onClick={() => setHomeFilter('all')}
-                style={{ color: 'rgba(220,235,255,0.88)' }}
-              >
-                Clear filter
-              </Button>
-            )}
-          </div>
+          <div className={classes.heroActionRow} style={fadeUp(0.21)}>
+            <div className={classes.filterBar}>
+              <span className={classes.filterPill}>Filter: {filterLabel[homeFilter]}</span>
+              {homeFilter !== 'all' && (
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  onClick={() => setHomeFilter('all')}
+                  style={{ color: 'rgba(220,235,255,0.88)' }}
+                >
+                  Clear filter
+                </Button>
+              )}
+            </div>
 
-          <div className={classes.healthBar} style={fadeUp(0.24)}>
-            {criticalCount > 0 && <HealthChip label={`${criticalCount} Critical`} color="danger" />}
-            {highCount > 0 && <HealthChip label={`${highCount} High Priority`} color="warning" />}
-            {compliantCount > 0 && (
-              <HealthChip
-                label={`${compliantCount} Compliant Resources`}
-                color="success"
-                onClick={onNavigateToRiskAssessments}
-              />
-            )}
-            {notReviewedCount > 0 && (
-              <HealthChip
-                label={`${notReviewedCount} Not Reviewed — Review Now`}
-                color="warning"
-                onClick={onNavigateToRiskAssessments}
-              />
-            )}
-            {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
+            <div className={classes.heroRightGroup}>
+              <span className={classes.heroActionLabel}>Risk Assessments</span>
+              <div className={classes.healthBar}>
+                {criticalCount > 0 && <HealthChip label={`${criticalCount} Critical`} color="danger" />}
+                {highCount > 0 && <HealthChip label={`${highCount} High Priority`} color="warning" />}
+                {compliantCount > 0 && (
+                  <HealthChip
+                    label={`${compliantCount} Compliant Resources`}
+                    color="success"
+                    onClick={onNavigateToRiskAssessments}
+                  />
+                )}
+                {notReviewedCount > 0 && (
+                  <HealthChip
+                    label={`${notReviewedCount} Not Reviewed — Review Now`}
+                    color="warning"
+                    onClick={onNavigateToRiskAssessments}
+                  />
+                )}
+                {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
+              </div>
+            </div>
           </div>
         </div>
       </div>
