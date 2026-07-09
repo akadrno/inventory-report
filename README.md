@@ -34,7 +34,7 @@ Most data is fetched live from the Power Platform, BAP, and Microsoft Graph APIs
 
 Featured home screenshot:
 
-![Platform 360 home screenshot](docs/screenshots/platform-360/home.png)
+![Platform 360 home screenshot](docs/screenshots/platform-360/Home.png)
 
 Browse the full capture set in [docs/screenshots/README.md](docs/screenshots/README.md). The gallery uses refreshed 1600×1200 screenshots taken from a signed-in session.
 
