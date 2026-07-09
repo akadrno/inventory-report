@@ -35,7 +35,7 @@ type PanelCardId =
   | 'environments-by-type'
   | 'premium-vs-standard'
 
-const PANEL_ORDER_KEY = 'ppac:home:panelCardOrder:v1'
+const PANEL_ORDER_KEY = 'ppac:home:panelCardOrder:v2'
 
 const PREMIUM_CONNECTOR_IDS = new Set([
   'sql',
@@ -280,13 +280,13 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
 
   const defaultPanelOrder: PanelCardId[] = [
     'resource-composition',
-    'adoption-over-time',
-    'top-makers',
     'flow-status',
-    'top-environments',
-    'top-connectors',
     'environments-by-type',
     'premium-vs-standard',
+    'adoption-over-time',
+    'top-makers',
+    'top-environments',
+    'top-connectors',
   ]
   const [panelOrder, setPanelOrder] = useState<PanelCardId[]>(defaultPanelOrder)
   const [draggingPanel, setDraggingPanel] = useState<PanelCardId | null>(null)
