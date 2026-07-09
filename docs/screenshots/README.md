@@ -1,6 +1,8 @@
 # Platform 360 Screenshot Gallery
 
-Captured from a signed-in session on 2026-07-08.
+Captured from a signed-in session on 2026-07-08 at 1600×1200.
+
+The home screenshot is the featured showcase image used in the main project README.
 
 ## Home
 - [Home](platform-360/home.png)

@@ -30,6 +30,14 @@ A browser-based inventory, governance, and usage dashboard for Power Platform ad
 
 Most data is fetched live from the Power Platform, BAP, and Microsoft Graph APIs using your signed-in user's **delegated** permissions and held only in your browser session. Optionally, an Azure Storage account (account-level Table SAS) can persist risk assessments, resource tags, and a cached sign-in dataset for the usage heatmap — see the [hosting guide](docs/03-azure-static-web-apps.md). Without it, those features fall back to `localStorage` or live fetches.
 
+## Screenshot Gallery
+
+Featured home screenshot:
+
+![Platform 360 home screenshot](docs/screenshots/platform-360/home.png)
+
+Browse the full capture set in [docs/screenshots/README.md](docs/screenshots/README.md). The gallery uses refreshed 1600×1200 screenshots taken from a signed-in session.
+
 ## Documentation
 
 | Guide | Description |
