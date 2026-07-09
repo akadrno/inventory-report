@@ -6,6 +6,7 @@ import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { getConnectors, getIsQuarantined, getStatus } from '../utils/resourceMetadata'
 import { getConnectorInfo } from '../utils/connectors'
 import { getCreatedDate } from './usageShared'
+import { isM365BuilderAgent } from '../utils/resourceMetadata'
 
 interface HomeDashboardSnapshotProps {
   allResources: ResourceItem[]
@@ -319,7 +320,76 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     })
   }
 
-  const appCount = useMemo(() => allResources.filter(r => getResourceCategory(r.type) === 'apps').length, [allResources])
+  const inventoryComposition = useMemo(() => {
+    let apps = 0
+    let flows = 0
+    let agents = 0
+    let other = 0
+
+    let appCanvas = 0
+    let appModelDriven = 0
+    let appCode = 0
+    let appBuilder = 0
+
+    let flowCloud = 0
+    let flowAgent = 0
+    let flowM365Agent = 0
+
+    let agentCopilotStudio = 0
+    let agentM365Builder = 0
+
+    for (const r of allResources) {
+      const category = getResourceCategory(r.type)
+      const typeLower = r.type.toLowerCase()
+
+      if (category === 'apps') {
+        apps++
+        if (typeLower.includes('canvas')) appCanvas++
+        else if (typeLower.includes('modeldriven')) appModelDriven++
+        else if (typeLower.includes('codeapp')) appCode++
+        else if (typeLower === 'microsoft.powerapps/apps') appBuilder++
+        continue
+      }
+
+      if (category === 'flows') {
+        flows++
+        if (typeLower.includes('m365agentflow')) flowM365Agent++
+        else if (typeLower.includes('agentflow')) flowAgent++
+        else flowCloud++
+        continue
+      }
+
+      if (category === 'agents') {
+        agents++
+        if (isM365BuilderAgent(r)) agentM365Builder++
+        else agentCopilotStudio++
+        continue
+      }
+
+      other++
+    }
+
+    const topLevel: DonutSlice[] = [
+      { label: 'Apps', value: apps, color: '#6d28d9' },
+      { label: 'Flows', value: flows, color: '#2563eb' },
+      { label: 'Agents', value: agents, color: '#0d9488' },
+      { label: 'Other/New', value: other, color: '#94a3b8' },
+    ]
+
+    const subFilters = [
+      { label: 'Canvas Apps', value: appCanvas, color: '#a78bfa' },
+      { label: 'Model-driven Apps', value: appModelDriven, color: '#7c3aed' },
+      { label: 'Code Apps', value: appCode, color: '#5b21b6' },
+      { label: 'App Builder', value: appBuilder, color: '#c4b5fd' },
+      { label: 'Cloud Flows', value: flowCloud, color: '#60a5fa' },
+      { label: 'Agent Flows', value: flowAgent, color: '#2563eb' },
+      { label: 'Workflow Agent Flows', value: flowM365Agent, color: '#1d4ed8' },
+      { label: 'Copilot Studio Agents', value: agentCopilotStudio, color: '#2dd4bf' },
+      { label: 'M365 Agent Builder', value: agentM365Builder, color: '#0f766e' },
+    ]
+
+    return { total: allResources.length, topLevel, subFilters }
+  }, [allResources])
 
   const makerInfo = useMemo(() => {
     const map = new Map<string, number>()
@@ -475,11 +545,6 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     return { premium, standard }
   }, [allResources])
 
-  const appVsOtherSlices: DonutSlice[] = [
-    { label: 'Apps', value: appCount, color: '#6d28d9' },
-    { label: 'Other resources', value: Math.max(0, allResources.length - appCount), color: '#cbd5e1' },
-  ]
-
   const flowTotal = flowStatus.active + flowStatus.deactivated + flowStatus.suspended + flowStatus.unknown
   const flowSlices: DonutSlice[] = [
     { label: 'Active', value: flowStatus.active, color: '#0d9488' },
@@ -496,6 +561,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
   const maxMaker = makerInfo.topMakers[0]?.count ?? 1
   const maxEnv = topEnvironments[0]?.count ?? 1
   const maxConnector = topConnectors[0]?.count ?? 1
+  const maxInventorySubFilter = Math.max(...inventoryComposition.subFilters.map(s => s.value), 1)
 
   const maxAdoptionSeries = Math.max(...adoptionSeries.map(p => p.total), 1)
   const adoptionGrowth = useMemo(() => {
@@ -516,19 +582,37 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     'resource-composition': (
       <>
           <Text className={classes.panelTitle}>Resource composition</Text>
-          <Caption1 className={classes.panelSub}>Apps, flows and agents</Caption1>
+          <Caption1 className={classes.panelSub}>Inventory-aligned filters and subfilters</Caption1>
           <div className={classes.split}>
-            <RingStat slices={appVsOtherSlices} centerValue={appCount.toLocaleString()} centerLabel="apps" />
+            <RingStat slices={inventoryComposition.topLevel} centerValue={inventoryComposition.total.toLocaleString()} centerLabel="resources" />
             <div className={classes.legend}>
-              {appVsOtherSlices.map(s => (
+              {inventoryComposition.topLevel.map(s => (
                 <div key={s.label} className={classes.legendRow}>
                   <span className={classes.swatch} style={{ backgroundColor: s.color }} />
                   <span className={classes.seriesName}>{s.label}</span>
                   <span className={classes.number}>{s.value.toLocaleString()}</span>
-                  <span className={classes.pct}>{safePct(s.value, allResources.length)}%</span>
+                  <span className={classes.pct}>{safePct(s.value, inventoryComposition.total)}%</span>
                 </div>
               ))}
             </div>
+          </div>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, marginTop: '6px' }}>Inventory subfilters</Caption1>
+          <div className={classes.list}>
+            {inventoryComposition.subFilters.map(s => (
+              <div key={s.label} className={classes.row}>
+                <span className={classes.rowLabel}>{s.label}</span>
+                <div className={classes.barBg}>
+                  <div
+                    className={classes.barFill}
+                    style={{
+                      width: `${(s.value / maxInventorySubFilter) * 100}%`,
+                      backgroundColor: s.color,
+                    }}
+                  />
+                </div>
+                <span className={classes.rowValue}>{s.value}</span>
+              </div>
+            ))}
           </div>
       </>
     ),
