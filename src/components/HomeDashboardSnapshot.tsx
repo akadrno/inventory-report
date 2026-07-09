@@ -14,6 +14,16 @@ interface HomeDashboardSnapshotProps {
 }
 
 type DonutSlice = { label: string; value: number; color: string }
+const CONNECTOR_BAR_COLORS = [
+  '#64748b',
+  '#2563eb',
+  '#0d9488',
+  '#8b5cf6',
+  '#f59e0b',
+  '#ef4444',
+  '#14b8a6',
+  '#ec4899',
+]
 type PanelCardId =
   | 'resource-composition'
   | 'adoption-over-time'
@@ -400,8 +410,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
       byYear.set(year, bucket)
     }
 
-    const yearsWithData = [...byYear.keys()].sort((a, b) => a - b)
-    const startYear = yearsWithData.length > 0 ? yearsWithData[0] : Math.max(currentYear - 7, 2019)
+    const startYear = currentYear - 4
     const points: { year: number; apps: number; flows: number; agents: number; total: number }[] = []
 
     for (let year = startYear; year <= currentYear; year++) {
@@ -678,7 +687,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
                       className={classes.barFill}
                       style={{
                         width: `${(c.count / maxConnector) * 100}%`,
-                        backgroundColor: idx % 3 === 0 ? '#64748b' : idx % 3 === 1 ? '#2563eb' : '#0d9488',
+                        backgroundColor: CONNECTOR_BAR_COLORS[idx % CONNECTOR_BAR_COLORS.length],
                       }}
                     />
                   </div>
