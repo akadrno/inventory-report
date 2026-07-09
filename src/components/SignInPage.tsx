@@ -156,6 +156,10 @@ export function SignInPage() {
   const { instance } = useMsal()
   const classes = useClasses()
 
+  const handleSignIn = () => {
+    instance.loginRedirect({ scopes: powerPlatformScopes }).catch(console.error)
+  }
+
   return (
     <div className={classes.page}>
       <CommandBackdrop />
@@ -209,7 +213,7 @@ export function SignInPage() {
             size="large"
             className={classes.signInBtn}
             icon={<MicrosoftLogo />}
-            onClick={() => instance.loginPopup({ scopes: powerPlatformScopes }).catch(console.error)}
+            onClick={handleSignIn}
           >
             Sign in with Microsoft
           </Button>
