@@ -100,7 +100,7 @@ const STROKE1 = tokens.colorNeutralStroke2
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RailSection = 'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'
-type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'other' | 'environments' | 'groups' | 'users'
+type InvView = 'all' | 'apps' | 'flows' | 'agents' | 'environments' | 'groups' | 'users'
 type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
 type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
@@ -1074,7 +1074,6 @@ function LicensingContent({ licView }: { licView: LicensingView }) {
 
 const INV_LABELS: Record<InvView, string> = {
   all: 'All Resources', apps: 'Apps', flows: 'Flows', agents: 'Agents',
-  other: 'Other/New',
   environments: 'Environments', groups: 'Environment Groups', users: 'Users',
 }
 
@@ -1127,11 +1126,7 @@ export function Shell() {
     let items = allResources
     if (hideSystemInv) items = items.filter(r => !isSystemResource(r))
     if (invView !== 'all' && invView !== 'environments' && invView !== 'groups' && invView !== 'users') {
-      if (invView === 'other') {
-        items = items.filter(r => getResourceCategory(r.type) === 'all')
-      } else {
-        items = items.filter(r => getResourceCategory(r.type) === invView)
-      }
+      items = items.filter(r => getResourceCategory(r.type) === invView)
     }
     if (invView === 'flows' && flowSubView !== 'all') {
       items = items.filter(r => {
@@ -1226,7 +1221,7 @@ export function Shell() {
 
     if (rail === 'inventory') {
       const label = INV_LABELS[invView]
-      const showTable = invView === 'all' || invView === 'apps' || invView === 'flows' || invView === 'agents' || invView === 'other'
+      const showTable = invView === 'all' || invView === 'apps' || invView === 'flows' || invView === 'agents'
 
       return (
         <>
@@ -1485,7 +1480,6 @@ export function Shell() {
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Apps" active={invView === 'apps'} onClick={() => setInvView('apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Flows" active={invView === 'flows'} onClick={() => setInvView('flows')} collapsed={!panelOpen} />
             <NavItem icon={<CopilotStudioIcon fontSize={20} />} label="Agents" active={invView === 'agents'} onClick={() => setInvView('agents')} collapsed={!panelOpen} />
-            <NavItem icon={<InfoRegular />} label="Other/New" active={invView === 'other'} onClick={() => setInvView('other')} collapsed={!panelOpen} />
             <NavItem icon={<DatabaseRegular />} label="Environments" active={invView === 'environments'} onClick={() => setInvView('environments')} collapsed={!panelOpen} />
             <NavItem icon={<FolderOpenRegular />} label="Environment Groups" active={invView === 'groups'} onClick={() => setInvView('groups')} collapsed={!panelOpen} />
             <NavItem icon={<PersonRegular />} label="Users" active={invView === 'users'} onClick={() => setInvView('users')} collapsed={!panelOpen} />

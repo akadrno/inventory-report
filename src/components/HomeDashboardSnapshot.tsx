@@ -277,6 +277,21 @@ function RingStat({ slices, centerValue, centerLabel }: { slices: DonutSlice[]; 
 
 export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerNames }: HomeDashboardSnapshotProps) {
   const classes = useClasses()
+  const [compositionDrill, setCompositionDrill] = useState<'apps' | 'flows' | 'agents' | null>(null)
+  const [selectedMaker, setSelectedMaker] = useState<string | null>(null)
+
+  const getMakerKey = (r: ResourceItem): string | null => {
+    const raw = getOwnerFromProperties(r)
+    if (!raw || raw === '—' || raw.startsWith(SYSTEM_PREFIX)) return null
+    const resolved = GUID_RE.test(raw) ? ownerNames?.get(raw) ?? raw : raw
+    const key = resolved.trim()
+    return key || null
+  }
+
+  const filteredResources = useMemo(() => {
+    if (!selectedMaker) return allResources
+    return allResources.filter(r => getMakerKey(r) === selectedMaker)
+  }, [allResources, selectedMaker, ownerNames])
 
   const defaultPanelOrder: PanelCardId[] = [
     'resource-composition',
@@ -324,7 +339,6 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     let apps = 0
     let flows = 0
     let agents = 0
-    let other = 0
 
     let appCanvas = 0
     let appModelDriven = 0
@@ -338,7 +352,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     let agentCopilotStudio = 0
     let agentM365Builder = 0
 
-    for (const r of allResources) {
+    for (const r of filteredResources) {
       const category = getResourceCategory(r.type)
       const typeLower = r.type.toLowerCase()
 
@@ -366,45 +380,56 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
         continue
       }
 
-      other++
     }
+
+    const selectedTotal = apps + flows + agents
 
     const topLevel: DonutSlice[] = [
       { label: 'Apps', value: apps, color: '#6d28d9' },
       { label: 'Flows', value: flows, color: '#2563eb' },
       { label: 'Agents', value: agents, color: '#0d9488' },
-      { label: 'Other/New', value: other, color: '#94a3b8' },
     ]
 
-    const subFilters = [
-      { label: 'Canvas Apps', value: appCanvas, color: '#a78bfa' },
-      { label: 'Model-driven Apps', value: appModelDriven, color: '#7c3aed' },
-      { label: 'Code Apps', value: appCode, color: '#5b21b6' },
-      { label: 'App Builder', value: appBuilder, color: '#c4b5fd' },
-      { label: 'Cloud Flows', value: flowCloud, color: '#60a5fa' },
-      { label: 'Agent Flows', value: flowAgent, color: '#2563eb' },
-      { label: 'Workflow Agent Flows', value: flowM365Agent, color: '#1d4ed8' },
-      { label: 'Copilot Studio Agents', value: agentCopilotStudio, color: '#2dd4bf' },
-      { label: 'M365 Agent Builder', value: agentM365Builder, color: '#0f766e' },
-    ]
+    const drilldowns = {
+      apps: {
+        total: apps,
+        slices: [
+          { label: 'Canvas Apps', value: appCanvas, color: '#a78bfa' },
+          { label: 'Model-driven Apps', value: appModelDriven, color: '#7c3aed' },
+          { label: 'Code Apps', value: appCode, color: '#5b21b6' },
+          { label: 'App Builder', value: appBuilder, color: '#c4b5fd' },
+        ] satisfies DonutSlice[],
+      },
+      flows: {
+        total: flows,
+        slices: [
+          { label: 'Cloud Flows', value: flowCloud, color: '#60a5fa' },
+          { label: 'Agent Flows', value: flowAgent, color: '#2563eb' },
+          { label: 'Workflow Agent Flows', value: flowM365Agent, color: '#1d4ed8' },
+        ] satisfies DonutSlice[],
+      },
+      agents: {
+        total: agents,
+        slices: [
+          { label: 'Copilot Studio Agents', value: agentCopilotStudio, color: '#2dd4bf' },
+          { label: 'M365 Agent Builder', value: agentM365Builder, color: '#0f766e' },
+        ] satisfies DonutSlice[],
+      },
+    }
 
-    return { total: allResources.length, topLevel, subFilters }
-  }, [allResources])
+    return { total: selectedTotal, topLevel, drilldowns }
+  }, [filteredResources])
 
   const makerInfo = useMemo(() => {
     const map = new Map<string, number>()
     let orphaned = 0
 
     for (const r of allResources) {
-      const raw = getOwnerFromProperties(r)
-      if (!raw || raw === '—') {
+      const key = getMakerKey(r)
+      if (!key) {
         orphaned++
         continue
       }
-      if (raw.startsWith(SYSTEM_PREFIX)) continue
-      const resolved = GUID_RE.test(raw) ? ownerNames?.get(raw) ?? raw : raw
-      const key = resolved.trim()
-      if (!key) continue
       map.set(key, (map.get(key) ?? 0) + 1)
     }
 
@@ -416,7 +441,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     return { makerCount: map.size, topMakers: top, orphaned }
   }, [allResources, ownerNames])
 
-  useMemo(() => allResources.filter(r => getIsQuarantined(r) === true).length, [allResources])
+  useMemo(() => filteredResources.filter(r => getIsQuarantined(r) === true).length, [filteredResources])
 
   const envNameMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -432,7 +457,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
 
   const topEnvironments = useMemo(() => {
     const map = new Map<string, number>()
-    for (const r of allResources) {
+    for (const r of filteredResources) {
       const pathEnv = getEnvironmentIdFromPath(r.id)
       const key = (
         (r.environmentId ? envNameMap.get(r.environmentId.toLowerCase()) : undefined)
@@ -448,11 +473,11 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([name, count]) => ({ name, count }))
-  }, [allResources, envNameMap])
+  }, [filteredResources, envNameMap])
 
   const topConnectors = useMemo(() => {
     const map = new Map<string, number>()
-    for (const r of allResources) {
+    for (const r of filteredResources) {
       for (const connectorId of getConnectors(r)) {
         const info = getConnectorInfo(connectorId)
         map.set(info.displayName, (map.get(info.displayName) ?? 0) + 1)
@@ -462,13 +487,13 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([name, count]) => ({ name, count }))
-  }, [allResources])
+  }, [filteredResources])
 
   const adoptionSeries = useMemo(() => {
     const currentYear = new Date().getFullYear()
     const byYear = new Map<number, { apps: number; flows: number; agents: number }>()
 
-    for (const r of allResources) {
+    for (const r of filteredResources) {
       const created = getCreatedDate(r)
       if (!created) continue
       const year = created.getFullYear()
@@ -490,7 +515,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     }
 
     return points
-  }, [allResources])
+  }, [filteredResources])
 
   const environmentTypeSlices = useMemo(() => {
     const map = new Map<string, number>()
@@ -518,7 +543,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
 
   const flowStatus = useMemo(() => {
     const counts = { active: 0, deactivated: 0, suspended: 0, unknown: 0 }
-    for (const flow of allResources.filter(r => getResourceCategory(r.type) === 'flows')) {
+    for (const flow of filteredResources.filter(r => getResourceCategory(r.type) === 'flows')) {
       const s = (getStatus(flow) ?? '').toLowerCase()
       if (!s) { counts.unknown++; continue }
       if (s.includes('suspend') || s.includes('paused') || s.includes('stopped')) { counts.suspended++; continue }
@@ -527,13 +552,13 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
       counts.unknown++
     }
     return counts
-  }, [allResources])
+  }, [filteredResources])
 
   const premiumStandard = useMemo(() => {
     let premium = 0
     let standard = 0
 
-    for (const r of allResources) {
+    for (const r of filteredResources) {
       const cat = getResourceCategory(r.type)
       if (cat !== 'apps' && cat !== 'flows') continue
       const connectors = getConnectors(r)
@@ -543,7 +568,7 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     }
 
     return { premium, standard }
-  }, [allResources])
+  }, [filteredResources])
 
   const flowTotal = flowStatus.active + flowStatus.deactivated + flowStatus.suspended + flowStatus.unknown
   const flowSlices: DonutSlice[] = [
@@ -561,8 +586,6 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
   const maxMaker = makerInfo.topMakers[0]?.count ?? 1
   const maxEnv = topEnvironments[0]?.count ?? 1
   const maxConnector = topConnectors[0]?.count ?? 1
-  const maxInventorySubFilter = Math.max(...inventoryComposition.subFilters.map(s => s.value), 1)
-
   const maxAdoptionSeries = Math.max(...adoptionSeries.map(p => p.total), 1)
   const adoptionGrowth = useMemo(() => {
     let running = 0
@@ -582,38 +605,72 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     'resource-composition': (
       <>
           <Text className={classes.panelTitle}>Resource composition</Text>
-          <Caption1 className={classes.panelSub}>Inventory-aligned filters and subfilters</Caption1>
-          <div className={classes.split}>
-            <RingStat slices={inventoryComposition.topLevel} centerValue={inventoryComposition.total.toLocaleString()} centerLabel="resources" />
-            <div className={classes.legend}>
-              {inventoryComposition.topLevel.map(s => (
-                <div key={s.label} className={classes.legendRow}>
-                  <span className={classes.swatch} style={{ backgroundColor: s.color }} />
-                  <span className={classes.seriesName}>{s.label}</span>
-                  <span className={classes.number}>{s.value.toLocaleString()}</span>
-                  <span className={classes.pct}>{safePct(s.value, inventoryComposition.total)}%</span>
+          {compositionDrill === null ? (
+            <>
+              <Caption1 className={classes.panelSub}>Apps, flows, and agents (click to drill down)</Caption1>
+              <div className={classes.split}>
+                <RingStat slices={inventoryComposition.topLevel} centerValue={inventoryComposition.total.toLocaleString()} centerLabel="resources" />
+                <div className={classes.legend}>
+                  {inventoryComposition.topLevel.map(s => (
+                    <div
+                      key={s.label}
+                      className={classes.legendRow}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        if (s.label === 'Apps') setCompositionDrill('apps')
+                        else if (s.label === 'Flows') setCompositionDrill('flows')
+                        else if (s.label === 'Agents') setCompositionDrill('agents')
+                      }}
+                    >
+                      <span className={classes.swatch} style={{ backgroundColor: s.color }} />
+                      <span className={classes.seriesName}>{s.label}</span>
+                      <span className={classes.number}>{s.value.toLocaleString()}</span>
+                      <span className={classes.pct}>{safePct(s.value, inventoryComposition.total)}%</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3, marginTop: '6px' }}>Inventory subfilters</Caption1>
-          <div className={classes.list}>
-            {inventoryComposition.subFilters.map(s => (
-              <div key={s.label} className={classes.row}>
-                <span className={classes.rowLabel}>{s.label}</span>
-                <div className={classes.barBg}>
-                  <div
-                    className={classes.barFill}
-                    style={{
-                      width: `${(s.value / maxInventorySubFilter) * 100}%`,
-                      backgroundColor: s.color,
-                    }}
-                  />
-                </div>
-                <span className={classes.rowValue}>{s.value}</span>
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setCompositionDrill(null)}
+                  style={{
+                    border: `1px solid ${tokens.colorNeutralStroke1}`,
+                    borderRadius: '999px',
+                    background: tokens.colorNeutralBackground1,
+                    color: tokens.colorNeutralForeground2,
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  ← Back
+                </button>
+                <Caption1 className={classes.panelSub}>
+                  {compositionDrill === 'apps' ? 'Apps subfilters' : compositionDrill === 'flows' ? 'Flows subfilters' : 'Agents subfilters'}
+                </Caption1>
+              </div>
+              <div className={classes.split}>
+                <RingStat
+                  slices={inventoryComposition.drilldowns[compositionDrill].slices}
+                  centerValue={inventoryComposition.drilldowns[compositionDrill].total.toLocaleString()}
+                  centerLabel={compositionDrill}
+                />
+                <div className={classes.legend}>
+                  {inventoryComposition.drilldowns[compositionDrill].slices.map(s => (
+                    <div key={s.label} className={classes.legendRow}>
+                      <span className={classes.swatch} style={{ backgroundColor: s.color }} />
+                      <span className={classes.seriesName}>{s.label}</span>
+                      <span className={classes.number}>{s.value.toLocaleString()}</span>
+                      <span className={classes.pct}>{safePct(s.value, inventoryComposition.drilldowns[compositionDrill].total)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
       </>
     ),
     'adoption-over-time': (
@@ -699,15 +756,54 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     ),
     'top-makers': (
       <>
-          <Text className={classes.panelTitle}>Top makers</Text>
-          <Caption1 className={classes.panelSub}>Most resources created or owned</Caption1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <Text className={classes.panelTitle}>Top makers</Text>
+            {selectedMaker && (
+              <button
+                onClick={() => setSelectedMaker(null)}
+                style={{
+                  border: `1px solid ${tokens.colorNeutralStroke1}`,
+                  borderRadius: '999px',
+                  background: tokens.colorNeutralBackground1,
+                  color: tokens.colorNeutralForeground2,
+                  padding: '2px 8px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
+          <Caption1 className={classes.panelSub}>
+            {selectedMaker ? `Filtered by ${selectedMaker}` : 'Most resources created or owned (click a maker to filter all cards)'}
+          </Caption1>
           {makerInfo.topMakers.length === 0 ? (
             <div className={classes.emptyState}><Caption1>No maker data available.</Caption1></div>
           ) : (
             <div className={classes.list}>
               {makerInfo.topMakers.map(m => (
                 <div key={m.name} className={classes.row}>
-                  <span className={classes.rowLabel}>{m.name}</span>
+                  <button
+                    onClick={() => setSelectedMaker(prev => (prev === m.name ? null : m.name))}
+                    style={{
+                      width: '180px',
+                      flexShrink: 0,
+                      color: selectedMaker === m.name ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textAlign: 'left',
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontWeight: selectedMaker === m.name ? tokens.fontWeightSemibold : tokens.fontWeightRegular,
+                    }}
+                    title={m.name}
+                  >
+                    {m.name}
+                  </button>
                   <div className={classes.barBg}><div className={classes.barFill} style={{ width: `${(m.count / maxMaker) * 100}%`, backgroundColor: '#7c3aed' }} /></div>
                   <span className={classes.rowValue}>{m.count}</span>
                 </div>
