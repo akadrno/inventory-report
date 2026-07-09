@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { makeStyles, tokens, Text, Caption1, Badge, Spinner } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Badge, Spinner, Button } from '@fluentui/react-components'
 import {
   ErrorCircleRegular,
   WarningRegular,
@@ -7,7 +7,7 @@ import {
 } from '@fluentui/react-icons'
 import { useMsal } from '@azure/msal-react'
 import type { ResourceItem } from '../types'
-import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath, getOwnerFromProperties } from '../types'
+import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath, getOwnerFromProperties, getGroupEnvironmentIds } from '../types'
 import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
 import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
@@ -24,6 +24,8 @@ import { getIsQuarantined } from '../utils/resourceMetadata'
 // command-center navy in dark mode. White hero text stays legible on both.
 const HERO_BG_LIGHT = 'radial-gradient(ellipse 90% 130% at 15% -20%, #3a7cc4 0%, #255596 45%, #173a64 100%)'
 const HERO_CARD_ORDER_KEY = 'ppac:home:heroMiniCardOrder:v1'
+
+type HomeFilter = 'all' | 'environments' | 'managed' | 'groups' | 'makers' | 'orphaned' | 'quarantined'
 
 interface ReportViewProps {
   allResources: ResourceItem[]
@@ -149,6 +151,11 @@ const useClasses = makeStyles({
     cursor: 'grab',
     userSelect: 'none',
   },
+  miniStatActive: {
+    border: '1px solid rgba(148, 214, 255, 0.95)',
+    boxShadow: '0 0 0 1px rgba(148,214,255,0.45), 0 6px 16px rgba(0,0,0,0.24)',
+    background: 'rgba(255,255,255,0.12)',
+  },
   miniStatDragging: {
     opacity: 0.7,
     cursor: 'grabbing',
@@ -163,6 +170,26 @@ const useClasses = makeStyles({
   miniLabel: {
     color: 'rgba(180,202,234,0.6)', fontSize: '11px',
     textTransform: 'uppercase', letterSpacing: '0.6px',
+  },
+  filterBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginTop: '-2px',
+  },
+  filterPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 10px',
+    borderRadius: tokens.borderRadiusCircular,
+    border: '1px solid rgba(150,200,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    color: 'rgba(220,235,255,0.88)',
+    fontSize: '12px',
+    fontWeight: 600,
+    letterSpacing: '0.2px',
   },
   healthBar: {
     display: 'flex',
@@ -840,6 +867,7 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
   const [heroOrder, setHeroOrder] = useState<HeroMiniCardId[]>(defaultHeroOrder)
   const [draggingHero, setDraggingHero] = useState<HeroMiniCardId | null>(null)
   const [heroDropTarget, setHeroDropTarget] = useState<HeroMiniCardId | null>(null)
+  const [homeFilter, setHomeFilter] = useState<HomeFilter>('all')
 
   useEffect(() => {
     try {
@@ -863,6 +891,105 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
     makers: { label: 'Makers', value: makerCount },
     orphaned: { label: 'Orphaned', value: orphanedCount },
     quarantined: { label: 'Quarantined', value: quarantinedCount },
+  }
+
+  const heroFilterByCard: Record<HeroMiniCardId, HomeFilter> = {
+    environments: 'environments',
+    managed: 'managed',
+    total: 'all',
+    groups: 'groups',
+    makers: 'makers',
+    orphaned: 'orphaned',
+    quarantined: 'quarantined',
+  }
+
+  const envAliasMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const e of allEnvironments) {
+      const canonical = e.id.toLowerCase()
+      m.set(canonical, canonical)
+      m.set(e.name.toLowerCase(), canonical)
+      const seg = e.id.split('/').pop()
+      if (seg) m.set(seg.toLowerCase(), canonical)
+    }
+    return m
+  }, [allEnvironments])
+
+  const groupedEnvIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const g of allGroups ?? []) {
+      for (const envId of getGroupEnvironmentIds(g)) {
+        const key = envAliasMap.get(envId.toLowerCase()) ?? envId.toLowerCase()
+        set.add(key)
+      }
+    }
+    return set
+  }, [allGroups, envAliasMap])
+
+  const managedEnvIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of allEnvironments) {
+      if (getIsManagedEnvironment(e)) set.add(e.id.toLowerCase())
+    }
+    return set
+  }, [allEnvironments])
+
+  const resourceEnvKey = (r: ResourceItem): string | undefined => {
+    const fromId = r.environmentId ? envAliasMap.get(r.environmentId.toLowerCase()) : undefined
+    if (fromId) return fromId
+    const seg = getEnvironmentIdFromPath(r.id)
+    if (seg) {
+      const bySeg = envAliasMap.get(seg.toLowerCase())
+      if (bySeg) return bySeg
+    }
+    return undefined
+  }
+
+  const homeFilteredResources = useMemo(() => {
+    if (homeFilter === 'all') return allResources
+    return allResources.filter(r => {
+      const owner = getOwnerFromProperties(r)
+      const hasOwner = !!owner && owner !== '—'
+      const envKey = resourceEnvKey(r)
+      switch (homeFilter) {
+        case 'environments':
+          return !!envKey
+        case 'managed':
+          return !!envKey && managedEnvIds.has(envKey)
+        case 'groups':
+          return !!envKey && groupedEnvIds.has(envKey)
+        case 'makers':
+          return hasOwner && !owner.startsWith(SYSTEM_PREFIX)
+        case 'orphaned':
+          return !hasOwner
+        case 'quarantined':
+          return getIsQuarantined(r) === true
+        default:
+          return true
+      }
+    })
+  }, [allResources, homeFilter, groupedEnvIds, managedEnvIds, envAliasMap])
+
+  const homeFilteredEnvironments = useMemo(() => {
+    if (homeFilter === 'managed') return allEnvironments.filter(e => managedEnvIds.has(e.id.toLowerCase()))
+    if (homeFilter === 'groups') return allEnvironments.filter(e => groupedEnvIds.has(e.id.toLowerCase()))
+    if (homeFilter === 'all') return allEnvironments
+    const refs = new Set<string>()
+    for (const r of homeFilteredResources) {
+      const envKey = resourceEnvKey(r)
+      if (envKey) refs.add(envKey)
+    }
+    return allEnvironments.filter(e => refs.has(e.id.toLowerCase()))
+  }, [allEnvironments, homeFilter, homeFilteredResources, groupedEnvIds, managedEnvIds, envAliasMap])
+
+  const filterLabel: Record<HomeFilter, string> = {
+    all: 'All resources',
+    environments: 'Environment-linked resources',
+    managed: 'Managed environment resources',
+    groups: 'Environment group resources',
+    makers: 'Resources with named makers',
+    orphaned: 'Ownerless resources',
+    quarantined: 'Quarantined resources',
   }
 
   const moveHeroCard = (from: HeroMiniCardId, to: HeroMiniCardId) => {
@@ -908,7 +1035,7 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
           </div>
 
           <div style={fadeUp(0.06)}>
-            <h1 className={classes.heroTitle}>Inventory &amp; Governance</h1>
+            <h1 className={classes.heroTitle}>Platform 360</h1>
             <Caption1 className={classes.heroSub}>
               Real-time view of every Agent, App, and Flow across your tenant.
             </Caption1>
@@ -923,8 +1050,10 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
           <div className={classes.secondaryRow} style={fadeUp(0.18)}>
             {heroOrder.map(id => {
               const card = heroCards[id]
+              const cardFilter = heroFilterByCard[id]
               const className = [
                 classes.miniStat,
+                homeFilter === cardFilter ? classes.miniStatActive : '',
                 draggingHero === id ? classes.miniStatDragging : '',
                 heroDropTarget === id ? classes.miniStatDropHint : '',
               ].filter(Boolean).join(' ')
@@ -946,13 +1075,28 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
                     setDraggingHero(null)
                     setHeroDropTarget(null)
                   }}
-                  title="Drag to reorder"
+                  onClick={() => setHomeFilter(prev => (prev === cardFilter ? 'all' : cardFilter))}
+                  title="Drag to reorder, click to filter"
                 >
                   <span className={classes.miniValue}><CountUp value={card.value} /></span>
                   <span className={classes.miniLabel}>{card.label}</span>
                 </div>
               )
             })}
+          </div>
+
+          <div className={classes.filterBar} style={fadeUp(0.21)}>
+            <span className={classes.filterPill}>Filter: {filterLabel[homeFilter]}</span>
+            {homeFilter !== 'all' && (
+              <Button
+                appearance="subtle"
+                size="small"
+                onClick={() => setHomeFilter('all')}
+                style={{ color: 'rgba(220,235,255,0.88)' }}
+              >
+                Clear filter
+              </Button>
+            )}
           </div>
 
           <div className={classes.healthBar} style={fadeUp(0.24)}>
@@ -979,13 +1123,13 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
 
       {/* Home dashboard snapshot (replaces old Overview/Governance/Recommendations tabs) */}
       <HomeDashboardSnapshot
-        allResources={allResources}
-        allEnvironments={allEnvironments}
+        allResources={homeFilteredResources}
+        allEnvironments={homeFilteredEnvironments}
         ownerNames={ownerNames}
       />
 
       <div style={{ textAlign: 'center', padding: tokens.spacingVerticalL, color: tokens.colorNeutralForeground3, borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: tokens.colorNeutralStroke2, marginTop: tokens.spacingVerticalL }}>
-        <Caption1>Inventory and Governance Report · Generated {new Date().toLocaleString()}</Caption1>
+        <Caption1>Platform 360 · Generated {new Date().toLocaleString()}</Caption1>
       </div>
     </div>
   )

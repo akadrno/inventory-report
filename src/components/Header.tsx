@@ -79,7 +79,7 @@ export function Header() {
           <div className={classes.logoBox}>
             <SquareMultipleRegular fontSize={16} />
           </div>
-          <Text weight="semibold" size={400}>Power Platform Inventory</Text>
+          <Text weight="semibold" size={400}>Platform 360</Text>
         </div>
 
         <div className={classes.right}>

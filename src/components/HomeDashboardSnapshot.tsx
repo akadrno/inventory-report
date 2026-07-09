@@ -5,6 +5,7 @@ import { getDisplayName, getEnvironmentIdFromPath, getOwnerFromProperties, getRe
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
 import { getConnectors, getIsQuarantined, getStatus } from '../utils/resourceMetadata'
 import { getConnectorInfo } from '../utils/connectors'
+import { getCreatedDate } from './usageShared'
 
 interface HomeDashboardSnapshotProps {
   allResources: ResourceItem[]
@@ -181,18 +182,21 @@ const useClasses = makeStyles({
     marginTop: '2px',
   },
   row: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 140px auto',
+    display: 'flex',
     alignItems: 'center',
     gap: '10px',
   },
   rowLabel: {
+    width: '180px',
+    flexShrink: 0,
     color: tokens.colorNeutralForeground1,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   barBg: {
+    flex: 1,
+    minWidth: '120px',
     height: '10px',
     borderRadius: tokens.borderRadiusCircular,
     backgroundColor: tokens.colorNeutralBackground3,
@@ -203,6 +207,9 @@ const useClasses = makeStyles({
     borderRadius: 'inherit',
   },
   rowValue: {
+    width: '36px',
+    textAlign: 'right',
+    flexShrink: 0,
     color: tokens.colorNeutralForeground1,
     fontWeight: tokens.fontWeightSemibold,
     fontVariantNumeric: 'tabular-nums',
@@ -379,23 +386,28 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
 
   const adoptionSeries = useMemo(() => {
     const currentYear = new Date().getFullYear()
-    const startYear = Math.max(currentYear - 7, 2019)
-    const byYear = new Map<number, number>()
+    const byYear = new Map<number, { apps: number; flows: number; agents: number }>()
 
     for (const r of allResources) {
-      const created = r.properties?.['createdTime'] ?? r.properties?.['createdDateTime'] ?? r.properties?.['createdOn']
-      if (typeof created !== 'string') continue
-      const year = new Date(created).getFullYear()
+      const created = getCreatedDate(r)
+      if (!created) continue
+      const year = created.getFullYear()
       if (!Number.isFinite(year)) continue
-      byYear.set(year, (byYear.get(year) ?? 0) + 1)
+      const category = getResourceCategory(r.type)
+      if (category !== 'apps' && category !== 'flows' && category !== 'agents') continue
+      const bucket = byYear.get(year) ?? { apps: 0, flows: 0, agents: 0 }
+      bucket[category]++
+      byYear.set(year, bucket)
     }
 
-    let running = 0
-    const points: { year: number; newCount: number; cumulative: number }[] = []
+    const yearsWithData = [...byYear.keys()].sort((a, b) => a - b)
+    const startYear = yearsWithData.length > 0 ? yearsWithData[0] : Math.max(currentYear - 7, 2019)
+    const points: { year: number; apps: number; flows: number; agents: number; total: number }[] = []
+
     for (let year = startYear; year <= currentYear; year++) {
-      const newCount = byYear.get(year) ?? 0
-      running += newCount
-      points.push({ year, newCount, cumulative: running })
+      const row = byYear.get(year) ?? { apps: 0, flows: 0, agents: 0 }
+      const total = row.apps + row.flows + row.agents
+      points.push({ year, apps: row.apps, flows: row.flows, agents: row.agents, total })
     }
 
     return points
@@ -476,16 +488,11 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
   const maxEnv = topEnvironments[0]?.count ?? 1
   const maxConnector = topConnectors[0]?.count ?? 1
 
-  const maxNew = Math.max(...adoptionSeries.map(p => p.newCount), 1)
-  const maxCum = Math.max(...adoptionSeries.map(p => p.cumulative), 1)
-
-  const linePoints = adoptionSeries
-    .map((p, idx) => {
-      const x = adoptionSeries.length === 1 ? 0 : (idx / (adoptionSeries.length - 1)) * 100
-      const y = 100 - (p.cumulative / maxCum) * 100
-      return `${x},${y}`
-    })
-    .join(' ')
+  const maxAdoptionSeries = Math.max(...adoptionSeries.map(p => Math.max(p.apps, p.flows, p.agents)), 1)
+  const adoptionTotals = useMemo(
+    () => adoptionSeries.reduce((acc, p) => ({ apps: acc.apps + p.apps, flows: acc.flows + p.flows, agents: acc.agents + p.agents }), { apps: 0, flows: 0, agents: 0 }),
+    [adoptionSeries],
+  )
 
   const panelCards: Record<PanelCardId, JSX.Element> = {
     'resource-composition': (
@@ -510,38 +517,59 @@ export function HomeDashboardSnapshot({ allResources, allEnvironments, ownerName
     'adoption-over-time': (
       <>
           <Text className={classes.panelTitle}>Adoption over time</Text>
-          <Caption1 className={classes.panelSub}>New resources per year and cumulative total</Caption1>
+          <Caption1 className={classes.panelSub}>App, flow and agent creations by year (inventory created dates)</Caption1>
           <div className={classes.chartWrap}>
             {adoptionSeries.length === 0 ? (
-              <div className={classes.emptyState}><Caption1>No created-time data available.</Caption1></div>
+              <div className={classes.emptyState}><Caption1>No created-date data found in inventory records.</Caption1></div>
             ) : (
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '170px' }}>
                 {adoptionSeries.map((p, idx) => {
-                  const x = adoptionSeries.length === 1 ? 0 : (idx / (adoptionSeries.length - 1)) * 100
-                  const width = adoptionSeries.length === 1 ? 10 : 100 / adoptionSeries.length - 1.6
-                  const h = (p.newCount / maxNew) * 34
+                  const slot = adoptionSeries.length === 0 ? 100 : 100 / adoptionSeries.length
+                  const x0 = idx * slot
+                  const barW = Math.max(1.4, slot * 0.22)
+                  const gap = Math.max(0.4, slot * 0.08)
+                  const appH = (p.apps / maxAdoptionSeries) * 36
+                  const flowH = (p.flows / maxAdoptionSeries) * 36
+                  const agentH = (p.agents / maxAdoptionSeries) * 36
                   return (
-                    <rect
-                      key={p.year}
-                      x={Math.max(0, x - width / 2)}
-                      y={98 - h}
-                      width={Math.max(2, width)}
-                      height={h}
-                      rx={1.2}
-                      fill="#8b5cf6"
-                      opacity={idx === adoptionSeries.length - 1 ? 1 : 0.7}
-                    />
+                    <g key={p.year}>
+                      <rect
+                        x={x0 + gap}
+                        y={98 - appH}
+                        width={barW}
+                        height={appH}
+                        rx={1.1}
+                        fill="#b07cff"
+                        opacity={0.95}
+                      />
+                      <rect
+                        x={x0 + gap + barW + gap}
+                        y={98 - flowH}
+                        width={barW}
+                        height={flowH}
+                        rx={1.1}
+                        fill="#4aa8ff"
+                        opacity={0.95}
+                      />
+                      <rect
+                        x={x0 + gap + (barW + gap) * 2}
+                        y={98 - agentH}
+                        width={barW}
+                        height={agentH}
+                        rx={1.1}
+                        fill="#3ad1c4"
+                        opacity={0.95}
+                      />
+                    </g>
                   )
                 })}
-                <polyline
-                  points={linePoints}
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth="1.4"
-                  vectorEffect="non-scaling-stroke"
-                />
               </svg>
             )}
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#b07cff' }}>Apps</span>: {adoptionTotals.apps.toLocaleString()}</Caption1>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#4aa8ff' }}>Flows</span>: {adoptionTotals.flows.toLocaleString()}</Caption1>
+            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}><span style={{ color: '#3ad1c4' }}>Agents</span>: {adoptionTotals.agents.toLocaleString()}</Caption1>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
             {adoptionSeries.map(p => (

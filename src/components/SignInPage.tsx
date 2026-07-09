@@ -178,7 +178,7 @@ export function SignInPage() {
         </div>
 
         <div style={fadeUp(0.16)}>
-          <h1 className={classes.title}>Power Platform Inventory</h1>
+          <h1 className={classes.title}>Platform 360</h1>
           <p className={classes.tagline}>
             Your command center for real-time inventory and governance — every Agent, App, and Flow across every environment, in one view.
           </p>
