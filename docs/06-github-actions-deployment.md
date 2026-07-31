@@ -1,5 +1,8 @@
 # GitHub Actions Deployment
 
+> [!IMPORTANT]
+> This workflow deploys unsupported sample code. It is not a Microsoft-supported deployment mechanism. Review the workflow and protect all repository secrets before use. See [SUPPORT.md](../SUPPORT.md).
+
 The repository includes a workflow (`.github/workflows/deploy.yml`) that builds and deploys the app automatically on every push to `main`. You can also trigger it manually from the Actions tab.
 
 ## How it works
@@ -33,17 +36,19 @@ Or retrieve it from the Azure portal: **Static Web Apps resource → Overview �
 
 ## Step 2 — Add GitHub repository secrets
 
-Go to your repo → **Settings → Secrets and variables → Actions → New repository secret** and add each of the following:
+Go to your repo → **Settings → Secrets and variables → Actions → New repository secret** and add the required values. Add the storage values only when using optional shared persistence.
 
 | Secret name | Value |
 |---|---|
 | `SWA_DEPLOYMENT_TOKEN` | Deployment token from Step 1 |
 | `VITE_CLIENT_ID` | App Registration Client ID (from [app registration guide](02-app-registration.md)) |
 | `VITE_TENANT_ID` | Your Azure AD tenant ID or domain |
-| `VITE_STORAGE_ACCOUNT` | Azure Storage account name (if using cloud storage) |
-| `VITE_TABLE_SAS` | Account-level Table Storage SAS token (if using cloud storage) |
+| `VITE_STORAGE_ACCOUNT` | Azure Storage account name *(optional)* |
+| `VITE_TABLE_SAS` | Account-level Table Storage SAS token *(optional; use only with the storage account)* |
 
 `VITE_STORAGE_ACCOUNT` and `VITE_TABLE_SAS` are optional — omit them if you don't need persistent assessments or resource tagging.
+
+> The Vite build embeds `VITE_*` values in client-side assets. A configured Table SAS is visible to users of the app. Scope it to the Table service, use an expiry, and do not store sensitive data.
 
 ---
 

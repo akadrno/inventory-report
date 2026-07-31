@@ -1,5 +1,8 @@
 # Platform 360 Screenshot Gallery
 
+> [!IMPORTANT]
+> These screenshots show unsupported sample code, not a Microsoft product. Screens and API results can change and are not supported by Microsoft. See [SUPPORT.md](../../SUPPORT.md).
+
 Captured from a signed-in session on 2026-07-08 at 1600×1200.
 
 The home screenshot is the featured showcase image used in the main project README.

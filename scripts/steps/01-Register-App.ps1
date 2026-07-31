@@ -5,14 +5,13 @@
 .DESCRIPTION
     - Creates the App Registration (or reuses an existing one with the same name)
     - Adds a Single-Page Application redirect URI for localhost (dev) and optionally a hosted URL
-    - Adds delegated API permissions for:
-        Power Platform API   (https://api.powerplatform.com)
-        PowerApps Service    (https://service.powerapps.com)
-        Microsoft Graph      User.ReadBasic.All
+    - Adds the required delegated permission for Power Platform API
+    - Optionally adds PowerApps Service and Microsoft Graph User.ReadBasic.All
     - Does NOT grant admin consent (see 02-Grant-Consent.ps1)
     - Returns an object with ClientId and TenantId
 
-    !! WARNING !! — This script creates a real Azure AD App Registration in your tenant.
+    !! WARNING !! — This script deploys unsupported sample code and creates a real
+    Azure AD App Registration in your tenant. It is not supported by Microsoft.
     It is NOT guaranteed to work in all tenants. Service principal availability for the
     Power Platform API varies by tenant configuration. If permission lookups
     fail, the script will warn you and provide manual steps.
@@ -26,6 +25,10 @@
 .PARAMETER HostedUrl
     Optional. The Azure Static Web Apps URL to add as an additional redirect URI.
 
+.PARAMETER IncludeOptionalPermissions
+    Adds PowerApps Service User and Microsoft Graph User.ReadBasic.All for
+    connections, sharing, and friendly owner names.
+
 .OUTPUTS
     PSCustomObject with ClientId and TenantId properties.
 #>
@@ -36,7 +39,8 @@
 param(
     [Parameter(Mandatory)][string]$TenantId,
     [string]$AppName    = "ppac-inventory-report",
-    [string]$HostedUrl  = ""
+    [string]$HostedUrl  = "",
+    [switch]$IncludeOptionalPermissions
 )
 
 Set-StrictMode -Version Latest
@@ -78,7 +82,7 @@ if ($existingApp -and $existingApp.Trim()) {
 
 Write-Host "  Configuring redirect URIs..."
 
-$redirectUris = @("http://localhost:5173")
+$redirectUris = @("http://localhost:3000")
 if ($HostedUrl -and $HostedUrl.Trim()) {
     $redirectUris += $HostedUrl.Trim().TrimEnd("/")
 }
@@ -116,21 +120,6 @@ function Get-ScopeId([string]$SpAppId, [string]$ScopeName) {
     if (-not $scopes) { return $null }
     $match = $scopes | Where-Object { $_.value -eq $ScopeName }
     return $match | Select-Object -ExpandProperty id -First 1
-}
-
-# ── Add Graph permission: User.ReadBasic.All ─────────────────────────────────
-
-Write-Host "  Adding Microsoft Graph permission (User.ReadBasic.All)..."
-try {
-    az ad app permission add `
-        --id $appId `
-        --api $GRAPH_APP_ID `
-        --api-permissions "${GRAPH_USER_READ_BASIC_ALL}=Scope" `
-        --output none
-    Write-Host "  Graph permission added." -ForegroundColor Green
-} catch {
-    Write-Warning "  Failed to add Graph permission: $_"
-    Write-Warning "  Add 'User.ReadBasic.All' manually in the Azure portal."
 }
 
 # ── Add Power Platform API permission ─────────────────────────────────────────
@@ -173,30 +162,44 @@ try {
 # endpoint's token audience is service.powerapps.com; without this permission
 # token acquisition fails with AADSTS650057 (Invalid resource).
 
-Write-Host "  Adding PowerApps Service API permissions..."
-try {
-    $paSvcSp = Get-OrProvisionSP -AppId $POWERAPPS_SVC_APP_ID -DisplayName "PowerApps Service"
-    if ($paSvcSp -and $paSvcSp.Trim()) {
-        # PowerApps Service exposes a single delegated scope named "User"
-        # (not the usual "user_impersonation").
-        $paSvcScopeId = Get-ScopeId -SpAppId $POWERAPPS_SVC_APP_ID -ScopeName "User"
-        if ($paSvcScopeId -and $paSvcScopeId.Trim()) {
-            az ad app permission add `
-                --id $appId `
-                --api $POWERAPPS_SVC_APP_ID `
-                --api-permissions "$($paSvcScopeId.Trim())=Scope" `
-                --output none
-            Write-Host "  PowerApps Service API permission added." -ForegroundColor Green
-        } else {
-            Write-Warning "  Could not resolve PowerApps Service 'User' scope ID. Add it manually in the Azure portal."
-        }
-    } else {
-        Write-Warning "  PowerApps Service service principal not found in this tenant."
-        Write-Warning "  Add the permission manually in the Azure portal (API app ID $POWERAPPS_SVC_APP_ID)."
+if ($IncludeOptionalPermissions) {
+    Write-Host "  Adding optional Microsoft Graph permission (User.ReadBasic.All)..."
+    try {
+        az ad app permission add `
+            --id $appId `
+            --api $GRAPH_APP_ID `
+            --api-permissions "${GRAPH_USER_READ_BASIC_ALL}=Scope" `
+            --output none
+        Write-Host "  Graph permission added." -ForegroundColor Green
+    } catch {
+        Write-Warning "  Failed to add optional Graph permission: $_"
+        Write-Warning "  Add 'User.ReadBasic.All' manually if friendly owner names are required."
     }
-} catch {
-    Write-Warning "  PowerApps Service API permission step failed: $_"
-    Write-Warning "  Add this permission manually in the Azure portal."
+
+    Write-Host "  Adding optional PowerApps Service API permission..."
+    try {
+        $paSvcSp = Get-OrProvisionSP -AppId $POWERAPPS_SVC_APP_ID -DisplayName "PowerApps Service"
+        if ($paSvcSp -and $paSvcSp.Trim()) {
+            $paSvcScopeId = Get-ScopeId -SpAppId $POWERAPPS_SVC_APP_ID -ScopeName "User"
+            if ($paSvcScopeId -and $paSvcScopeId.Trim()) {
+                az ad app permission add `
+                    --id $appId `
+                    --api $POWERAPPS_SVC_APP_ID `
+                    --api-permissions "$($paSvcScopeId.Trim())=Scope" `
+                    --output none
+                Write-Host "  PowerApps Service API permission added." -ForegroundColor Green
+            } else {
+                Write-Warning "  Could not resolve PowerApps Service 'User' scope ID. Add it manually if connections and sharing are required."
+            }
+        } else {
+            Write-Warning "  PowerApps Service service principal not found in this tenant."
+            Write-Warning "  Add it manually only if connections and sharing are required."
+        }
+    } catch {
+        Write-Warning "  Optional PowerApps Service permission step failed: $_"
+    }
+} else {
+    Write-Host "  Skipping optional Graph and PowerApps Service permissions." -ForegroundColor DarkGray
 }
 
 # ── Return result ─────────────────────────────────────────────────────────────

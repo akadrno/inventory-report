@@ -1,8 +1,11 @@
 # Hosting on Azure Static Web Apps
 
-Azure Static Web Apps (SWA) is a free-tier-eligible Azure service that hosts static web applications with built-in CI/CD integration. This is the recommended hosting option for this application.
+> [!IMPORTANT]
+> This is unsupported sample code, not a Microsoft product. Microsoft Support does not support this deployment. You are responsible for Azure configuration, security, and costs. See [SUPPORT.md](../SUPPORT.md).
 
-> **Cost:** The Free tier of Azure Static Web Apps is sufficient for this application. No Azure Functions or API backends are used.
+Azure hosting is optional. Run the sample locally if you only want to evaluate it. Azure Static Web Apps (SWA) is the documented cloud-hosting option because the application builds to static files and has no backend.
+
+> **Cost:** The Free tier of Azure Static Web Apps is generally sufficient for this sample. Optional Azure Storage is a separate resource and can incur charges. Confirm current pricing and your organization's Azure policies before deployment.
 > See [Azure Static Web Apps pricing](https://azure.microsoft.com/pricing/details/app-service/static/).
 
 ---
@@ -42,7 +45,7 @@ Azure Static Web Apps (SWA) is a free-tier-eligible Azure service that hosts sta
 
 ---
 
-### Step 2 — Add environment variable secrets to GitHub
+### Step 2 — Add build and deployment secrets to GitHub
 
 The build step needs your configuration values. Store them as GitHub repository secrets — never hard-code them in source files.
 
@@ -54,8 +57,12 @@ The build step needs your configuration values. Store them as GitHub repository 
    | `SWA_DEPLOYMENT_TOKEN` | The deployment token from the SWA resource (see below) |
    | `VITE_CLIENT_ID` | Your App Registration's Client ID |
    | `VITE_TENANT_ID` | Your Azure AD Tenant ID or domain |
-   | `VITE_STORAGE_ACCOUNT` | Storage account name *(optional — for persistent assessments and tagging)* |
-   | `VITE_TABLE_SAS` | Account-level Table Storage SAS token *(optional — required if using storage)* |
+   | `VITE_STORAGE_ACCOUNT` | Storage account name *(optional; omit for browser-only persistence)* |
+   | `VITE_TABLE_SAS` | Account-level Table Storage SAS token *(optional; required only with storage)* |
+
+Only `SWA_DEPLOYMENT_TOKEN`, `VITE_CLIENT_ID`, and `VITE_TENANT_ID` are required for hosted deployment. Do not create storage resources or secrets unless shared persistence is required.
+
+> `VITE_*` values are embedded in the browser bundle. A Table SAS is therefore visible to users of the deployed app. Use a narrowly scoped, expiring SAS and store only non-sensitive sample data.
 
 **Finding the SWA deployment token:**
 - Go to the Static Web Apps resource in the Azure portal.
@@ -109,11 +116,9 @@ Use this to deploy the built `dist/` folder directly without GitHub Actions.
 # Install the CLI
 npm install -g @azure/static-web-apps-cli
 
-# Build the app (add VITE_STORAGE_ACCOUNT and VITE_TABLE_SAS if using cloud storage)
+# Build the app with the required values
 VITE_CLIENT_ID=<your-client-id> \
 VITE_TENANT_ID=<your-tenant-id> \
-VITE_STORAGE_ACCOUNT=<your-storage-account> \
-VITE_TABLE_SAS=<your-sas-token> \
 npm run build
 
 # Deploy
@@ -126,10 +131,10 @@ npx swa deploy ./dist \
 > ```powershell
 > $env:VITE_CLIENT_ID="<your-client-id>"
 > $env:VITE_TENANT_ID="<your-tenant-id>"
-> $env:VITE_STORAGE_ACCOUNT="<your-storage-account>"
-> $env:VITE_TABLE_SAS="<your-sas-token>"
 > npm run build
 > ```
+>
+> Set `VITE_STORAGE_ACCOUNT` and `VITE_TABLE_SAS` only when optional Azure Table Storage is configured.
 
 ---
 

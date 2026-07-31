@@ -1,5 +1,8 @@
 # User Guide
 
+> [!IMPORTANT]
+> This application is unsupported sample code, not a Microsoft product. Microsoft Support does not support its behavior, data, or operation. Validate all results independently before making governance decisions. See [SUPPORT.md](../SUPPORT.md).
+
 This guide explains the features available in the Power Platform Inventory Report and how to use them effectively as a Power Platform admin.
 
 ---
@@ -28,7 +31,7 @@ A vertical **icon rail** on the left switches between the six top-level areas:
 |---|---|
 | **Home** | Command-center overview and governance health |
 | **Inventory** | Browse all Power Platform resources |
-| **Governance** | Governance posture, policies, recommendations, and risk |
+| **Governance** | Governance posture, rule-based policies, recommendations, and risk |
 | **Usage** | Adoption analytics and sign-in geography |
 | **Tagging** | Tag resources and manage the term store |
 | **Licensing** | License capacity and SKU utilization |
@@ -92,6 +95,8 @@ The Governance panel offers six pages:
 | **Risk Assessments** | Assign risk level and compliance status to resources; persisted to Azure Storage (or `localStorage`) |
 
 Governance API calls require Power Platform administrator permissions; without them the affected page shows a permission notice instead of failing.
+
+This sample does not read classic DLP policies, tenant settings, or the Business Application Platform (BAP) API. Rule-based policy views use the Power Platform API.
 
 ---
 
@@ -157,7 +162,7 @@ Use the **Sign out** button in the top-right header. Authentication tokens are s
 | Product-level usage | Sign-in usage attributes to products, not individual apps/flows/agents |
 | Single tenant | Displays data for the signed-in user's tenant only |
 | Permission-gated | Governance, Licensing, and Usage sections show a notice when the required permission/role is missing |
-| Sample only | Not a production or officially supported Microsoft product |
+| Sample only | Not a Microsoft product and not supported by Microsoft; results must be independently validated |
 
 ---
 

@@ -1,19 +1,19 @@
 # Platform 360: A Power Platform Inventory and Governance App
 
-A browser-based inventory, governance, and usage dashboard for Power Platform admins. It surfaces apps, cloud flows, Copilot Studio agents, environments, governance insights, billing policies, licensing, sign-in usage, and resource tagging in a single read-only view — authenticated through your own Azure AD app registration. It ships with a light/dark theme and a "command center" home screen.
+> [!IMPORTANT]
+> **Unsupported sample code:** This repository is provided for educational, demonstration, and exploratory use only. It is not a Microsoft product and is not supported by Microsoft. Microsoft Support cannot provide assistance or production-readiness assurances for it. The code is provided as-is, without warranty or SLA. Review the permissions, source, data handling, and deployment scripts before use. See [SUPPORT.md](SUPPORT.md).
+
+A browser-based inventory, governance, and usage dashboard for Power Platform admins. It surfaces apps, cloud flows, Copilot Studio agents, environments, governance insights, billing policies, licensing, sign-in usage, and resource tagging in a single read-only view, authenticated through your own Microsoft Entra ID app registration.
 
 ---
 
-> ## ⚠️ IMPORTANT DISCLAIMER
+> ## IMPORTANT RESPONSIBILITY NOTICE
 >
-> **This is a sample application provided for educational and exploratory purposes only.**
->
-> - It is **NOT a production-ready application** and has not been hardened, performance-tested, or security-reviewed for enterprise use.
-> - It is **NOT an officially supported Microsoft product or sample**. No warranty, SLA, or support commitment of any kind is offered.
-> - By downloading, installing, or running this application you accept **full responsibility for its use** in your environment. You assume all risk, including (but not limited to) unintended data access, cost incurred in Azure, or misconfiguration of your tenant.
-> - **Read all setup instructions carefully** before running the application in any environment that contains real data.
+> - This sample is not production-ready and has not been hardened, performance-tested, or security-reviewed for enterprise use.
+> - You accept responsibility for its use, including unintended data access, Azure costs, and tenant configuration changes.
+> - Read the setup instructions and understand each delegated permission before using real tenant data.
 > - This application calls live Microsoft APIs using credentials you supply. Ensure you understand the permissions being granted before proceeding.
-> - Always follow your organisation's security and compliance policies.
+> - Follow your organization's security, privacy, and compliance policies.
 
 ---
 
@@ -51,10 +51,22 @@ Browse the full capture set in [docs/screenshots/README.md](docs/screenshots/REA
 
 ## Quick start (summary)
 
-1. [Register an Azure AD application](docs/02-app-registration.md) and grant admin consent.
-2. Copy `.env.example` to `.env.local` and set `VITE_CLIENT_ID` and `VITE_TENANT_ID` (optionally `VITE_STORAGE_ACCOUNT` + `VITE_TABLE_SAS` for persistence).
-3. Run locally: `npm install && npm run dev` (serves on `http://localhost:3000`), **or** deploy to Azure Static Web Apps following the [hosting guide](docs/03-azure-static-web-apps.md).
-4. Add your app URL (e.g. `http://localhost:3000`) as a redirect URI on the app registration, then sign in with a Power Platform admin account.
+For the minimum local setup:
+
+1. Install Node.js 20 LTS or later and Git.
+2. [Create a single-tenant SPA app registration](docs/02-app-registration.md) with `http://localhost:3000` as a redirect URI.
+3. Add the Power Platform API delegated permission and grant tenant admin consent. No Business Application Platform (BAP) API permission is used or required.
+4. Copy `.env.example` to `.env.local`; set only `VITE_CLIENT_ID` and `VITE_TENANT_ID`.
+5. Run:
+
+	```bash
+	npm install
+	npm run dev
+	```
+
+6. Open `http://localhost:3000` and sign in with a Power Platform Administrator or Global Administrator account.
+
+Microsoft Graph, Power Apps Service, Azure Table Storage, GitHub, and Azure Static Web Apps are optional. Add them only for the corresponding features or hosted deployment described in the guides.
 
 ## Technology stack
 
@@ -78,3 +90,5 @@ See [API Reference](docs/05-api-reference.md) for full details.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The MIT license does not imply Microsoft support. See [SUPPORT.md](SUPPORT.md).

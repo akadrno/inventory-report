@@ -10,7 +10,8 @@
       4. Write GitHub repository secrets
       5. Build and deploy the application
 
-    !! WARNING !! — Read scripts/README.md before running this script.
+    !! WARNING !! — Read scripts/README.md and SUPPORT.md before running this script.
+    This is unsupported sample code and is not supported by Microsoft.
     This script makes real changes to your Azure AD tenant and Azure subscription.
     It is NOT guaranteed to work in all tenants. Tenant policies, conditional access
     rules, service principal availability, and Azure subscription quotas can all
@@ -43,6 +44,10 @@
 .PARAMETER CreateResourceGroup
     Create the resource group if it does not already exist.
 
+.PARAMETER IncludeOptionalPermissions
+    Add Graph User.ReadBasic.All and PowerApps Service User delegated permissions
+    for friendly owner names, connections, and sharing.
+
 .EXAMPLE
     .\Deploy-All.ps1 `
       -TenantId "00000000-0000-0000-0000-000000000000" `
@@ -66,7 +71,8 @@ param(
     [string]$TableSas        = "",
     [switch]$SkipConsent,
     [switch]$SkipGitHub,
-    [switch]$CreateResourceGroup
+    [switch]$CreateResourceGroup,
+    [switch]$IncludeOptionalPermissions
 )
 
 Set-StrictMode -Version Latest
@@ -80,7 +86,8 @@ Write-Host "  Power Platform Inventory Report — Automated Deployment"   -Foreg
 Write-Host "==========================================================" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "WARNING: This script makes real changes to your tenant."     -ForegroundColor Red
-Write-Host "         It is a SAMPLE and NOT guaranteed to work in"       -ForegroundColor Red
+Write-Host "         It is an UNSUPPORTED SAMPLE, not supported by"       -ForegroundColor Red
+Write-Host "         Microsoft, and NOT guaranteed to work in"            -ForegroundColor Red
 Write-Host "         all environments. Proceed at your own risk."        -ForegroundColor Red
 Write-Host ""
 Write-Host "Tenant:         $TenantId"
@@ -133,7 +140,8 @@ Write-Host "`n[1/5] Creating App Registration..." -ForegroundColor Cyan
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $step1Result = & "$scriptRoot\steps\01-Register-App.ps1" `
     -TenantId $TenantId `
-    -AppName  $AppName
+    -AppName  $AppName `
+    -IncludeOptionalPermissions:$IncludeOptionalPermissions
 
 if (-not $step1Result -or -not $step1Result.ClientId) {
     Write-Error "Step 1 failed: could not retrieve App Registration details."

@@ -1,6 +1,9 @@
 # Automated Setup Scripts
 
-These PowerShell scripts automate the end-to-end deployment of the Power Platform Inventory Report using Azure CLI and GitHub CLI. They are intended for advanced users who are comfortable with scripting, Azure administration, and PowerShell.
+> [!IMPORTANT]
+> These scripts automate deployment of unsupported sample code. They are not Microsoft-supported tools. Microsoft Support cannot troubleshoot them or changes they make. Read [SUPPORT.md](../SUPPORT.md) and review each command before execution.
+
+These PowerShell scripts automate the optional Azure Static Web Apps deployment using Azure CLI and GitHub CLI. Local evaluation does not require these scripts, an Azure subscription, GitHub Actions, or Azure Storage.
 
 ---
 
@@ -43,7 +46,7 @@ All of the following must be installed and authenticated **before** running any 
 | PowerShell | 5.1 (Windows) or 7.x (cross-platform) | https://aka.ms/powershell |
 | Azure CLI | 2.50.0+ | https://learn.microsoft.com/cli/azure/install-azure-cli |
 | GitHub CLI | 2.x | https://cli.github.com |
-| Node.js | 18 LTS | https://nodejs.org |
+| Node.js | 20 LTS | https://nodejs.org |
 
 Verify:
 ```powershell
@@ -80,6 +83,8 @@ The account used for GitHub CLI must have:
 
 ## Quick start
 
+Use the manual [local quick start](../README.md#quick-start-summary) first if you only need to evaluate the application. The command below creates or changes Entra, Azure, and GitHub resources.
+
 ```powershell
 # Clone the repository
 git clone https://github.com/akadrno/inventory-report.git
@@ -94,6 +99,10 @@ cd inventory-report
   -AppName         "ppac-inventory-report" `
   -Location        "eastus2"
 ```
+
+`StorageAccount` and `TableSas` parameters are optional. Omit them unless shared persistence is required.
+
+By default, the scripts add only the required Power Platform API delegated permission. Add `-IncludeOptionalPermissions` to also configure Microsoft Graph `User.ReadBasic.All` and Power Apps Service `User` for friendly owner names, connections, and sharing. Licensing and Usage permissions remain manual, opt-in choices documented in the [app registration guide](../docs/02-app-registration.md).
 
 To run individual steps, see each script in the `steps/` folder.
 

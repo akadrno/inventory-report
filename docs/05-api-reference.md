@@ -1,6 +1,11 @@
 # API Reference
 
+> [!IMPORTANT]
+> This is an implementation reference for unsupported sample code. It is not Microsoft product documentation or a support commitment. API contracts and permissions can change; verify current requirements in the linked Microsoft documentation. See [SUPPORT.md](../SUPPORT.md).
+
 This application calls several Microsoft APIs directly from the browser using **delegated** permissions — no backend server is involved. Tokens are acquired per-API via MSAL (`acquireTokenSilent` with popup fallback). An optional Azure Table Storage account (account-level SAS, no OAuth) persists a few features.
+
+The Business Application Platform (BAP) API is not called and no BAP permission is required.
 
 ---
 
@@ -178,7 +183,7 @@ Returns the tenant's subscribed SKUs with prepaid/consumed unit counts. The app 
 GET https://graph.microsoft.com/v1.0/auditLogs/signIns?$filter=createdDateTime ge {since}&$top=999
 ```
 
-Returns Entra sign-in records (user, app, location/geo, client, status, timestamp). The app aggregates these by location, user, product, and day. Requires `AuditLog.Read.All` **and** an Entra role that can read audit logs (Reports Reader, Security Reader, Global Reader, or Global Administrator). When Azure Storage is configured, results are cached (see section 6) so the heatmap loads instantly.
+Returns Entra sign-in records (user, app, location/geo, client, status, timestamp). The app aggregates these by location, user, product, and day. Requires `AuditLog.Read.All` **and** an Entra role that can read audit logs (Reports Reader, Security Reader, Global Reader, or Global Administrator). When Azure Storage is configured, results are cached (see section 5) so the heatmap loads instantly.
 
 ### Authentication scopes
 
@@ -221,16 +226,16 @@ Account-level **SAS token** (not OAuth) appended to each request. The SAS needs 
 
 ## API permission summary
 
-The table below matches each API to the permissions that must be configured in the Azure AD App Registration:
+Only the Power Platform API delegated permission is needed for the minimum inventory experience. Add optional permissions only for the listed feature.
 
-| API | Permission type | Scope / Permission name | Admin consent required | Powers |
+| API | Permission type | Scope / permission | Setup status | Feature |
 |---|---|---|---|---|
-| Power Platform API | Delegated | `https://api.powerplatform.com/.default` | Yes | Inventory |
-| Power Apps Service | Delegated | `https://service.powerapps.com/.default` | Yes | Sharing |
-| Microsoft Graph | Delegated | `User.ReadBasic.All` | No (but recommended) | Owner names (core) |
-| Microsoft Graph | Delegated | `Organization.Read.All` | Yes | Licensing (optional) |
-| Microsoft Graph | Delegated | `AuditLog.Read.All` | Yes | Usage heatmap (optional) — also needs an audit-reader Entra role |
-| Azure Table Storage | Account SAS | `VITE_TABLE_SAS` | n/a | Persisted assessments, tags, sign-in cache (optional) |
+| Power Platform API | Delegated | `https://api.powerplatform.com/.default` | Required; tenant consent | Inventory and Power Platform governance |
+| Power Apps Service | Delegated | `https://service.powerapps.com/.default` (`User`) | Optional; tenant consent | Connections and sharing |
+| Microsoft Graph | Delegated | `User.ReadBasic.All` | Optional | Friendly owner names |
+| Microsoft Graph | Delegated | `Organization.Read.All` | Optional; tenant consent | Licensing |
+| Microsoft Graph | Delegated | `AuditLog.Read.All` | Optional; tenant consent and audit-reader role | Usage analytics and heatmap |
+| Azure Table Storage | Account SAS | `VITE_TABLE_SAS` | Optional; no Entra consent | Shared assessments, tags, and sign-in cache |
 
 ---
 
@@ -250,6 +255,7 @@ The table below matches each API to the permissions that must be configured in t
 - By default no data is persisted beyond the browser session (tokens in `sessionStorage`, API responses in React Query's in-memory cache).
 - **If** `VITE_STORAGE_ACCOUNT`/`VITE_TABLE_SAS` are configured, the app persists risk assessments, resource tags, and a trimmed sign-in cache to **your** Azure Table Storage; otherwise assessments/tags use `localStorage`.
 - The application is read-only with respect to Power Platform — it does not create, modify, or delete apps, flows, agents, environments, or policies. The only data it writes is your risk assessments and tags, to your own storage.
+- Because this is sample code, do not treat its output as authoritative compliance, security, licensing, or billing advice.
 
 ---
 
