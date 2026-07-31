@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchDLPPolicies, fetchTenantSettings, fetchEnvironmentCapacity, fetchBillingPolicies,
+  fetchBillingPolicies,
   fetchCrossTenantConnectionReport, fetchAdvisorRecommendations, fetchRecommendationResources,
   fetchConnections, fetchAllRuleBasedPolicies,
 } from '../api/governanceApi'
@@ -11,43 +11,16 @@ import {
 } from '../api/tableStorageApi'
 import type { CachedBlob } from '../api/tableStorageApi'
 import type {
-  DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
+  BillingPolicy,
   CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult, PowerConnection,
 } from '../api/governanceApi'
 import { fetchSubscribedSkus } from '../api/graphApi'
 import type { SubscribedSku } from '../api/graphApi'
 
 export type {
-  DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy, SubscribedSku,
+  BillingPolicy, SubscribedSku,
   CrossTenantConnectionReport, AdvisorRecommendation, RecommendationResource, ConnectionsResult, PowerConnection,
   RuleBasedPolicy,
-}
-
-export function useDLPPolicies() {
-  return useQuery<DLPPolicy[], Error>({
-    queryKey: ['dlp-policies'],
-    queryFn: fetchDLPPolicies,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  })
-}
-
-export function useTenantSettings() {
-  return useQuery<TenantSettings, Error>({
-    queryKey: ['tenant-settings'],
-    queryFn: fetchTenantSettings,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  })
-}
-
-export function useEnvironmentCapacity() {
-  return useQuery<EnvironmentCapacity[], Error>({
-    queryKey: ['environment-capacity'],
-    queryFn: fetchEnvironmentCapacity,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  })
 }
 
 export function useBillingPolicies() {

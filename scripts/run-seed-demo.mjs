@@ -153,13 +153,13 @@ async function fetchPowerPlatformAdmins(token) {
 // ── Demo data ─────────────────────────────────────────────────────────────────
 
 const CRITICAL = [
-  { riskNotes: 'Canvas app with no DLP policy coverage — connects to external REST endpoints without governance controls. Immediate remediation required.', notes: 'App owner and environment admin notified. Flagged for security review.' },
+  { riskNotes: 'Canvas app connects to external REST endpoints without a documented connector-governance review. Immediate remediation required.', notes: 'App owner and environment admin notified. Flagged for security review.' },
   { riskNotes: 'Automated flow running unattended using shared service account credentials. Owner departed 8+ months ago with no succession plan recorded.', notes: 'Flow disabled pending ownership reassignment. Escalated to IT security.' },
   { riskNotes: 'Copilot Studio agent published organisation-wide with no usage policy, no content moderation, and no data retention controls configured.', notes: 'Public access suspended. Compliance team review required before re-enabling.' },
 ]
 const HIGH = [
   { riskNotes: 'App shared with all users in the tenant — oversharing risk. No data classification applied to underlying SharePoint data sources.', notes: 'Access scope under review. Restriction to named security groups pending classification.' },
-  { riskNotes: 'Flow connects to third-party connectors not covered by the existing DLP policy. Potential data exfiltration vector identified in last DLP audit.', notes: 'DLP policy update in progress. Business justification requested from owner.' },
+  { riskNotes: 'Flow uses third-party connectors without a documented Advanced Connector Policy review. Potential data exfiltration risk requires validation.', notes: 'Connector-governance review in progress. Business justification requested from owner.' },
   { riskNotes: 'No active owner on record. Last modified over 14 months ago — no governance review completed.', notes: 'Ownership confirmation sent. Decommission scheduled if no response within 30 days.' },
   { riskNotes: 'Multiple users hold CanEdit access with no change control enforced. Version history shows modifications from unintended contributors.', notes: 'Excess editors removed. CoE change request process to be enforced.' },
   { riskNotes: 'App accesses confidential SharePoint document libraries. Role-based access not aligned with data sensitivity classification.', notes: 'Joint review with document library owner in progress.' },
@@ -167,7 +167,7 @@ const HIGH = [
 const MEDIUM = [
   { riskNotes: 'App not accessed in 90+ days. No documented business owner or active use case on record.', notes: 'Owner contacted. Confirm active status before next quarterly review.' },
   { riskNotes: 'Flow has no documented purpose or business owner. Scheduled trigger with no error handling or failure notification.', notes: 'Documentation backlog. Review in upcoming governance cycle.' },
-  { riskNotes: 'Resource not in a managed environment — missing DLP enforcement and lifecycle governance guardrails.', notes: 'Migration to managed environment planned for next quarter.' },
+  { riskNotes: 'Resource not in a managed environment — missing advanced lifecycle and usage governance controls.', notes: 'Migration to managed environment planned for next quarter.' },
   { riskNotes: 'App description and metadata incomplete — no user group, data sensitivity label, or business function indicated.', notes: 'Owner asked to complete metadata. Deadline: end of current month.' },
   { riskNotes: 'Shared with a broad Microsoft 365 group. Membership not reviewed for appropriateness relative to data accessed.', notes: 'Membership audit added to quarterly governance checklist.' },
   { riskNotes: 'Agent has no escalation path for unresolved conversations. No human handoff topic configured.', notes: 'Escalation design review scheduled with business owner.' },
@@ -177,7 +177,7 @@ const MEDIUM = [
 const LOW = [
   { riskNotes: 'App description missing — reduces discoverability and self-service documentation.', notes: 'Reminder sent to owner.' },
   { riskNotes: 'Flow not triggered in the last 30 days. Verify continued active use.', notes: 'Monitoring. May reflect seasonal usage.' },
-  { riskNotes: 'Not in a managed environment — migration would improve lifecycle management and DLP coverage.', notes: '' },
+  { riskNotes: 'Not in a managed environment — migration would improve lifecycle management, telemetry, and governance visibility.', notes: '' },
   { riskNotes: 'App metadata incomplete — missing icon and category for app catalogue.', notes: '' },
   { riskNotes: 'No run history in last 14 days. May be periodic — verify with owner.', notes: '' },
   { riskNotes: 'Display name does not clearly indicate business function.', notes: 'Rename recommended at next update.' },
@@ -213,7 +213,7 @@ const AGENT_LOW_NOTES = [
   { riskNotes: 'Agent topic coverage limited. Known support scenarios not fully reflected in current topic structure.', notes: 'Expansion planned per product roadmap.' },
   { riskNotes: 'Agent has no escalation path configured. End users may reach dead ends for unsupported queries.', notes: 'Review escalation design with business owner.' },
   { riskNotes: 'Agent description and metadata incomplete. Purpose and target audience not documented.', notes: 'Owner asked to update agent metadata.' },
-  { riskNotes: 'Agent not in a managed environment — missing governance guardrails and DLP enforcement.', notes: 'Migration to managed environment recommended.' },
+  { riskNotes: 'Agent not in a managed environment — missing advanced lifecycle and usage governance controls.', notes: 'Migration to managed environment recommended.' },
   { riskNotes: 'Agent not modified in over 60 days with no documented review. May not reflect current business requirements.', notes: 'Schedule periodic review with bot owner.' },
 ]
 

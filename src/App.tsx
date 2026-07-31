@@ -1,7 +1,6 @@
 import { useIsAuthenticated, useMsal } from '@azure/msal-react'
 import { InteractionStatus } from '@azure/msal-browser'
 import { makeStyles, tokens, Spinner, Text, Title2 } from '@fluentui/react-components'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { SignInPage } from './components/SignInPage'
 import { Shell } from './components/Shell'
 

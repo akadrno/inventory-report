@@ -44,7 +44,7 @@ The home screen is a cinematic dashboard:
 - **Live counters** for Agents, Apps, and Flows across the tenant, plus Environments, Managed Environments, and total resources.
 - **Health chips** showing critical and high-priority governance findings, compliant resource count, and resources not yet reviewed. Clicking a chip jumps to the relevant page (Recommendations or Risk Assessments).
 - A **usage sign-in cache status** strip (when Azure Storage is configured) showing when the heatmap data was last refreshed, with an **Update now** button.
-- Tabs below the hero: **Overview** (resource breakdown + recently created), **Tenant Governance**, **DLP Policies**, and **Recommendations**.
+- A dashboard below the hero summarizes resource distribution, environments, makers, ownership, and recent activity.
 
 ---
 
@@ -80,20 +80,18 @@ Opening any resource slides in a panel with tabs:
 
 ## Governance
 
-The Governance panel offers eight pages:
+The Governance panel offers six pages:
 
 | Page | What it shows |
 |---|---|
 | **Overview** | Summary cards (Critical / Warnings / Managed Environments) and **Resource Insights** with drill-down |
-| **Tenant Settings** | Tenant-level Power Platform settings from the BAP API, with warnings on risky values |
-| **DLP Policies** | All DLP policies, connector classification (Confidential / General / Blocked), and findings (no policies, no data separation, nothing blocked) |
 | **Cross Tenant Connections** | Cross-tenant connection report (cached, with refresh) |
 | **Connections** | Connections enumerated across environments |
-| **Recommendations** | Advisor (security & governance) recommendations plus the app's own computed remediation actions with `pac`/portal guidance |
+| **Recommendations** | Power Platform Advisor recommendations plus computed Managed Environment remediation actions |
 | **Maker Analytics** | Maker activity — who is building, where, and in unmanaged environments |
 | **Risk Assessments** | Assign risk level and compliance status to resources; persisted to Azure Storage (or `localStorage`) |
 
-Many governance pages require Power Platform admin permissions (BAP API); without them the page shows a permission notice instead of failing.
+Governance API calls require Power Platform administrator permissions; without them the affected page shows a permission notice instead of failing.
 
 ---
 
@@ -132,7 +130,7 @@ Tags persist to Azure Storage when configured, otherwise to `localStorage`.
 
 ## Licensing
 
-The Licensing panel offers a **Summary** plus per-product pages (**Power Apps, Power Automate, Copilot Studio**). Each shows license capacity (SKUs, purchased, assigned/consumed) and per-SKU utilization, flagging over-allocation. Requires the Graph `Organization.Read.All` permission; without it the page shows a permission notice.
+The Licensing panel offers **Summary**, **Billing Policies**, and per-product pages (**Power Apps, Power Automate, Copilot Studio**). Product pages show license capacity and utilization from Microsoft Graph. Billing Policies lists stable Power Platform API billing-policy metadata and linked environment counts. Each API displays its own permission notice when access is unavailable.
 
 ---
 

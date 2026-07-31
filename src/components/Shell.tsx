@@ -40,7 +40,7 @@ import { useEnvironments } from '../hooks/useEnvironments'
 import { useOwnerNames, isSystemResource } from '../hooks/useOwnerNames'
 import { useResourceTypeCanary } from '../hooks/useResourceTypeCanary'
 import {
-  useDLPPolicies, useTenantSettings, useLicenses,
+  useLicenses,
   useCrossTenantConnections, useAdvisorRecommendations, useConnectionsReport,
   useRuleBasedPolicies,
 } from '../hooks/useGovernance'
@@ -57,7 +57,7 @@ import { RiskAssessmentView } from './RiskAssessmentView'
 import { UsageView } from './UsageView'
 import { UsageDetailView } from './UsageDetail'
 import { UsageHeatmap } from './UsageHeatmap'
-import { CapacityBillingView } from './CapacityBillingView'
+import { BillingPoliciesView } from './BillingPoliciesView'
 import { ResourceTaggingView } from './ResourceTaggingView'
 import type { TagView } from './ResourceTaggingView'
 import { ErrorBanner } from './ErrorBanner'
@@ -72,10 +72,6 @@ import { isM365BuilderAgent } from '../utils/resourceMetadata'
 import { friendlyType } from './ResourceTypeBadge'
 import {
   computeInsights,
-  countTenantWarnings,
-  TenantSettingsSection,
-  DLPSection,
-  DLPPolicyDetail,
   EnvironmentDrillDown,
   CrossTenantSection,
   ConnectionsSection,
@@ -83,7 +79,6 @@ import {
   RecommendationDetail,
 } from './GovernanceView'
 import type { InsightKey } from './GovernanceView'
-import type { DLPPolicy } from '../hooks/useGovernance'
 
 // ── Design constants (Fluent v9 tokens — auto-adapt to light/dark theme) ─────
 
@@ -105,8 +100,8 @@ type FlowSubView = 'all' | 'cloud' | 'agent' | 'm365agent'
 type AppSubView = 'all' | 'canvas' | 'modeldriven' | 'code' | 'appbuilder'
 type AgentSubView = 'all' | 'copilotstudio' | 'm365builder'
 type EnvSubView = 'all' | 'production' | 'default' | 'sandbox' | 'trial' | 'developer' | 'teams'
-type GovView = 'overview' | 'tenant-settings' | 'dlp' | 'cross-tenant' | 'connections' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
-type LicensingView = 'summary' | 'capacity' | 'power-apps' | 'power-automate' | 'copilot-studio'
+type GovView = 'overview' | 'cross-tenant' | 'connections' | 'recommendations' | 'maker-analytics' | 'risk-assessments'
+type LicensingView = 'summary' | 'billing' | 'power-apps' | 'power-automate' | 'copilot-studio'
 type UsageSubView = 'overview' | 'apps' | 'flows' | 'agents' | 'heatmap'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -437,11 +432,9 @@ function GovOverviewPage({
   onEnvsClick: () => void
 }) {
   const classes = useClasses()
-  const { data: settings } = useTenantSettings()
-  const { data: dlp } = useDLPPolicies()
   const [drillDown, setDrillDown] = useState<InsightKey | null>(null)
 
-  const recs = useMemo(() => buildRecs(allEnvironments, dlp, settings), [allEnvironments, dlp, settings])
+  const recs = useMemo(() => buildRecs(allEnvironments), [allEnvironments])
   const criticalCount = recs.filter(r => r.priority === 'Critical').length
   const warningCount = recs.filter(r => r.priority === 'High' || r.priority === 'Medium').length
 
@@ -528,108 +521,6 @@ function GovOverviewPage({
             )
           })}
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Governance: Tenant Settings page ─────────────────────────────────────────
-
-function GovTenantSettingsPage() {
-  const classes = useClasses()
-  const { data, isLoading, isError } = useTenantSettings()
-
-  if (isLoading) return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading tenant settings…" /></div>
-  if (isError || !data) return (
-    <div className={classes.sectionCard}>
-      <div className={classes.permNotice}>
-        <LockClosedRegular fontSize={16} />
-        <Caption1>Requires Power Platform admin permissions (BAP API). Sign in with an admin account to view this data.</Caption1>
-      </div>
-    </div>
-  )
-
-  const warnings = countTenantWarnings(data)
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <PersonRegular fontSize={16} style={{ color: ACTIVE }} />
-        <Text weight="semibold">Tenant Settings</Text>
-        {warnings > 0 && (
-          <Badge appearance="tint" color="warning" size="small">{warnings} warning{warnings !== 1 ? 's' : ''}</Badge>
-        )}
-      </div>
-      <TenantSettingsSection settings={data} />
-    </div>
-  )
-}
-
-// ── Governance: DLP page ──────────────────────────────────────────────────────
-
-function GovDLPPage({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
-  const classes = useClasses()
-  const [selectedPolicy, setSelectedPolicy] = useState<DLPPolicy | null>(null)
-  const { data, isLoading, isError } = useDLPPolicies()
-
-  if (selectedPolicy) {
-    return <DLPPolicyDetail policy={selectedPolicy} environments={allEnvironments} onBack={() => setSelectedPolicy(null)} />
-  }
-
-  if (isLoading) return <div style={{ padding: '24px' }}><Spinner size="small" label="Loading DLP policies…" /></div>
-  if (isError || !data) return (
-    <div className={classes.sectionCard}>
-      <div className={classes.permNotice}>
-        <LockClosedRegular fontSize={16} />
-        <Caption1>Requires Power Platform admin permissions (BAP API). Sign in with an admin account to view DLP policies.</Caption1>
-      </div>
-    </div>
-  )
-
-  const hasNoPolicies = data.length === 0
-  const allInGeneral = data.length > 0 && data.every(p =>
-    !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'confidential' && g.connectors.length > 0)
-  )
-  const noBlocked = data.every(p =>
-    !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'blocked' && g.connectors.length > 0)
-  )
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusDangerBackground1, borderLeftColor: tokens.colorStatusDangerBorder1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorStatusDangerForeground1 }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>No DLP policies found — all connectors unrestricted</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Without DLP policies, any connector can communicate with any other. Sensitive data can be exfiltrated with no audit trail.</Caption1>
-        </div>
-      )}
-      {allInGeneral && !hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusDangerBackground1, borderLeftColor: tokens.colorStatusDangerBorder1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorStatusDangerForeground1 }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>All connectors in General — no data separation</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Move sensitive connectors (Dataverse, SharePoint, SQL, Office 365) to the Confidential group.</Caption1>
-        </div>
-      )}
-      {noBlocked && !hasNoPolicies && (
-        <div className={classes.finding} style={{ backgroundColor: tokens.colorStatusWarningBackground1, borderLeftColor: tokens.colorStatusWarningBorder1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <WarningRegular fontSize={16} style={{ color: tokens.colorStatusWarningForeground1 }} />
-            <Text style={{ fontWeight: 600, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>No connectors in the Blocked group</Text>
-          </div>
-          <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Block the HTTP connector and custom connectors to prevent arbitrary external data flows.</Caption1>
-        </div>
-      )}
-
-      <div className={classes.sectionCard}>
-        <div className={classes.cardHead}>
-          <LockClosedRegular fontSize={16} style={{ color: ACTIVE }} />
-          DLP Policies
-          <Badge appearance="tint" color="informative" size="small">{data.length} polic{data.length !== 1 ? 'ies' : 'y'}</Badge>
-        </div>
-        <DLPSection policies={data} onPolicyClick={setSelectedPolicy} />
       </div>
     </div>
   )
@@ -838,7 +729,7 @@ function GovRecommendationsPage({ allEnvironments }: { allEnvironments: Resource
         )}
       </CollapsibleCard>
 
-      {/* The app's own computed recommendations from inventory + tenant settings */}
+      {/* The app's own computed recommendations from inventory data */}
       <CollapsibleCard
         icon={<ShieldRegular fontSize={16} style={{ color: ACTIVE }} />}
         title="Recommended Actions"
@@ -876,7 +767,7 @@ function formatSkuName(partNumber: string): string {
 
 const LICENSING_LABELS: Record<LicensingView, string> = {
   summary: 'Summary',
-  capacity: 'Capacity & Billing',
+  billing: 'Billing Policies',
   'power-apps': 'Power Apps',
   'power-automate': 'Power Automate',
   'copilot-studio': 'Copilot Studio',
@@ -1369,7 +1260,7 @@ export function Shell() {
     }
 
     if (rail === 'governance') {
-      const govLabels: Record<GovView, string> = { overview: 'Overview', 'tenant-settings': 'Tenant Settings', dlp: 'DLP Policies', 'cross-tenant': 'Cross Tenant Connections', connections: 'Connections', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
+      const govLabels: Record<GovView, string> = { overview: 'Overview', 'cross-tenant': 'Cross Tenant Connections', connections: 'Connections', recommendations: 'Recommendations', 'maker-analytics': 'Maker Analytics', 'risk-assessments': 'Risk Assessments' }
       return (
         <>
           <div className={classes.contentHeader}>
@@ -1383,8 +1274,6 @@ export function Shell() {
               onEnvsClick={() => { setRail('inventory'); setInvView('environments') }}
             />
           )}
-          {govView === 'tenant-settings' && <GovTenantSettingsPage />}
-          {govView === 'dlp' && <GovDLPPage allEnvironments={allEnvironments} />}
           {govView === 'cross-tenant' && <GovCrossTenantPage />}
           {govView === 'connections' && <GovConnectionsPage allEnvironments={allEnvironments} />}
           {govView === 'recommendations' && <GovRecommendationsPage allEnvironments={allEnvironments} />}
@@ -1399,16 +1288,16 @@ export function Shell() {
     }
 
     if (rail === 'licensing') {
-      if (licView === 'capacity') {
+      if (licView === 'billing') {
         return (
           <>
             <div className={classes.contentHeader}>
               <div>
-                <Text className={classes.pageTitle}>Capacity &amp; Billing</Text>
-                <Caption1 className={classes.pageSub}>Environment storage consumption, add-on capacity, and pay-as-you-go billing policies.</Caption1>
+                <Text className={classes.pageTitle}>Billing Policies</Text>
+                <Caption1 className={classes.pageSub}>Pay-as-you-go billing instruments and their assigned environments.</Caption1>
               </div>
             </div>
-            <CapacityBillingView />
+            <BillingPoliciesView />
           </>
         )
       }
@@ -1489,8 +1378,6 @@ export function Shell() {
         {rail === 'governance' && (
           <NavPanel title="Governance" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<ShieldCheckmarkRegular />} label="Overview" active={govView === 'overview'} onClick={() => setGovView('overview')} collapsed={!panelOpen} />
-            <NavItem icon={<PersonRegular />} label="Tenant Settings" active={govView === 'tenant-settings'} onClick={() => setGovView('tenant-settings')} collapsed={!panelOpen} />
-            <NavItem icon={<LockClosedRegular />} label="DLP Policies" active={govView === 'dlp'} onClick={() => setGovView('dlp')} collapsed={!panelOpen} />
             <NavItem icon={<GlobeRegular />} label="Cross Tenant Connections" active={govView === 'cross-tenant'} onClick={() => setGovView('cross-tenant')} collapsed={!panelOpen} />
             <NavItem icon={<PlugConnectedRegular />} label="Connections" active={govView === 'connections'} onClick={() => setGovView('connections')} collapsed={!panelOpen} />
             <NavItem icon={<LightbulbRegular />} label="Recommendations" active={govView === 'recommendations'} onClick={() => setGovView('recommendations')} collapsed={!panelOpen} />
@@ -1521,7 +1408,7 @@ export function Shell() {
         {rail === 'licensing' && (
           <NavPanel title="Licensing" panelOpen={panelOpen} setPanelOpen={setPanelOpen}>
             <NavItem icon={<CertificateRegular />} label="Summary" active={licView === 'summary'} onClick={() => setLicView('summary')} collapsed={!panelOpen} />
-            <NavItem icon={<DatabaseRegular />} label="Capacity & Billing" active={licView === 'capacity'} onClick={() => setLicView('capacity')} collapsed={!panelOpen} />
+            <NavItem icon={<TagRegular />} label="Billing Policies" active={licView === 'billing'} onClick={() => setLicView('billing')} collapsed={!panelOpen} />
             {panelOpen && <Caption1 style={{ padding: '12px 12px 4px 12px', color: MUTED, display: 'block', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</Caption1>}
             <NavItem icon={<PowerAppsIcon fontSize={20} />} label="Power Apps" active={licView === 'power-apps'} onClick={() => setLicView('power-apps')} collapsed={!panelOpen} />
             <NavItem icon={<PowerAutomateIcon fontSize={20} />} label="Power Automate" active={licView === 'power-automate'} onClick={() => setLicView('power-automate')} collapsed={!panelOpen} />

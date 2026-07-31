@@ -17,8 +17,6 @@ import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { PowerAppsIcon, PowerAutomateIcon, CopilotStudioIcon } from './ProductIcons'
 import { ResourceDetailPanel } from './ResourceDetailPanel'
 import { GUID_RE, SYSTEM_PREFIX } from '../hooks/useOwnerNames'
-import { useEnvironmentCapacity } from '../hooks/useGovernance'
-import type { EnvironmentCapacity } from '../hooks/useGovernance'
 
 interface UsersViewProps {
   resources: ResourceItem[]
@@ -165,22 +163,14 @@ function ResourceIcon({ type }: { type: string }) {
   return null
 }
 
-function formatMB(mb: number): string {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-  if (mb < 1) return '<1 MB'
-  return `${Math.round(mb)} MB`
-}
-
 // ── User environment footprint ───────────────────────────────────────────────
 
 function UserEnvironmentFootprint({
   user,
   allEnvironments,
-  capacityData,
 }: {
   user: UserEntry
   allEnvironments: ResourceItem[]
-  capacityData: EnvironmentCapacity[] | undefined
 }) {
   const classes = useClasses()
 
@@ -193,15 +183,10 @@ function UserEnvironmentFootprint({
     return [...envIdCounts.entries()]
       .map(([envId, count]) => {
         const envItem = allEnvironments.find(e => e.name === envId)
-        const cap = capacityData?.find(c => c.name === envId)
-        const db = cap?.capacity.find(c => c.capacityType === 'Database')?.actualConsumption ?? 0
-        const file = cap?.capacity.find(c => c.capacityType === 'File')?.actualConsumption ?? 0
-        const log = cap?.capacity.find(c => c.capacityType === 'Log')?.actualConsumption ?? 0
-        const totalStorage = db + file + log
-        return { envId, count, envItem, totalStorage, db, file, log }
+        return { envId, count, envItem }
       })
       .sort((a, b) => b.count - a.count)
-  }, [user.resources, allEnvironments, capacityData])
+  }, [user.resources, allEnvironments])
 
   if (rows.length === 0) return null
 
@@ -219,11 +204,10 @@ function UserEnvironmentFootprint({
               <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Environment</div></th>
               <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Status</div></th>
               <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Resources</div></th>
-              <th className={classes.th} style={{ cursor: 'default' }}><div className={classes.thInner}>Dataverse Storage</div></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ envId, count, envItem, totalStorage, db, file, log }) => {
+            {rows.map(({ envId, count, envItem }) => {
               const isManaged = envItem ? getIsManagedEnvironment(envItem) : undefined
               const displayName = envItem ? getDisplayName(envItem) : envId
               const envType = envItem?.environmentType
@@ -248,22 +232,6 @@ function UserEnvironmentFootprint({
                   </td>
                   <td className={classes.td}>
                     <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>{count}</Text>
-                  </td>
-                  <td className={classes.td}>
-                    {totalStorage > 0 ? (
-                      <div>
-                        <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>{formatMB(totalStorage)}</Text>
-                        <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>
-                          {[
-                            db > 0 && `DB: ${formatMB(db)}`,
-                            file > 0 && `File: ${formatMB(file)}`,
-                            log > 0 && `Log: ${formatMB(log)}`,
-                          ].filter(Boolean).join(' · ')}
-                        </Caption1>
-                      </div>
-                    ) : (
-                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>—</Caption1>
-                    )}
                   </td>
                 </tr>
               )
@@ -292,7 +260,6 @@ function UserResourcesView({
   const [selected, setSelected] = useState<ResourceItem | null>(null)
   const [search, setSearch] = useState('')
   const classes = useClasses()
-  const capacityQuery = useEnvironmentCapacity()
 
   const envMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -353,7 +320,6 @@ function UserResourcesView({
       <UserEnvironmentFootprint
         user={user}
         allEnvironments={allEnvironments}
-        capacityData={capacityQuery.data}
       />
 
       <div className={classes.tableWrapper}>

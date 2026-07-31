@@ -18,8 +18,6 @@ The home screenshot is the featured showcase image used in the main project READ
 
 ## Governance
 - [Overview](platform-360/governance-overview.png)
-- [Tenant Settings](platform-360/governance-tenant-settings.png)
-- [DLP Policies](platform-360/governance-dlp-policies.png)
 - [Cross Tenant Connections](platform-360/governance-cross-tenant-connections.png)
 - [Connections](platform-360/governance-connections.png)
 - [Recommendations](platform-360/governance-recommendations.png)
@@ -39,7 +37,6 @@ The home screenshot is the featured showcase image used in the main project READ
 
 ## Licensing
 - [Summary](platform-360/licensing-summary.png)
-- [Capacity & Billing](platform-360/licensing-capacity-billing.png)
 - [Power Apps](platform-360/licensing-power-apps.png)
 - [Power Automate](platform-360/licensing-power-automate.png)
 - [Copilot Studio](platform-360/licensing-copilot-studio.png)

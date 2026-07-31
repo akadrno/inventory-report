@@ -6,7 +6,7 @@ type NotePair = { riskNotes: string; notes: string }
 
 const CRITICAL_NOTES: NotePair[] = [
   {
-    riskNotes: 'Canvas app with no DLP policy coverage — connects to external REST endpoints without governance controls. Immediate remediation required.',
+    riskNotes: 'Canvas app connects to external REST endpoints without a documented connector-governance review. Immediate remediation required.',
     notes: 'Flagged for security review. App owner and environment admin notified. Awaiting response.',
   },
   {
@@ -25,8 +25,8 @@ const HIGH_NOTES: NotePair[] = [
     notes: 'Scope under review. Access to be restricted to named security groups pending classification outcome.',
   },
   {
-    riskNotes: 'Flow connects to third-party connectors not covered by the existing DLP policy. Potential data exfiltration vector identified in last DLP audit.',
-    notes: 'DLP policy update in progress. Business justification requested from owner.',
+    riskNotes: 'Flow uses third-party connectors without a documented Advanced Connector Policy review. Potential data exfiltration risk requires validation.',
+    notes: 'Connector-governance review in progress. Business justification requested from owner.',
   },
   {
     riskNotes: 'No active owner on record. Resource was last modified over 14 months ago and has received no governance review.',
@@ -52,7 +52,7 @@ const MEDIUM_NOTES: NotePair[] = [
     notes: 'Documentation backlog. Review scheduled for upcoming governance cycle.',
   },
   {
-    riskNotes: 'Resource not deployed in a managed environment — missing DLP enforcement and lifecycle governance guardrails.',
+    riskNotes: 'Resource not deployed in a managed environment — missing advanced lifecycle and usage governance controls.',
     notes: 'Migration to managed environment planned for next quarter.',
   },
   {
@@ -87,7 +87,7 @@ const LOW_NOTES: NotePair[] = [
     notes: 'Monitoring. May reflect seasonal usage pattern.',
   },
   {
-    riskNotes: 'Resource not in a managed environment. Migration would improve lifecycle management, telemetry, and DLP coverage.',
+    riskNotes: 'Resource not in a managed environment. Migration would improve lifecycle management, telemetry, and governance visibility.',
     notes: '',
   },
   {

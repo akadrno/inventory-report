@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { makeStyles, tokens, Text, Caption1, Badge, Spinner, Button } from '@fluentui/react-components'
+import { makeStyles, tokens, Text, Caption1, Badge, Button } from '@fluentui/react-components'
 import {
-  ErrorCircleRegular,
-  WarningRegular,
   CheckmarkCircleRegular,
 } from '@fluentui/react-icons'
 import { useMsal } from '@azure/msal-react'
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getDisplayName, getIsManagedEnvironment, getEnvironmentIdFromPath, getOwnerFromProperties, getGroupEnvironmentIds } from '../types'
-import { useDLPPolicies, useTenantSettings } from '../hooks/useGovernance'
-import type { DLPPolicy, TenantSettings } from '../hooks/useGovernance'
 import { ResourceTypeBadge } from './ResourceTypeBadge'
 import { useAdminData } from '../hooks/useAdminData'
 import { useSignInCache } from '../context/SignInCacheContext'
@@ -646,152 +642,17 @@ function OverviewTab({ allResources, allEnvironments }: ReportViewProps) {
   )
 }
 
-// ── Tab: Governance ───────────────────────────────────────────────────────────
-
-type SettingCheck = { label: string; value: boolean | undefined; positive: boolean; severity: 'critical' | 'warning' | 'info' }
-
-function governanceChecks(s: TenantSettings): SettingCheck[] {
-  const pp = s.powerPlatform
-  return [
-    { label: 'Restrict environment creation to admins', value: s.disableEnvironmentCreationByNonAdminUsers, positive: true, severity: 'critical' },
-    { label: 'Restrict trial environment creation to admins', value: s.disableTrialEnvironmentCreationByNonAdminUsers, positive: true, severity: 'critical' },
-    { label: 'Restrict developer env creation to admins', value: pp?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers, positive: true, severity: 'warning' },
-    { label: 'Restrict portal creation to admins', value: s.disablePortalsCreationByNonAdminUsers, positive: true, severity: 'warning' },
-    { label: 'Restrict Share with Everyone', value: pp?.powerApps?.disableShareWithEveryone, positive: true, severity: 'warning' },
-    { label: 'Guest makers disabled', value: pp?.powerApps?.enableGuestsToMake !== undefined ? !pp!.powerApps!.enableGuestsToMake : undefined, positive: true, severity: 'warning' },
-    { label: 'Admin digest emails enabled', value: pp?.governance?.disableAdminDigest !== undefined ? !pp!.governance!.disableAdminDigest : undefined, positive: true, severity: 'info' },
-    { label: 'Usage metrics for admins', value: pp?.governance?.disableUsageMetricsForAdmins !== undefined ? !pp!.governance!.disableUsageMetricsForAdmins : undefined, positive: true, severity: 'info' },
-  ]
-}
-
-function GovernanceTab() {
-  const { data, isLoading, isError } = useTenantSettings()
-  const classes = useClasses()
-
-  if (isLoading) return <div style={{ padding: tokens.spacingVerticalXL }}><Spinner size="small" label="Loading tenant settings…" /></div>
-  if (isError || !data) return (
-    <div className={classes.finding + ' ' + classes.findingInfo} style={{ border: `1px solid ${tokens.colorNeutralStroke2}` }}>
-      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Requires Power Platform admin permissions (BAP API). Sign in with an admin account.</Caption1>
-    </div>
-  )
-
-  const checks = governanceChecks(data)
-  const findings = checks.filter(c => {
-    if (c.value === undefined) return false
-    return c.positive ? !c.value : c.value
-  })
-
-  return (
-    <div className={classes.section}>
-      {findings.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
-          {findings.map(f => (
-            <div key={f.label} className={`${classes.finding} ${f.severity === 'critical' ? classes.findingCritical : classes.findingWarn}`}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
-                {f.severity === 'critical'
-                  ? <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
-                  : <WarningRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
-                }
-                <Text size={300} weight="semibold">{f.label}</Text>
-              </div>
-              <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-                Currently: <strong>{f.positive ? 'disabled (not enforced)' : 'enabled'}</strong>. Remediate via Power Platform admin center or PAC CLI.
-              </Caption1>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div>
-        <div className={classes.sectionHead}>
-          <Text weight="semibold" size={400}>Tenant Settings</Text>
-        </div>
-        <div className={classes.card}>
-          <table className={classes.table}>
-            <thead className={classes.thead}>
-              <tr>
-                <th className={classes.th}>Setting</th>
-                <th className={classes.th}>Status</th>
-                <th className={classes.th}>Severity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {checks.filter(c => c.value !== undefined).map(c => {
-                const isGood = c.positive ? c.value : !c.value
-                return (
-                  <tr key={c.label}>
-                    <td className={classes.td}><Text size={200}>{c.label}</Text></td>
-                    <td className={classes.td}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {isGood
-                          ? <CheckmarkCircleRegular fontSize={14} style={{ color: tokens.colorPaletteGreenForeground1 }} />
-                          : <WarningRegular fontSize={14} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
-                        }
-                        <Caption1 style={{ color: isGood ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForeground2 }}>
-                          {c.value ? 'Enabled' : 'Disabled'}
-                        </Caption1>
-                      </div>
-                    </td>
-                    <td className={classes.td}>
-                      {isGood
-                        ? <Badge appearance="tint" color="success" size="small">Good</Badge>
-                        : c.severity === 'critical'
-                          ? <Badge appearance="tint" color="danger" size="small">Critical</Badge>
-                          : <Badge appearance="tint" color="warning" size="small">Warning</Badge>
-                      }
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Keep legacy tab implementations available for potential reuse while the
-// home page now renders the screenshot-style dashboard snapshot.
+// Keep the legacy overview implementation available for potential reuse while
+// the home page renders the screenshot-style dashboard snapshot.
 void OverviewTab
-void GovernanceTab
 
 // ── Tab: Recommendations ──────────────────────────────────────────────────────
 
 type Rec = { priority: 'Critical' | 'High' | 'Medium' | 'Low'; action: string; why: string; how: string }
 
-export function buildRecs(
-  allEnvironments: ResourceItem[],
-  dlp: DLPPolicy[] | undefined,
-  settings: TenantSettings | undefined,
-): Rec[] {
+export function buildRecs(allEnvironments: ResourceItem[]): Rec[] {
   const recs: Rec[] = []
   const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
-
-  if (dlp) {
-    const hasNoConf = dlp.length === 0 || dlp.every(p => !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'confidential' && g.connectors.length > 0))
-    if (hasNoConf) recs.push({ priority: 'Critical', action: 'Reclassify DLP connectors — move sensitive connectors to Confidential', why: 'All connectors in General allows any data to flow anywhere with no DLP protection.', how: 'Edit DLP policy in Power Platform admin center. Move Dataverse, SharePoint, SQL, Office 365 to Confidential.' })
-
-    const hasNoBlock = dlp.every(p => !(p.connectorGroups ?? []).some(g => g.classification.toLowerCase() === 'blocked' && g.connectors.length > 0))
-    if (hasNoBlock) recs.push({ priority: 'Critical', action: 'Block high-risk connectors (HTTP, custom connectors)', why: 'HTTP connector allows calling any external API, bypassing DLP intent.', how: 'Add HTTP connector and custom connectors to the Blocked group in all production policies.' })
-
-    // ACP is the GA replacement for classic DLP. Recommend migration whenever
-    // classic data policies are still in use.
-    if (dlp.length > 0) recs.push({ priority: 'Medium', action: 'Adopt Advanced Connector Policies (ACP) — the modern replacement for classic DLP', why: 'ACP (now GA) uses a default-deny allowlist with action-level control and design-time enforcement, replacing the Business/Non-Business/Blocked model with simpler, stronger connector governance.', how: 'Power Platform admin center → Environment groups → Rules → Advanced connector policies (or per environment: Security → Data and privacy). Run mixed mode during migration, then enable ACP-only mode. Docs: aka.ms/AdvancedConnectorPolicies' })
-  }
-
-  if (settings) {
-    if (!settings.disableEnvironmentCreationByNonAdminUsers)
-      recs.push({ priority: 'Critical', action: 'Restrict environment creation to admins only', why: 'Any licensed user can create production/sandbox environments causing sprawl and shadow IT.', how: 'pac admin update-tenant-settings --setting-name "disableEnvironmentCreationByNonAdminUsers" --setting-value "true"' })
-    if (!settings.disableTrialEnvironmentCreationByNonAdminUsers)
-      recs.push({ priority: 'Critical', action: 'Restrict trial environment creation to admins', why: 'Trials auto-expire after 30 days; users may build real workloads then lose data.', how: 'pac admin update-tenant-settings --setting-name "disableTrialEnvironmentCreationByNonAdminUsers" --setting-value "true"' })
-    if (!settings.powerPlatform?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers)
-      recs.push({ priority: 'High', action: 'Restrict developer environment creation', why: 'Developer environments consume capacity and expand the ungoverned inventory.', how: 'pac admin update-tenant-settings --setting-name "powerPlatform.governance.disableDeveloperEnvironmentCreationByNonAdminUsers" --setting-value "true"' })
-    if (!settings.disablePortalsCreationByNonAdminUsers)
-      recs.push({ priority: 'Medium', action: 'Restrict portal (Power Pages) creation to admins', why: 'Power Pages sites expose Dataverse data externally with no admin visibility.', how: 'pac admin update-tenant-settings --setting-name "disablePortalsCreationByNonAdminUsers" --setting-value "true"' })
-    if (!settings.powerPlatform?.powerApps?.disableShareWithEveryone)
-      recs.push({ priority: 'Medium', action: 'Disable Share with Everyone for Canvas Apps', why: 'Allows any user to share apps with the entire organization uncontrolled.', how: 'pac admin update-tenant-settings --setting-name "powerPlatform.powerApps.disableShareWithEveryone" --setting-value "true"' })
-  }
 
   if (managedCount < allEnvironments.length) {
     recs.push({ priority: 'High', action: `Enable Managed Environments (${allEnvironments.length - managedCount} of ${allEnvironments.length} not managed)`, why: 'Non-managed environments lack admin insights, usage tracking, and weekly digests.', how: 'pac admin set-governance-config --environment "<id>" --protection-level Standard' })
@@ -801,11 +662,9 @@ export function buildRecs(
 }
 
 export function RecsTab({ allEnvironments }: { allEnvironments: ResourceItem[] }) {
-  const { data: dlp } = useDLPPolicies()
-  const { data: settings } = useTenantSettings()
   const classes = useClasses()
 
-  const recs = useMemo(() => buildRecs(allEnvironments, dlp, settings), [allEnvironments, dlp, settings])
+  const recs = useMemo(() => buildRecs(allEnvironments), [allEnvironments])
 
   const priorityColor = (p: Rec['priority']): 'danger' | 'warning' | 'informative' | 'subtle' =>
     p === 'Critical' ? 'danger' : p === 'High' ? 'warning' : p === 'Medium' ? 'informative' : 'subtle'
@@ -869,10 +728,8 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
   const flowCount = allResources.filter(r => getResourceCategory(r.type) === 'flows').length
   const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
   const envGroupCount = allGroups?.length ?? 0
-  const { data: settings } = useTenantSettings()
-  const { data: dlp } = useDLPPolicies()
   const { data: assessments } = useAdminData()
-  const recs = useMemo(() => buildRecs(allEnvironments, dlp, settings), [allEnvironments, dlp, settings])
+  const recs = useMemo(() => buildRecs(allEnvironments), [allEnvironments])
   const criticalCount = recs.filter(r => r.priority === 'Critical').length
   const highCount = recs.filter(r => r.priority === 'High').length
 
@@ -1198,7 +1055,6 @@ export function ReportView({ allResources, allEnvironments, allGroups, ownerName
                     onClick={onNavigateToRiskAssessments}
                   />
                 )}
-                {!settings && <HealthChip label="Connect BAP API for full governance analysis" color="subtle" />}
               </div>
             </div>
           </div>

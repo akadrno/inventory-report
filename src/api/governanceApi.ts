@@ -1,28 +1,7 @@
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
-import { msalInstance, bapScopes, powerPlatformScopes, powerAppsScopes } from '../auth/msalConfig'
+import { msalInstance, powerPlatformScopes, powerAppsScopes } from '../auth/msalConfig'
 
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
-
-// Singleton promise so concurrent callers share one popup instead of racing.
-let _inFlight: Promise<string> | null = null
-
-async function getBapToken(): Promise<string> {
-  if (_inFlight) return _inFlight
-  const account = msalInstance.getAllAccounts()[0]
-  _inFlight = (async () => {
-    try {
-      const result = await msalInstance.acquireTokenSilent({ scopes: bapScopes, account })
-      return result.accessToken
-    } catch (e) {
-      if (e instanceof InteractionRequiredAuthError) {
-        const result = await msalInstance.acquireTokenPopup({ scopes: bapScopes, account })
-        return result.accessToken
-      }
-      throw e
-    }
-  })().finally(() => { _inFlight = null })
-  return _inFlight
-}
 
 let _ppInFlight: Promise<string> | null = null
 
@@ -44,33 +23,21 @@ async function getPowerPlatformToken(): Promise<string> {
   return _ppInFlight
 }
 
-export interface CapacityEntry {
-  capacityType: 'Database' | 'File' | 'Log'
-  actualConsumption: number
-  ratedConsumption: number
-  capacityUnit: string
-  updatedOn: string
-}
-
-export interface EnvironmentCapacity {
-  id: string
-  name: string
-  location: string
-  displayName: string
-  environmentType: string
-  capacity: CapacityEntry[]
-  addons: Array<{ addonType: string; quantity: number }>
-}
-
 export interface BillingPolicy {
   id: string
   name: string
-  type: string
-  properties: {
-    billingInstrument?: { id: string; resourceId: string }
-    environments?: Array<{ id: string; name: string }>
-    provisioningState?: string
+  location: string
+  status: 'Enabled' | 'Disabled'
+  billingInstrument?: {
+    id: string
+    subscriptionId: string
+    resourceGroup: string
   }
+  createdBy?: { id: string; type: 'None' | 'Application' | 'User' | 'DelegatedAdmin' }
+  createdOn?: string
+  lastModifiedBy?: { id: string; type: 'None' | 'Application' | 'User' | 'DelegatedAdmin' }
+  lastModifiedOn?: string
+  environmentIds: string[]
 }
 
 export interface GroupRuleAssignment {
@@ -197,141 +164,44 @@ export function ruleBasedPolicyHasAcp(p: RuleBasedPolicy): boolean {
   return (p.ruleSets ?? []).some(isAcpRuleSet)
 }
 
-export async function fetchEnvironmentCapacity(): Promise<EnvironmentCapacity[]> {
-  // The admin environments + capacity expand lives on the BAP host (same family
-  // as DLP / tenant settings), not api.powerplatform.com — use the BAP token.
-  const token = await getBapToken()
-  const res = await fetch(
-    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/environments?api-version=2020-10-01&$expand=properties.capacity,properties.addons',
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  if (!res.ok) throw new Error(`Environment capacity fetch failed: ${res.status}`)
-  const json = await res.json()
-  const raw: Record<string, unknown>[] = json.value ?? []
-  return raw.map(e => {
-    const props = (e['properties'] as Record<string, unknown>) ?? {}
-    return {
-      id: e['id'] as string ?? '',
-      name: e['name'] as string ?? '',
-      location: e['location'] as string ?? '',
-      displayName: (props['displayName'] as string) ?? (e['name'] as string) ?? '',
-      environmentType: (props['environmentType'] as string) ?? '',
-      capacity: (props['capacity'] as CapacityEntry[]) ?? [],
-      addons: (props['addons'] as EnvironmentCapacity['addons']) ?? [],
-    }
-  })
-}
-
 export async function fetchBillingPolicies(): Promise<BillingPolicy[]> {
   const token = await getPowerPlatformToken()
-  const res = await fetch(
-    'https://api.powerplatform.com/licensing/billingPolicies?api-version=2022-03-01-preview',
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  if (!res.ok) throw new Error(`Billing policies fetch failed: ${res.status}`)
-  const json = await res.json()
-  return json.value ?? []
-}
+  const headers = { Authorization: `Bearer ${token}` }
+  const policies: Omit<BillingPolicy, 'environmentIds'>[] = []
+  let url: string | undefined = 'https://api.powerplatform.com/licensing/billingPolicies?api-version=2024-10-01'
+  let guard = 0
 
-export interface DLPPolicy {
-  name: string
-  displayName: string
-  type: string
-  environmentType?: string
-  // V1 shape
-  environments?: { name: string; id: string; type: string }[]
-  connectorGroups?: {
-    classification: string
-    connectors: { id: string; name: string; type: string }[]
-  }[]
-  // V1 inner shape (apiPolicies endpoint)
-  properties?: {
-    displayName?: string
-    defaultConnectorsClassification?: string
-    connectorGroups?: { classification: string; connectors: { id: string; name: string; type: string }[] }[]
-    environments?: { name: string; id: string; type: string }[]
-    environmentType?: string
-    createdBy?: unknown
-    createdTime?: string
-    lastModifiedBy?: unknown
-    lastModifiedTime?: string
-    etag?: string
+  while (url && guard < 50) {
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error(`Billing policies fetch failed: ${res.status}`)
+    const json = await res.json() as {
+      value?: Omit<BillingPolicy, 'environmentIds'>[]
+      '@odata.nextLink'?: string
+    }
+    policies.push(...(json.value ?? []))
+    url = json['@odata.nextLink']
+    guard++
   }
-  createdTime?: string
-  lastModifiedTime?: string
-  etag?: string
-}
 
-export interface TenantSettings {
-  walkMeOptOut?: boolean
-  disableNPSCommentsReachout?: boolean
-  disableNewsletterSendout?: boolean
-  disableEnvironmentCreationByNonAdminUsers?: boolean
-  disablePortalsCreationByNonAdminUsers?: boolean
-  disableSurveyFeedback?: boolean
-  disableTrialEnvironmentCreationByNonAdminUsers?: boolean
-  disableCapacityAllocationByEnvironmentAdmins?: boolean
-  disableSupportTicketsForB2BUsers?: boolean
-  powerPlatform?: {
-    search?: { disableDocsSearch?: boolean; disableCommunitySearch?: boolean; disableBingVideoSearch?: boolean }
-    teamsIntegration?: { shareWithColleaguesUserLimit?: number }
-    powerApps?: {
-      disableShareWithEveryone?: boolean
-      enableGuestsToMake?: boolean
-      disableMembersIndicator?: boolean
-      disableMakerMatch?: boolean
-    }
-    powerAutomate?: { disableCopilot?: boolean }
-    environments?: { preferredEnvironmentLocation?: string }
-    governance?: {
-      disableAdminDigest?: boolean
-      disableUsageMetricsForAdmins?: boolean
-      disableDeveloperEnvironmentCreationByNonAdminUsers?: boolean
-    }
-    licensing?: {
-      disableBillingPolicyCreationByNonAdminUsers?: boolean
-      enableTenantCapacityReportForEnvironmentAdmins?: boolean
-      storageCapacityConsumptionWarningThreshold?: number
-    }
-    champions?: { disableChampionsInvitationReachout?: boolean; disableSkillsMatchInvitationReachout?: boolean }
-    intelligence?: { disableCopilot?: boolean; enableOpenAiBotPublishing?: boolean }
-    modelExperimentation?: { enableModelDataSharing?: boolean; optOutOfExperimentsWithBots?: boolean }
-    catalogSettings?: { powerCatalogAudienceSetting?: string }
-    userManagementSettings?: { enableDeleteDisabledUserinAllEnvironments?: boolean }
-  }
-}
+  return Promise.all(policies.map(async policy => {
+    const environmentIds: string[] = []
+    let environmentsUrl: string | undefined = `https://api.powerplatform.com/licensing/billingPolicies/${encodeURIComponent(policy.id)}/environments?api-version=2024-10-01`
+    let environmentGuard = 0
 
-export async function fetchDLPPolicies(): Promise<DLPPolicy[]> {
-  const token = await getBapToken()
-  const res = await fetch(
-    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/apiPolicies?api-version=2016-11-01',
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  if (!res.ok) throw new Error(`DLP fetch failed: ${res.status}`)
-  const json = await res.json()
-  const raw: DLPPolicy[] = json.value ?? json
-  // Normalise V1 shape: hoist properties fields to top level
-  return raw.map(p => ({
-    ...p,
-    displayName: p.displayName ?? p.properties?.displayName ?? p.name,
-    environmentType: p.environmentType ?? p.properties?.environmentType,
-    environments: p.environments ?? p.properties?.environments,
-    connectorGroups: p.connectorGroups ?? p.properties?.connectorGroups,
+    while (environmentsUrl && environmentGuard < 50) {
+      const res = await fetch(environmentsUrl, { headers })
+      if (!res.ok) throw new Error(`Billing policy environments fetch failed: ${res.status}`)
+      const json = await res.json() as {
+        value?: Array<{ billingPolicyId: string; environmentId: string }>
+        '@odata.nextLink'?: string
+      }
+      environmentIds.push(...(json.value ?? []).map(item => item.environmentId).filter(Boolean))
+      environmentsUrl = json['@odata.nextLink']
+      environmentGuard++
+    }
+
+    return { ...policy, environmentIds }
   }))
-}
-
-export async function fetchTenantSettings(): Promise<TenantSettings> {
-  const token = await getBapToken()
-  const res = await fetch(
-    'https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/listTenantSettings?api-version=2021-04-01',
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: '{}',
-    },
-  )
-  if (!res.ok) throw new Error(`Tenant settings fetch failed: ${res.status}`)
-  return res.json() as Promise<TenantSettings>
 }
 
 // ─── Cross-tenant connection reports (governance namespace, preview) ──────────

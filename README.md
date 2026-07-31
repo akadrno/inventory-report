@@ -1,6 +1,6 @@
 # Platform 360: A Power Platform Inventory and Governance App
 
-A browser-based inventory, governance, and usage dashboard for Power Platform admins. It surfaces apps, cloud flows, Copilot Studio agents, environments, DLP policies, tenant settings, licensing, sign-in usage, and resource tagging in a single read-only view — authenticated through your own Azure AD app registration. It ships with a light/dark theme and a "command center" home screen.
+A browser-based inventory, governance, and usage dashboard for Power Platform admins. It surfaces apps, cloud flows, Copilot Studio agents, environments, governance insights, billing policies, licensing, sign-in usage, and resource tagging in a single read-only view — authenticated through your own Azure AD app registration. It ships with a light/dark theme and a "command center" home screen.
 
 ---
 
@@ -21,14 +21,14 @@ A browser-based inventory, governance, and usage dashboard for Power Platform ad
 
 | Section | Description |
 |---|---|
-| **Home** | Overview: live Agent / App / Flow counts, governance health (critical, warnings, compliance), and tabs for resource breakdown, tenant governance, and recommendations |
+| **Home** | Live Agent / App / Flow counts, environment governance health, compliance state, and a resource dashboard |
 | **Inventory** | Browse all resources — Apps (canvas / model-driven / code), Flows (cloud / agent), Agents (Copilot Studio / M365), Environments, Environment Groups, and Users — with search and a detail panel (configuration, sharing, activity) |
-| **Governance** | Overview & resource insights, Tenant Settings, DLP Policies, Cross-Tenant Connections, Connections, Recommendations (Advisor + computed), Maker Analytics, and Risk Assessments |
+| **Governance** | Overview & resource insights, Cross-Tenant Connections, Connections, Recommendations, Maker Analytics, and Risk Assessments |
 | **Usage** | Adoption analytics from Entra sign-ins + inventory: active users, sessions, success rate, geography, top users; per-product (Apps / Flows / Agents) drill-ins; and a world **Heatmap** of where users sign in |
 | **Tagging** | Browse and tag resources, backed by a SharePoint-style Term Store (groups, term sets, terms) |
-| **Licensing** | Power Platform license capacity and SKU utilization (Power Apps, Power Automate, Copilot Studio) |
+| **Licensing** | Power Platform license capacity and SKU utilization, plus pay-as-you-go billing policies and environment assignments |
 
-Most data is fetched live from the Power Platform, BAP, and Microsoft Graph APIs using your signed-in user's **delegated** permissions and held only in your browser session. Optionally, an Azure Storage account (account-level Table SAS) can persist risk assessments, resource tags, and a cached sign-in dataset for the usage heatmap — see the [hosting guide](docs/03-azure-static-web-apps.md). Without it, those features fall back to `localStorage` or live fetches.
+Most data is fetched live from the Power Platform, Power Apps Service, and Microsoft Graph APIs using your signed-in user's **delegated** permissions and held only in your browser session. Optionally, an Azure Storage account (account-level Table SAS) can persist risk assessments, resource tags, and a cached sign-in dataset for the usage heatmap — see the [hosting guide](docs/03-azure-static-web-apps.md). Without it, those features fall back to `localStorage` or live fetches.
 
 ## Screenshot Gallery
 
@@ -68,7 +68,7 @@ Browse the full capture set in [docs/screenshots/README.md](docs/screenshots/REA
 ## APIs used
 
 - [Power Platform Resource Query API](https://learn.microsoft.com/rest/api/power-platform/) — apps, flows, agents, environments inventory
-- [Business Application Platform (BAP) API](https://learn.microsoft.com/power-platform/admin/programmability-extensibility-overview) — DLP policies, tenant settings, recommendations, connections
+- [Power Platform API](https://learn.microsoft.com/rest/api/power-platform/) — governance, Advisor, cross-tenant reporting, and billing policies
 - [Power Apps Service API](https://learn.microsoft.com/connectors/powerappsforadmins/) — resource sharing / permissions
 - [Microsoft Graph API](https://learn.microsoft.com/graph/overview) — user name resolution (`User.ReadBasic.All`), license capacity (`Organization.Read.All`), and sign-in logs for the usage heatmap (`AuditLog.Read.All`)
 - [Azure Table Storage](https://learn.microsoft.com/rest/api/storageservices/table-service-rest-api) *(optional)* — persists risk assessments, tags, and the cached sign-in dataset via an account-level SAS

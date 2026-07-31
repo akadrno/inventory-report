@@ -67,43 +67,39 @@ The API returns a `skipToken` in the response when more results are available. T
 
 ---
 
-## 2. Business Application Platform (BAP) API
+## 2. Power Platform Governance and Licensing API
 
-**Base URL:** `https://api.bap.microsoft.com`
+**Base URL:** `https://api.powerplatform.com`
 
-**Used for:** DLP policies and tenant-level Power Platform settings.
+**Used for:** Governance reports, Advisor recommendations, rule-based policies, and pay-as-you-go billing policies.
 
-### Endpoint — DLP Policies
-
-```
-GET https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/scopes/admin/apiPolicies?api-version=2016-11-01
-```
-
-Returns all Data Loss Prevention (DLP) policies defined in the tenant. The app uses this to check which environments have a DLP policy applied.
-
-### Endpoint — Tenant Settings
+### Endpoint — Billing policies
 
 ```
-POST https://api.bap.microsoft.com/providers/Microsoft.BusinessAppPlatform/listTenantSettings?api-version=2021-04-01
-Content-Type: application/json
-
-{}
+GET https://api.powerplatform.com/licensing/billingPolicies?api-version=2024-10-01
 ```
 
-Returns the full set of tenant-level Power Platform settings (e.g., ability to create environments, trial policies, sharing controls).
+Returns tenant billing policies. The app follows `@odata.nextLink` until all pages are loaded.
+
+### Endpoint — Billing policy environment assignments
+
+```
+GET https://api.powerplatform.com/licensing/billingPolicies/{billingPolicyId}/environments?api-version=2024-10-01
+```
+
+Returns the environment IDs linked to a billing policy. The app follows `@odata.nextLink` and joins assignments to each policy for the Billing Policies page.
 
 ### Authentication scope
 
 ```
-https://api.bap.microsoft.com/.default
+https://api.powerplatform.com/.default
 ```
 
 ### Official documentation
 
-- [Power Platform programmability and extensibility](https://learn.microsoft.com/power-platform/admin/programmability-extensibility-overview)
-- [DLP policies via API](https://learn.microsoft.com/power-platform/admin/powerapps-powershell#data-loss-prevention-dlp-policy-commands)
-- [Tenant settings reference](https://learn.microsoft.com/power-platform/admin/tenant-settings)
-- [Power Platform admin connector](https://learn.microsoft.com/connectors/powerplatformforadmins/)
+- [Billing Policy operations](https://learn.microsoft.com/rest/api/power-platform/licensing/billing-policy)
+- [List Billing Policies](https://learn.microsoft.com/rest/api/power-platform/licensing/billing-policy/list-billing-policies)
+- [List Billing Policy Environments](https://learn.microsoft.com/rest/api/power-platform/licensing/billing-policy-environment/list-billing-policy-environments)
 
 ---
 
@@ -230,7 +226,6 @@ The table below matches each API to the permissions that must be configured in t
 | API | Permission type | Scope / Permission name | Admin consent required | Powers |
 |---|---|---|---|---|
 | Power Platform API | Delegated | `https://api.powerplatform.com/.default` | Yes | Inventory |
-| BAP API | Delegated | `https://api.bap.microsoft.com/.default` | Yes | Governance |
 | Power Apps Service | Delegated | `https://service.powerapps.com/.default` | Yes | Sharing |
 | Microsoft Graph | Delegated | `User.ReadBasic.All` | No (but recommended) | Owner names (core) |
 | Microsoft Graph | Delegated | `Organization.Read.All` | Yes | Licensing (optional) |
@@ -244,14 +239,13 @@ The table below matches each API to the permissions that must be configured in t
 | API | Notes |
 |---|---|
 | Power Platform Resource Query | Paginated; the app fetches up to 200 resources per page |
-| BAP API | No published limit; single call per session |
 | Microsoft Graph `$batch` | Max 20 requests per batch; the app chunks automatically |
 
 ---
 
 ## Data residency and privacy
 
-- All API calls are made to Microsoft-owned infrastructure (Microsoft Graph, Power Platform, BAP, and — if configured — your own Azure Storage account).
+- All API calls are made to Microsoft-owned infrastructure (Microsoft Graph, Power Platform, Power Apps Service, and — if configured — your own Azure Storage account).
 - No data is sent to any third-party service.
 - By default no data is persisted beyond the browser session (tokens in `sessionStorage`, API responses in React Query's in-memory cache).
 - **If** `VITE_STORAGE_ACCOUNT`/`VITE_TABLE_SAS` are configured, the app persists risk assessments, resource tags, and a trimmed sign-in cache to **your** Azure Table Storage; otherwise assessments/tags use `localStorage`.
@@ -270,4 +264,4 @@ The table below matches each API to the permissions that must be configured in t
 | Azure Static Web Apps documentation | https://learn.microsoft.com/azure/static-web-apps/ |
 | Power Platform Licensing guide | https://learn.microsoft.com/power-platform/admin/pricing-billing-skus |
 | Managed Environments overview | https://learn.microsoft.com/power-platform/admin/managed-environment-overview |
-| DLP policies overview | https://learn.microsoft.com/power-platform/admin/wp-data-loss-prevention |
+| Power Platform Billing Policy API | https://learn.microsoft.com/rest/api/power-platform/licensing/billing-policy |

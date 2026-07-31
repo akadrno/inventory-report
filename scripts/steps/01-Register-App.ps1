@@ -7,7 +7,6 @@
     - Adds a Single-Page Application redirect URI for localhost (dev) and optionally a hosted URL
     - Adds delegated API permissions for:
         Power Platform API   (https://api.powerplatform.com)
-        BAP API              (https://api.bap.microsoft.com)
         PowerApps Service    (https://service.powerapps.com)
         Microsoft Graph      User.ReadBasic.All
     - Does NOT grant admin consent (see 02-Grant-Consent.ps1)
@@ -15,7 +14,7 @@
 
     !! WARNING !! — This script creates a real Azure AD App Registration in your tenant.
     It is NOT guaranteed to work in all tenants. Service principal availability for the
-    Power Platform API and BAP API varies by tenant configuration. If permission lookups
+    Power Platform API varies by tenant configuration. If permission lookups
     fail, the script will warn you and provide manual steps.
 
 .PARAMETER TenantId
@@ -52,7 +51,6 @@ Write-Host "  [01-Register-App] Starting..." -ForegroundColor Cyan
 # If lookups fail, visit the relevant admin portals to trigger provisioning.
 
 $GRAPH_APP_ID         = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
-$BAP_APP_ID           = "00000007-0000-0000-c000-000000000000"  # Business Application Platform
 $PP_API_APP_ID        = "8578e004-a5c6-46e7-913e-12f58912df43"  # Power Platform API
 $POWERAPPS_SVC_APP_ID = "475226c6-020e-4fb2-8a90-7a972cbfc1d4"  # PowerApps Service (service.powerapps.com)
 
@@ -166,32 +164,6 @@ try {
     }
 } catch {
     Write-Warning "  Power Platform API permission step failed: $_"
-    Write-Warning "  Add this permission manually in the Azure portal."
-}
-
-# ── Add BAP API permission ────────────────────────────────────────────────────
-
-Write-Host "  Adding BAP API permissions..."
-try {
-    $bapSp = Get-OrProvisionSP -AppId $BAP_APP_ID -DisplayName "Business Application Platform"
-    if ($bapSp -and $bapSp.Trim()) {
-        $bapScopeId = Get-ScopeId -SpAppId $BAP_APP_ID -ScopeName "user_impersonation"
-        if ($bapScopeId -and $bapScopeId.Trim()) {
-            az ad app permission add `
-                --id $appId `
-                --api $BAP_APP_ID `
-                --api-permissions "$($bapScopeId.Trim())=Scope" `
-                --output none
-            Write-Host "  BAP API permission added." -ForegroundColor Green
-        } else {
-            Write-Warning "  Could not resolve BAP API scope ID. Add manually in Azure portal."
-        }
-    } else {
-        Write-Warning "  BAP API service principal not found in this tenant."
-        Write-Warning "  Add the permission manually in the Azure portal."
-    }
-} catch {
-    Write-Warning "  BAP API permission step failed: $_"
     Write-Warning "  Add this permission manually in the Azure portal."
 }
 

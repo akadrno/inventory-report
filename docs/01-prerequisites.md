@@ -8,7 +8,7 @@ Before you can deploy or run the Power Platform Inventory Report, confirm you ha
 
 | Requirement | Why |
 |---|---|
-| **Power Platform Administrator** or **Global Administrator** role | The signed-in user must be able to read all environments, DLP policies, and tenant settings across the entire tenant |
+| **Power Platform Administrator** or **Global Administrator** role | The signed-in user must be able to read tenant-wide Power Platform inventory, governance reports, connections, and billing policies |
 | **Azure AD** permission to create App Registrations | Required to create the identity the app uses to call APIs |
 | **Azure Subscription** (for hosting) | Required only if you want to deploy to Azure Static Web Apps; not needed for local development |
 
@@ -57,8 +57,7 @@ The browser running the app must be able to reach:
 | Host | Purpose |
 |---|---|
 | `login.microsoftonline.com` | Azure AD authentication |
-| `api.powerplatform.com` | Power Platform Resource Query API (inventory) |
-| `api.bap.microsoft.com` | BAP API — DLP policies, tenant settings, recommendations, connections |
+| `api.powerplatform.com` | Power Platform inventory, governance, Advisor, and billing policies |
 | `service.powerapps.com` | Power Apps Service — resource sharing / permissions |
 | `graph.microsoft.com` | Microsoft Graph — user names, license capacity, sign-in logs |
 | `<account>.table.core.windows.net` | Azure Table Storage *(optional)* — persisted assessments, tags, sign-in cache |

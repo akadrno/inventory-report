@@ -1,6 +1,6 @@
 # Azure AD App Registration & Admin Consent
 
-The application uses Microsoft Identity Platform (Azure AD) to authenticate the signed-in user and acquire tokens for the Power Platform, BAP, and Graph APIs. You must create an App Registration in your tenant before the app can be used.
+The application uses Microsoft Identity Platform (Azure AD) to authenticate the signed-in user and acquire tokens for the Power Platform, Power Apps Service, and Graph APIs. You must create an App Registration in your tenant before the app can be used.
 
 > **This is a delegated-permissions app.** It acts as the signed-in user — it can only do what that user can already do. Granting admin consent does not give the app any permissions the user doesn't already hold.
 
@@ -37,15 +37,6 @@ In the App Registration, go to **API permissions** → **Add a permission**.
 
 > If `Power Platform API` does not appear in search, the service principal may not yet exist in your tenant. You can force it by visiting:
 > `https://admin.powerplatform.microsoft.com` and signing in as a Global Admin once. Then retry the search.
-
-### Business Application Platform (BAP) API
-
-1. Click **Add a permission** → **APIs my organization uses**.
-2. Search for `Business Application Platform` or paste the resource URI `https://api.bap.microsoft.com`.
-3. Select **Delegated permissions** and add available permissions (typically listed under `user_impersonation`).
-4. Click **Add permissions**.
-
-> The BAP API is used for DLP policy and tenant settings reads.
 
 ### Power Apps Service (for resource sharing)
 
@@ -120,7 +111,6 @@ You'll use these in `.env.local` (local dev) or as GitHub secrets (CI/CD).
 - [ ] App Registration created
 - [ ] Redirect URI(s) added (SPA type) — include `http://localhost:3000` for local dev
 - [ ] Power Platform API delegated permissions added
-- [ ] BAP API delegated permissions added
 - [ ] Power Apps Service delegated permission added (resource sharing)
 - [ ] Graph `User.ReadBasic.All` added (core)
 - [ ] Graph `Organization.Read.All` added (Licensing — optional)

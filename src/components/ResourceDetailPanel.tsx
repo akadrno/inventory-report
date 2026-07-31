@@ -769,7 +769,6 @@ function ConnectorsSection({ connectors, search, meta }: {
         || (e.publisher ?? '').toLowerCase().includes(q)
         || c.operations.some(op => op.toLowerCase().includes(q))
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectors, search, meta])
 
   const counts = useMemo(() => {
@@ -859,7 +858,6 @@ function NamedItemsSection({ items, search, empty, nameMap, meta }: {
         || (it.operationId ?? '').toLowerCase().includes(q)
         || (it.description ?? '').toLowerCase().includes(q)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, meta])
 
   if (items.length === 0) return <EmptyState message={empty} />

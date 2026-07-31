@@ -38,7 +38,7 @@ Each file targets a different Microsoft API surface with its own OAuth scope:
 | File | API | Scope |
 |---|---|---|
 | `powerPlatformApi.ts` | Power Platform Resource Query (KQLOM) | `api.powerplatform.com/.default` |
-| `governanceApi.ts` | BAP admin + PP governance endpoints | `api.bap.microsoft.com/.default` + `api.powerplatform.com/.default` |
+| `governanceApi.ts` | Power Platform governance and licensing endpoints | `api.powerplatform.com/.default` |
 | `graphApi.ts` | Microsoft Graph (user/SP names; license SKUs) | `graph.microsoft.com/User.ReadBasic.All` + `Organization.Read.All` |
 | `signInsApi.ts` / `signInsCache.ts` | Microsoft Graph sign-in logs (usage heatmap) + Azure Table cache | `graph.microsoft.com/AuditLog.Read.All` (read); account SAS (cache) |
 | `sharingApi.ts` | Power Apps sharing/permissions | `service.powerapps.com/.default` |
@@ -52,13 +52,13 @@ Token acquisition uses a **singleton promise pattern** (`_inFlight`) to prevent 
 
 1. **Resources** — `useResources` hook uses `useInfiniteQuery` to auto-paginate through the Power Platform Resource Query API (500 items/page via `skipToken`). Resources are categorized into apps/flows/agents via `RESOURCE_TYPES` maps in `src/types/index.ts`.
 2. **Owner resolution** — Owner IDs (GUIDs) are resolved to display names via MS Graph `$batch` calls (20 IDs/chunk), trying `/users/` first then `/servicePrincipals/` for 404s.
-3. **Governance** — DLP policies, tenant settings, environment capacity, and billing policies are fetched independently via `useQuery` hooks in `src/hooks/useGovernance.ts`.
+3. **Governance** — Billing policies, rule-based policies, Advisor recommendations, and cross-tenant reports are fetched through custom hooks in `src/hooks/useGovernance.ts`.
 
 ### Navigation
 
 The app uses a **rail-based SPA** (no router library). `Shell.tsx` is the live root (`App` → `AppShell` → `Shell`) and manages all navigation in local state — a `RailSection` (`'home' | 'inventory' | 'governance' | 'usage' | 'tags' | 'licensing'`) plus a per-section sub-view union (e.g. `InvView`, `GovView`, `UsageSubView`, `LicensingView`, `TagView`). Each rail section renders a secondary `NavPanel` of sub-pages and a page component.
 
-> `src/pages/Dashboard.tsx` and the monolithic `GovernanceView` component are **dead code**. `Shell.tsx` composes the **exported sub-components** from `GovernanceView.tsx` (e.g. `TenantSettingsSection`, `DLPSection`, `ConnectionsSection`). To add/modify a section, wire it into `Shell.tsx`, not just `GovernanceView.tsx`.
+> `Shell.tsx` composes exported sections from `GovernanceView.tsx` (for example `ConnectionsSection` and `RecommendationsSection`). To add or modify a section, wire it into `Shell.tsx`.
 
 Key views: Home (`ReportView`), Usage (`UsageView` overview, `UsageDetail` per-product, `UsageHeatmap`, shared helpers in `usageShared.tsx`), Licensing (in `Shell.tsx`), Tagging (`ResourceTaggingView`), Risk (`RiskAssessmentView`), Maker (`MakerAnalyticsView`). The cinematic sign-in/home visuals live in `CommandCenter.tsx` (+ keyframes in `index.css`).
 
@@ -66,7 +66,7 @@ Key views: Home (`ReportView`), Usage (`UsageView` overview, `UsageDetail` per-p
 
 - **Fluent UI v9** for all UI components. Use `makeStyles` (Griffel) for styling with `tokens` for spacing/colors — no raw CSS values or CSS modules.
 - **Fluent UI Icons** — import from `@fluentui/react-icons` with the `Regular` suffix (e.g., `ShieldRegular`, `WarningRegular`).
-- **Custom hooks** wrap every TanStack Query call (`useResources`, `useDLPPolicies`, `useEnvironmentCapacity`, etc.) — never call `useQuery`/`useInfiniteQuery` directly from components.
+- **Custom hooks** wrap every TanStack Query call (`useResources`, `useBillingPolicies`, `useAdvisorRecommendations`, etc.) — never call `useQuery`/`useInfiniteQuery` directly from components.
 - **Type definitions** — The `ResourceItem` interface in `src/types/index.ts` is the central data model. Helper functions (`getDisplayName`, `getResourceCategory`, `getOwnerFromProperties`, etc.) handle the many property-name variants across Power Platform API response shapes.
 - **No routing library** — tab state is managed in component state. Don't add react-router.
 - Resource type matching is case-insensitive and handles both current canonical names and legacy API type strings (see `RESOURCE_TYPES` and `DEFAULT_CLAUSES`).

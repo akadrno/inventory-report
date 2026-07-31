@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   makeStyles,
   tokens,
@@ -14,20 +14,16 @@ import {
   AccordionPanel,
 } from '@fluentui/react-components'
 import {
-  ShieldRegular,
   ShieldCheckmarkRegular,
   WarningRegular,
-  ErrorCircleRegular,
   CheckmarkCircleRegular,
   LockClosedRegular,
   GlobeRegular,
   PersonRegular,
-  InfoRegular,
   ChevronRightRegular,
   ChevronDownRegular,
   ArrowLeftRegular,
   DatabaseRegular,
-  TagRegular,
   LightbulbRegular,
   PlugConnectedRegular,
   ArrowSyncRegular,
@@ -41,21 +37,14 @@ import {
 import type { ResourceItem } from '../types'
 import { getResourceCategory, getEnvironmentIdFromPath, getDisplayName, getIsManagedEnvironment } from '../types'
 import {
-  useDLPPolicies, useTenantSettings, useEnvironmentCapacity, useBillingPolicies,
-  useCrossTenantConnectionReport, useAdvisorRecommendations, useRecommendationResources, useConnections,
+  useRecommendationResources,
 } from '../hooks/useGovernance'
 import type {
-  DLPPolicy, TenantSettings, EnvironmentCapacity, BillingPolicy,
   CrossTenantConnectionReport, AdvisorRecommendation, ConnectionsResult, PowerConnection,
 } from '../hooks/useGovernance'
 import { getConnectorInfo } from '../utils/connectors'
 import { formatLocalDateTime } from '../utils/format'
 import { EnvironmentBadge } from './EnvironmentBadge'
-
-interface GovernanceViewProps {
-  allResources: ResourceItem[]
-  allEnvironments: ResourceItem[]
-}
 
 const useClasses = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
@@ -169,7 +158,7 @@ const useClasses = makeStyles({
     ':last-child td': { borderBottom: 'none' },
   },
   envNameCell: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, minWidth: 0 },
-  // Non-interactive table row (no pointer/hover); used for tenant settings.
+  // Non-interactive table row used by governance detail tables.
   settingsTr: { ':last-child td': { borderBottom: 'none' } },
   // Full-width category divider row inside the settings table.
   settingsCatTd: {
@@ -311,7 +300,7 @@ export function computeInsights(resources: ResourceItem[], environments: Resourc
     insights.push({
       severity: 'warning',
       title: `${unmanaged.length} unmanaged environment${unmanaged.length !== 1 ? 's' : ''}`,
-      detail: 'Managed Environments unlock advanced governance controls like DLP policy enforcement, weekly digests, and usage insights. Consider enabling Managed Environments for production environments.',
+      detail: 'Managed Environments unlock advanced governance controls, weekly digests, and usage insights. Consider enabling Managed Environments for production environments.',
       drillDownKey: 'unmanaged-envs',
     })
   }
@@ -321,7 +310,7 @@ export function computeInsights(resources: ResourceItem[], environments: Resourc
     insights.push({
       severity: 'info',
       title: `Default environment${defaultEnvs.length !== 1 ? 's' : ''} detected: ${defaultEnvs.map(e => getDisplayName(e)).join(', ')}`,
-      detail: 'Default environments are shared by all users in the tenant. Consider restricting app and flow creation in default environments via DLP policies and tenant settings.',
+      detail: 'Default environments are shared by all users in the tenant. Review their resources, makers, connections, and Advanced Connector Policy coverage regularly.',
     })
   }
 
@@ -339,7 +328,7 @@ export function computeInsights(resources: ResourceItem[], environments: Resourc
     insights.push({
       severity: 'info',
       title: 'No significant issues detected from resource data',
-      detail: 'Connect to the BAP API (requires Power Platform admin permissions) to unlock DLP policy analysis and tenant settings audit.',
+      detail: 'No unmanaged environments, orphaned environment references, or obvious inventory anomalies were detected.',
     })
   }
 
@@ -347,21 +336,6 @@ export function computeInsights(resources: ResourceItem[], environments: Resourc
 }
 
 // ── Helper components ────────────────────────────────────────────────────────
-
-function SeverityIcon({ severity }: { severity: Insight['severity'] }) {
-  if (severity === 'critical') return <ErrorCircleRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
-  if (severity === 'warning') return <WarningRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />
-  return <InfoRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3 }} />
-}
-
-function PermissionNotice({ classes }: { classes: ReturnType<typeof useClasses> }) {
-  return (
-    <div className={classes.permissionNotice}>
-      <LockClosedRegular fontSize={16} />
-      <Caption1>Requires Power Platform admin permissions (BAP API scope). Sign in with an admin account to view this data.</Caption1>
-    </div>
-  )
-}
 
 // ── Environment drill-down ───────────────────────────────────────────────────
 
@@ -465,432 +439,6 @@ export function EnvironmentDrillDown({
     </div>
   )
 }
-
-// ── DLP Policy detail view ───────────────────────────────────────────────────
-
-export function DLPPolicyDetail({
-  policy,
-  environments,
-  onBack,
-}: {
-  policy: DLPPolicy
-  environments: ResourceItem[]
-  onBack: () => void
-}) {
-  const classes = useClasses()
-
-  const envMap = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const env of environments) m.set(env.name, getDisplayName(env))
-    return m
-  }, [environments])
-
-  const isAllEnv = policy.environmentType === 'AllEnvironments' || policy.type === 'AllEnvironments'
-
-  const classificationColor = (c: string) => {
-    const l = c.toLowerCase()
-    if (l === 'blocked') return tokens.colorPaletteRedForeground1
-    if (l === 'confidential' || l === 'hbi') return tokens.colorPaletteMarigoldForeground2
-    return tokens.colorNeutralForeground2
-  }
-
-  return (
-    <div className={classes.drillRoot}>
-      <div className={classes.breadcrumb}>
-        <Button appearance="subtle" icon={<ArrowLeftRegular />} size="small" onClick={onBack}>
-          DLP Policies
-        </Button>
-        <Text style={{ color: tokens.colorNeutralForeground3 }}>/</Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
-          <LockClosedRegular style={{ color: tokens.colorBrandForeground2, fontSize: '16px' }} />
-          <Text weight="semibold">{policy.displayName ?? policy.name}</Text>
-        </div>
-        {isAllEnv
-          ? <Badge appearance="tint" color="informative" size="small">All Environments</Badge>
-          : <Badge appearance="tint" color="subtle" size="small">{policy.environments?.length ?? 0} environment{(policy.environments?.length ?? 0) !== 1 ? 's' : ''}</Badge>
-        }
-      </div>
-
-      {/* Environment scope */}
-      {!isAllEnv && policy.environments && policy.environments.length > 0 && (
-        <div className={classes.sectionCard}>
-          <div className={classes.sectionHeader}>
-            <GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />
-            <Text weight="semibold">Environment Scope</Text>
-            <Badge appearance="tint" color="subtle" size="small">{policy.environments.length}</Badge>
-          </div>
-          <div style={{ padding: `0 ${tokens.spacingHorizontalL}` }}>
-            {policy.environments.map(env => (
-              <div key={env.name} className={classes.envRow}>
-                <div className={classes.rowLeft}>
-                  <GlobeRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3 }} />
-                  <Text size={200}>{envMap.get(env.name) ?? env.name}</Text>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Connector groups */}
-      {policy.connectorGroups && policy.connectorGroups.length > 0 && policy.connectorGroups.map(group => (
-        <div key={group.classification} className={classes.sectionCard}>
-          <div className={classes.sectionHeader}>
-            <LockClosedRegular fontSize={16} style={{ color: classificationColor(group.classification) }} />
-            <Text weight="semibold">{group.classification}</Text>
-            <Badge appearance="tint" color="subtle" size="small">{group.connectors.length} connector{group.connectors.length !== 1 ? 's' : ''}</Badge>
-          </div>
-          {group.connectors.length === 0 ? (
-            <div className={classes.sectionBody}>
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No connectors in this group</Caption1>
-            </div>
-          ) : (
-            <div style={{ padding: `0 ${tokens.spacingHorizontalL}` }}>
-              {group.connectors.map(c => (
-                <div key={c.id} className={classes.envRow}>
-                  <Text size={200}>{c.name}</Text>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── DLP Section (policy list) ────────────────────────────────────────────────
-
-export function DLPSection({
-  policies,
-  onPolicyClick,
-}: {
-  policies: DLPPolicy[]
-  onPolicyClick: (p: DLPPolicy) => void
-}) {
-  const classes = useClasses()
-
-  const allEnvPolicy = policies.find(p => p.environmentType === 'AllEnvironments' || p.type === 'AllEnvironments')
-
-  if (policies.length === 0) {
-    return (
-      <div className={classes.sectionBody}>
-        <div className={classes.permissionNotice} style={{ backgroundColor: tokens.colorPaletteRedBackground1 }}>
-          <WarningRegular fontSize={16} style={{ color: tokens.colorPaletteRedForeground1 }} />
-          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>No DLP policies found. All connectors are unrestricted.</Caption1>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className={classes.sectionBody}>
-      <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', marginBottom: tokens.spacingVerticalXS }}>
-        <Badge appearance="tint" color="informative" size="small">{policies.length} polic{policies.length !== 1 ? 'ies' : 'y'}</Badge>
-        {allEnvPolicy && <Badge appearance="tint" color="success" size="small">Tenant-wide policy active</Badge>}
-      </div>
-      {policies.map((p, i) => {
-        const isAllEnv = p.environmentType === 'AllEnvironments' || p.type === 'AllEnvironments'
-        const connectorTotal = p.connectorGroups?.reduce((sum, g) => sum + g.connectors.length, 0) ?? 0
-        return (
-          <div key={p.name ?? i} className={classes.insightRowClickable} onClick={() => onPolicyClick(p)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPolicyClick(p) } }}>
-            <ShieldCheckmarkRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text size={200} weight="semibold" style={{ display: 'block' }}>{p.displayName ?? p.name}</Text>
-              <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, marginTop: '2px', flexWrap: 'wrap' }}>
-                {isAllEnv
-                  ? <Badge appearance="tint" color="informative" size="small">All Environments</Badge>
-                  : <Badge appearance="tint" color="subtle" size="small">{p.environments?.length ?? 0} env{(p.environments?.length ?? 0) !== 1 ? 's' : ''}</Badge>
-                }
-                {connectorTotal > 0 && <Badge appearance="tint" color="subtle" size="small">{connectorTotal} connectors</Badge>}
-              </div>
-            </div>
-            <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Tenant Settings warning counter ─────────────────────────────────────────
-
-export function countTenantWarnings(s: TenantSettings): number {
-  const pp = s.powerPlatform
-  // Each entry: [value, positive] — a warning fires when (positive && !value) || (!positive && value)
-  const checks: [boolean | undefined, boolean][] = [
-    [s.disableEnvironmentCreationByNonAdminUsers, true],
-    [s.disableTrialEnvironmentCreationByNonAdminUsers, true],
-    [pp?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers, true],
-    [s.disablePortalsCreationByNonAdminUsers, true],
-    [pp?.powerApps?.disableShareWithEveryone, true],
-    [pp?.powerApps?.enableGuestsToMake, false],
-    [pp?.powerAutomate?.disableCopilot !== undefined ? !pp!.powerAutomate!.disableCopilot : undefined, true],
-    [pp?.intelligence?.disableCopilot !== undefined ? !pp!.intelligence!.disableCopilot : undefined, true],
-    [pp?.intelligence?.enableOpenAiBotPublishing, false],
-    [pp?.governance?.disableAdminDigest !== undefined ? !pp!.governance!.disableAdminDigest : undefined, true],
-    [pp?.governance?.disableUsageMetricsForAdmins !== undefined ? !pp!.governance!.disableUsageMetricsForAdmins : undefined, true],
-    [s.disableCapacityAllocationByEnvironmentAdmins !== undefined ? !s.disableCapacityAllocationByEnvironmentAdmins : undefined, true],
-  ]
-  return checks.filter(([value, positive]) => {
-    if (value === undefined) return false
-    return positive ? !value : value
-  }).length
-}
-
-// ── Tenant Settings Section ──────────────────────────────────────────────────
-
-export function TenantSettingsSection({ settings }: { settings: TenantSettings }) {
-  const classes = useClasses()
-  const pp = settings.powerPlatform
-
-  const categories = [
-    {
-      title: 'Environment Creation',
-      rows: [
-        { label: 'Restrict environment creation to admins', value: settings.disableEnvironmentCreationByNonAdminUsers, positive: true },
-        { label: 'Restrict trial environment creation to admins', value: settings.disableTrialEnvironmentCreationByNonAdminUsers, positive: true },
-        { label: 'Restrict developer environment creation to admins', value: pp?.governance?.disableDeveloperEnvironmentCreationByNonAdminUsers, positive: true },
-        { label: 'Restrict portal creation to admins', value: settings.disablePortalsCreationByNonAdminUsers, positive: true },
-      ],
-    },
-    {
-      title: 'Power Apps',
-      rows: [
-        { label: 'Restrict Share with Everyone', value: pp?.powerApps?.disableShareWithEveryone, positive: true },
-        { label: 'Allow guests to create apps', value: pp?.powerApps?.enableGuestsToMake, positive: false },
-      ],
-    },
-    {
-      title: 'AI & Copilot',
-      rows: [
-        { label: 'Copilot in Power Automate', value: pp?.powerAutomate?.disableCopilot !== undefined ? !pp.powerAutomate.disableCopilot : undefined, positive: true },
-        { label: 'Copilot (tenant-wide)', value: pp?.intelligence?.disableCopilot !== undefined ? !pp.intelligence.disableCopilot : undefined, positive: true },
-        { label: 'OpenAI bot publishing', value: pp?.intelligence?.enableOpenAiBotPublishing, positive: false },
-      ],
-    },
-    {
-      title: 'Admin & Governance',
-      rows: [
-        { label: 'Admin digest emails', value: pp?.governance?.disableAdminDigest !== undefined ? !pp.governance.disableAdminDigest : undefined, positive: true },
-        { label: 'Usage metrics for admins', value: pp?.governance?.disableUsageMetricsForAdmins !== undefined ? !pp.governance.disableUsageMetricsForAdmins : undefined, positive: true },
-        { label: 'Capacity allocation by env admins', value: settings.disableCapacityAllocationByEnvironmentAdmins !== undefined ? !settings.disableCapacityAllocationByEnvironmentAdmins : undefined, positive: true },
-      ],
-    },
-  ]
-    .map(c => ({ ...c, rows: c.rows.filter(r => r.value !== undefined) }))
-    .filter(c => c.rows.length > 0)
-
-  return (
-    <div className={classes.envTableWrapper}>
-      <div style={{ overflowX: 'auto' }}>
-        <table className={classes.envTable}>
-          <colgroup>
-            <col />
-            <col style={{ width: '130px' }} />
-          </colgroup>
-          <thead className={classes.envThead}>
-            <tr>
-              <th className={classes.envTh} style={{ cursor: 'default' }}>Setting</th>
-              <th className={classes.envTh} style={{ cursor: 'default' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map(cat => (
-              <Fragment key={cat.title}>
-                <tr>
-                  <td className={classes.settingsCatTd} colSpan={2}>{cat.title}</td>
-                </tr>
-                {cat.rows.map(r => {
-                  const isGood = r.positive ? r.value : !r.value
-                  return (
-                    <tr key={r.label} className={classes.settingsTr}>
-                      <td className={classes.envTd}>
-                        <div className={classes.envNameCell}>
-                          {isGood
-                            ? <CheckmarkCircleRegular fontSize={14} style={{ color: tokens.colorPaletteGreenForeground1, flexShrink: 0 }} />
-                            : <WarningRegular fontSize={14} style={{ color: tokens.colorPaletteMarigoldForeground2, flexShrink: 0 }} />}
-                          <Text size={200} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</Text>
-                        </div>
-                      </td>
-                      <td className={classes.envTd}>
-                        <Badge appearance="tint" color={isGood ? 'success' : 'warning'} size="small">{r.value ? 'Enabled' : 'Disabled'}</Badge>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatMB(mb: number): string {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-  if (mb < 1) return '<1 MB'
-  return `${Math.round(mb)} MB`
-}
-
-// ── Capacity Section ─────────────────────────────────────────────────────────
-
-function CapacitySection({ capacityData }: { capacityData: EnvironmentCapacity[] }) {
-  const classes = useClasses()
-
-  const sorted = useMemo(() => {
-    return capacityData
-      .map(env => {
-        const db = env.capacity.find(c => c.capacityType === 'Database')?.actualConsumption ?? 0
-        const file = env.capacity.find(c => c.capacityType === 'File')?.actualConsumption ?? 0
-        const log = env.capacity.find(c => c.capacityType === 'Log')?.actualConsumption ?? 0
-        const total = db + file + log
-        return { ...env, db, file, log, total }
-      })
-      .filter(e => e.total > 0)
-      .sort((a, b) => b.total - a.total)
-  }, [capacityData])
-
-  const maxTotal = sorted[0]?.total ?? 1
-
-  if (sorted.length === 0) {
-    return (
-      <div className={classes.sectionBody}>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No Dataverse storage consumption found across visible environments.</Caption1>
-      </div>
-    )
-  }
-
-  return (
-    <div className={classes.sectionBody}>
-      <Caption1 style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalXS }}>
-        Dataverse storage consumption across {sorted.length} environment{sorted.length !== 1 ? 's' : ''}
-      </Caption1>
-      {sorted.map(env => (
-        <div key={env.id} style={{ marginBottom: tokens.spacingVerticalM }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS, minWidth: 0 }}>
-              <Text size={200} weight="semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {env.displayName}
-              </Text>
-              {env.environmentType && (
-                <Badge appearance="tint" color="subtle" size="small">{env.environmentType}</Badge>
-              )}
-            </div>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground2, flexShrink: 0, marginLeft: tokens.spacingHorizontalS }}>
-              {formatMB(env.total)}
-            </Text>
-          </div>
-          <div style={{ height: '6px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: '3px', overflow: 'hidden', marginBottom: '4px' }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.min(100, (env.total / maxTotal) * 100)}%`,
-              backgroundColor: tokens.colorBrandBackground,
-              borderRadius: '3px',
-            }} />
-          </div>
-          <div style={{ display: 'flex', gap: tokens.spacingHorizontalM }}>
-            {env.db > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>DB: {formatMB(env.db)}</Caption1>}
-            {env.file > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>File: {formatMB(env.file)}</Caption1>}
-            {env.log > 0 && <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Log: {formatMB(env.log)}</Caption1>}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Billing Policies Section ─────────────────────────────────────────────────
-
-function BillingPoliciesSection({
-  policies,
-  allEnvironments,
-}: {
-  policies: BillingPolicy[]
-  allEnvironments: ResourceItem[]
-}) {
-  const classes = useClasses()
-
-  const coveredIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const p of policies) {
-      for (const env of p.properties.environments ?? []) {
-        if (env.id) ids.add(env.id)
-        if (env.name) ids.add(env.name)
-      }
-    }
-    return ids
-  }, [policies])
-
-  const uncovered = useMemo(
-    () => allEnvironments.filter(e => !coveredIds.has(e.id) && !coveredIds.has(e.name)),
-    [allEnvironments, coveredIds],
-  )
-
-  if (policies.length === 0) {
-    return (
-      <div className={classes.sectionBody}>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-          No pay-as-you-go billing policies configured. Environments are using standard included licenses only.
-        </Caption1>
-      </div>
-    )
-  }
-
-  return (
-    <div className={classes.sectionBody}>
-      <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', marginBottom: tokens.spacingVerticalXS }}>
-        <Badge appearance="tint" color="informative" size="small">
-          {policies.length} polic{policies.length !== 1 ? 'ies' : 'y'}
-        </Badge>
-        {uncovered.length > 0 && (
-          <Badge appearance="tint" color="warning" size="small">
-            {uncovered.length} env{uncovered.length !== 1 ? 's' : ''} not linked
-          </Badge>
-        )}
-      </div>
-      {policies.map(policy => (
-        <div key={policy.id} className={classes.insightRow}>
-          <TagRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Text size={200} weight="semibold" style={{ display: 'block' }}>{policy.name}</Text>
-            <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, marginTop: '2px', flexWrap: 'wrap' }}>
-              <Badge appearance="tint" color="subtle" size="small">
-                {policy.properties.environments?.length ?? 0} environment{(policy.properties.environments?.length ?? 0) !== 1 ? 's' : ''} linked
-              </Badge>
-              {policy.properties.provisioningState && (
-                <Badge
-                  appearance="tint"
-                  color={policy.properties.provisioningState === 'Succeeded' ? 'success' : 'warning'}
-                  size="small"
-                >
-                  {policy.properties.provisioningState}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-      {uncovered.length > 0 && (
-        <div style={{ marginTop: tokens.spacingVerticalS }}>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: tokens.spacingVerticalXS }}>
-            Not linked to any billing policy
-          </Caption1>
-          {uncovered.map(env => (
-            <div key={env.id} className={classes.insightRow}>
-              <GlobeRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, marginTop: '2px' }} />
-              <Text size={200}>{getDisplayName(env)}</Text>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Cross-Tenant Connections Section ─────────────────────────────────────────
 
 interface ForeignTenant {
@@ -940,13 +488,15 @@ export function CrossTenantSection({
       {tenants.length === 0 ? (
         <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{hint}</Caption1>
       ) : (
-        tenants.map(t => (
-          <div key={t.tenantId} className={classes.row}>
+        tenants.map(tenant => (
+          <div key={tenant.tenantId} className={classes.row}>
             <div className={classes.rowLeft}>
               <GlobeRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-              <Text size={200} style={{ fontFamily: 'Consolas, monospace' }}>{t.tenantId}</Text>
+              <Text size={200} style={{ fontFamily: 'Consolas, monospace' }}>{tenant.tenantId}</Text>
             </div>
-            <Badge appearance="tint" color="subtle" size="small">{t.count} connection{t.count !== 1 ? 's' : ''}</Badge>
+            <Badge appearance="tint" color="subtle" size="small">
+              {tenant.count} connection{tenant.count !== 1 ? 's' : ''}
+            </Badge>
           </div>
         ))
       )}
@@ -965,11 +515,11 @@ export function CrossTenantSection({
         </Badge>
         {report.startDate && report.endDate && (
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            {formatLocalDateTime(report.startDate)} – {formatLocalDateTime(report.endDate)}
+            {formatLocalDateTime(report.startDate)} - {formatLocalDateTime(report.endDate)}
           </Caption1>
         )}
         {cachedAt && (
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>· Cached {formatLocalDateTime(cachedAt)}</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Cached {formatLocalDateTime(cachedAt)}</Caption1>
         )}
         <Button
           appearance="subtle"
@@ -979,7 +529,7 @@ export function CrossTenantSection({
           onClick={onRefresh}
           style={{ marginLeft: 'auto' }}
         >
-          {isUpdating ? 'Updating…' : 'Refresh'}
+          {isUpdating ? 'Updating...' : 'Refresh'}
         </Button>
       </div>
 
@@ -988,7 +538,7 @@ export function CrossTenantSection({
           <Spinner size="extra-tiny" />
           <Caption1 style={{ color: tokens.colorBrandForeground2 }}>
             {isUpdating
-              ? 'The cross-tenant connection report is being updated…'
+              ? 'The cross-tenant connection report is being updated...'
               : 'The report is still generating on the service. Use Refresh in a moment to pull the latest results.'}
           </Caption1>
         </div>
@@ -1004,13 +554,13 @@ export function CrossTenantSection({
       ) : (
         <>
           {directionBlock(
-            'Outbound (your tenant → external)',
+            'Outbound (your tenant to external)',
             <ArrowUploadRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />,
             outbound,
             'No outbound connections to external tenants.',
           )}
           {directionBlock(
-            'Inbound (external → your tenant)',
+            'Inbound (external to your tenant)',
             <ArrowDownloadRegular fontSize={16} style={{ color: tokens.colorPaletteMarigoldForeground2 }} />,
             inbound,
             'No inbound connections from external tenants.',
@@ -1021,17 +571,13 @@ export function CrossTenantSection({
   )
 }
 
-// ── Advisor Recommendations Section ──────────────────────────────────────────
-
-// Scenario names arrive as machine identifiers (camelCase / dotted). Turn them
-// into a readable title for display.
-export function humanizeScenario(s: string): string {
-  const words = s
+export function humanizeScenario(scenario: string): string {
+  const words = scenario
     .replace(/[._-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim()
-  if (!words) return s
+  if (!words) return scenario
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
@@ -1061,20 +607,32 @@ export function RecommendationsSection({
       <Badge appearance="tint" color="informative" size="small" style={{ alignSelf: 'flex-start' }}>
         {recommendations.length} recommendation{recommendations.length !== 1 ? 's' : ''}
       </Badge>
-      {sorted.map(rec => {
-        const count = rec.resourceCount ?? 0
+      {sorted.map(recommendation => {
+        const count = recommendation.resourceCount ?? 0
         return (
-          <div key={rec.scenario} className={classes.insightRowClickable} onClick={() => onScenarioClick(rec.scenario)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onScenarioClick(rec.scenario) } }}>
+          <div
+            key={recommendation.scenario}
+            className={classes.insightRowClickable}
+            onClick={() => onScenarioClick(recommendation.scenario)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onScenarioClick(recommendation.scenario)
+              }
+            }}
+          >
             <LightbulbRegular fontSize={16} style={{ color: count > 0 ? tokens.colorPaletteMarigoldForeground2 : tokens.colorBrandForeground1, flexShrink: 0, marginTop: '2px' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <Text size={200} weight="semibold" style={{ display: 'block' }}>{humanizeScenario(rec.scenario)}</Text>
+              <Text size={200} weight="semibold" style={{ display: 'block' }}>{humanizeScenario(recommendation.scenario)}</Text>
               <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, marginTop: '2px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <Badge appearance="tint" color={count > 0 ? 'warning' : 'success'} size="small">
                   {count} resource{count !== 1 ? 's' : ''}
                 </Badge>
-                {rec.lastRefreshedTimestamp && (
+                {recommendation.lastRefreshedTimestamp && (
                   <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                    Refreshed {formatLocalDateTime(rec.lastRefreshedTimestamp)}
+                    Refreshed {formatLocalDateTime(recommendation.lastRefreshedTimestamp)}
                   </Caption1>
                 )}
               </div>
@@ -1086,8 +644,6 @@ export function RecommendationsSection({
     </div>
   )
 }
-
-// ── Recommendation drill-down (resources for one scenario) ───────────────────
 
 export function RecommendationDetail({
   scenario,
@@ -1115,32 +671,37 @@ export function RecommendationDetail({
 
       <div className={classes.sectionCard}>
         {isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
+          <div className={classes.sectionBody}>
+            <div className={classes.permissionNotice}>
+              <LockClosedRegular fontSize={16} />
+              <Caption1>Power Platform administrator permissions are required to view recommendation resources.</Caption1>
+            </div>
+          </div>
         ) : isLoading ? (
-          <div className={classes.sectionBody}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading affected resources…</Caption1></div>
+          <div className={classes.sectionBody}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading affected resources...</Caption1></div>
         ) : !data || data.length === 0 ? (
           <div className={classes.sectionBody}><Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No resources are currently flagged for this recommendation.</Caption1></div>
         ) : (
           <div style={{ padding: `0 ${tokens.spacingHorizontalL}` }}>
-            {data.map(r => (
-              <div key={r.resourceId} className={classes.envRow}>
+            {data.map(resource => (
+              <div key={resource.resourceId} className={classes.envRow}>
                 <div className={classes.rowLeft} style={{ minWidth: 0 }}>
                   <DatabaseRegular fontSize={16} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <Text size={200} weight="semibold" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.resourceName || r.resourceId}
+                      {resource.resourceName || resource.resourceId}
                     </Text>
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                      {[r.resourceType, r.environmentName, r.resourceOwner].filter(Boolean).join(' · ') || '—'}
+                      {[resource.resourceType, resource.environmentName, resource.resourceOwner].filter(Boolean).join(' / ') || '-'}
                     </Caption1>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: '2px' }}>
-                  {typeof r.resourceUsage === 'number' && (
-                    <Badge appearance="tint" color="subtle" size="small">{r.resourceUsage} user{r.resourceUsage === 1 ? '' : 's'}/30d</Badge>
+                  {typeof resource.resourceUsage === 'number' && (
+                    <Badge appearance="tint" color="subtle" size="small">{resource.resourceUsage} user{resource.resourceUsage === 1 ? '' : 's'}/30d</Badge>
                   )}
-                  {r.lastAccessedDate && (
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Last used {formatLocalDateTime(r.lastAccessedDate)}</Caption1>
+                  {resource.lastAccessedDate && (
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Last used {formatLocalDateTime(resource.lastAccessedDate)}</Caption1>
                   )}
                 </div>
               </div>
@@ -1151,8 +712,6 @@ export function RecommendationDetail({
     </div>
   )
 }
-
-// ── Connections (live connection instances + owners) Section ─────────────────
 
 function InlineConnectorChip({ connectorId }: { connectorId: string }) {
   const info = getConnectorInfo(connectorId)
@@ -1184,21 +743,18 @@ interface EnvConnectionGroup {
   errors: number
 }
 
-// A connection is "in error" when it carries an error message or any status
-// other than Connected — matching the red status badge below.
-function connectionHasError(c: PowerConnection): boolean {
-  if (c.statusError) return true
-  return !!c.status && !/connected/i.test(c.status)
+function connectionHasError(connection: PowerConnection): boolean {
+  if (connection.statusError) return true
+  return !!connection.status && !/connected/i.test(connection.status)
 }
 
-// Resolve an environment's friendly type for the Type column / badge.
-function envTypeOf(env?: ResourceItem): string | undefined {
-  if (!env) return undefined
-  if (env.environmentType) return env.environmentType
-  const p = env.properties
-  if (!p) return undefined
-  for (const c of [p['environmentSku'], p['sku'], p['type'], p['environmentType'], p['kind']]) {
-    if (typeof c === 'string' && c.trim()) return c.trim()
+function envTypeOf(environment?: ResourceItem): string | undefined {
+  if (!environment) return undefined
+  if (environment.environmentType) return environment.environmentType
+  const properties = environment.properties
+  if (!properties) return undefined
+  for (const candidate of [properties['environmentSku'], properties['sku'], properties['type'], properties['environmentType'], properties['kind']]) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
   }
   return undefined
 }
@@ -1210,27 +766,28 @@ function ConnSortIcon({ active, dir }: { active: boolean; dir: ConnSortDir }) {
     : <ChevronDownRegular fontSize={14} style={{ color: tokens.colorBrandForeground1 }} />
 }
 
-// Generic grouping for the connections drill-down. A GroupDef partitions a set
-// of connections into labelled buckets; buckets render as expandable rows and
-// are recursively grouped by the next GroupDef, with connections as the leaves.
-// This lets the same renderer power both the in-environment hierarchy and the
-// search results (which simply reorder the GroupDefs by what was searched).
-interface GroupBucket { key: string; header: React.ReactNode; right?: React.ReactNode; conns: PowerConnection[] }
-type GroupDef = (conns: PowerConnection[]) => GroupBucket[]
-
-function groupConns(conns: PowerConnection[], keyFn: (c: PowerConnection) => string): Map<string, PowerConnection[]> {
-  const m = new Map<string, PowerConnection[]>()
-  for (const c of conns) {
-    const k = keyFn(c)
-    const arr = m.get(k) ?? []
-    arr.push(c)
-    m.set(k, arr)
-  }
-  return m
+interface GroupBucket {
+  key: string
+  header: React.ReactNode
+  right?: React.ReactNode
+  conns: PowerConnection[]
 }
 
-const ownerKeyOf = (c: PowerConnection) => c.owner?.id ?? c.owner?.email ?? c.owner?.displayName ?? 'unknown'
-const ownerLabelOf = (c: PowerConnection) => c.owner?.displayName ?? c.owner?.email ?? 'Unknown user'
+type GroupDef = (connections: PowerConnection[]) => GroupBucket[]
+
+function groupConns(connections: PowerConnection[], keyFn: (connection: PowerConnection) => string): Map<string, PowerConnection[]> {
+  const groups = new Map<string, PowerConnection[]>()
+  for (const connection of connections) {
+    const key = keyFn(connection)
+    const group = groups.get(key) ?? []
+    group.push(connection)
+    groups.set(key, group)
+  }
+  return groups
+}
+
+const ownerKeyOf = (connection: PowerConnection) => connection.owner?.id ?? connection.owner?.email ?? connection.owner?.displayName ?? 'unknown'
+const ownerLabelOf = (connection: PowerConnection) => connection.owner?.displayName ?? connection.owner?.email ?? 'Unknown user'
 
 // Wrap every case-insensitive occurrence of `q` in `text` with a highlight mark.
 // `q` is expected already trimmed + lowercased; empty `q` returns plain text.
@@ -1695,323 +1252,3 @@ export function ConnectionsSection({
   )
 }
 
-// ── Collapsible section wrapper ──────────────────────────────────────────────
-
-function CollapsibleSection({
-  icon,
-  title,
-  warnCount,
-  loading,
-  onOpenChange,
-  children,
-}: {
-  icon: React.ReactNode
-  title: string
-  warnCount?: number
-  loading?: boolean
-  onOpenChange?: (open: boolean) => void
-  children: React.ReactNode
-}) {
-  const [open, setOpen] = useState(false)
-  const classes = useClasses()
-  const hasWarn = !!warnCount && warnCount > 0
-
-  const toggle = () => {
-    setOpen(o => {
-      const next = !o
-      onOpenChange?.(next)
-      return next
-    })
-  }
-
-  return (
-    <div className={hasWarn ? classes.sectionCardWarn : classes.sectionCard}>
-      <div
-        className={open ? classes.sectionHeaderClickableOpen : classes.sectionHeaderClickable}
-        onClick={toggle}
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
-      >
-        {icon}
-        <Text weight="semibold" style={{ flex: 1 }}>{title}</Text>
-        {loading && <Spinner size="extra-tiny" />}
-        {hasWarn && (
-          <Badge appearance="tint" color="warning" size="small">
-            {warnCount} warning{warnCount !== 1 ? 's' : ''}
-          </Badge>
-        )}
-        {open
-          ? <ChevronDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-          : <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-        }
-      </div>
-      {open && children}
-    </div>
-  )
-}
-
-// ── Main export ──────────────────────────────────────────────────────────────
-
-export function GovernanceView({ allResources, allEnvironments }: GovernanceViewProps) {
-  const classes = useClasses()
-  const dlpQuery = useDLPPolicies()
-  const settingsQuery = useTenantSettings()
-  const capacityQuery = useEnvironmentCapacity()
-  const billingQuery = useBillingPolicies()
-  const [drillDown, setDrillDown] = useState<InsightKey | null>(null)
-  const [selectedPolicy, setSelectedPolicy] = useState<DLPPolicy | null>(null)
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
-
-  // Lazy-load the heavier / side-effecting sections only after they're opened.
-  const [crossTenantOpened, setCrossTenantOpened] = useState(false)
-  const [advisorOpened, setAdvisorOpened] = useState(false)
-  const [connectionsOpened, setConnectionsOpened] = useState(false)
-
-  const envIds = useMemo(() => allEnvironments.map(e => e.name).filter(Boolean), [allEnvironments])
-
-  const crossTenantQuery = useCrossTenantConnectionReport(crossTenantOpened)
-  const advisorQuery = useAdvisorRecommendations(advisorOpened)
-  const connectionsQuery = useConnections(envIds, connectionsOpened)
-
-  const insights = useMemo(
-    () => computeInsights(allResources, allEnvironments),
-    [allResources, allEnvironments],
-  )
-
-  const criticalCount = insights.filter(i => i.severity === 'critical').length
-  const settingsWarnings = settingsQuery.data ? countTenantWarnings(settingsQuery.data) : 0
-  const warningCount = insights.filter(i => i.severity === 'warning').length + settingsWarnings
-  const envCount = allEnvironments.length
-  const managedCount = allEnvironments.filter(e => getIsManagedEnvironment(e)).length
-
-  if (selectedPolicy) {
-    return (
-      <DLPPolicyDetail
-        policy={selectedPolicy}
-        environments={allEnvironments}
-        onBack={() => setSelectedPolicy(null)}
-      />
-    )
-  }
-
-  if (drillDown === 'unmanaged-envs') {
-    return (
-      <EnvironmentDrillDown
-        allEnvironments={allEnvironments}
-        allResources={allResources}
-        onBack={() => setDrillDown(null)}
-      />
-    )
-  }
-
-  if (selectedScenario) {
-    return (
-      <RecommendationDetail
-        scenario={selectedScenario}
-        onBack={() => setSelectedScenario(null)}
-      />
-    )
-  }
-
-  return (
-    <div className={classes.root}>
-
-      {/* Summary cards */}
-      <div className={classes.summaryGrid}>
-        <div className={classes.summaryCard} style={{ backgroundColor: criticalCount > 0 ? tokens.colorPaletteCranberryBackground2 : tokens.colorPaletteGreenBackground1 }}>
-          <ErrorCircleRegular fontSize={24} style={{ color: criticalCount > 0 ? tokens.colorPaletteCranberryForeground2 : tokens.colorPaletteGreenForeground1 }} />
-          <div>
-            <Text size={500} weight="semibold" style={{ display: 'block' }}>{criticalCount}</Text>
-            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Critical</Caption1>
-          </div>
-        </div>
-        <div className={classes.summaryCard} style={{ backgroundColor: warningCount > 0 ? tokens.colorPaletteMarigoldBackground1 : tokens.colorPaletteGreenBackground1 }}>
-          <WarningRegular fontSize={24} style={{ color: warningCount > 0 ? tokens.colorPaletteMarigoldForeground2 : tokens.colorPaletteGreenForeground1 }} />
-          <div>
-            <Text size={500} weight="semibold" style={{ display: 'block' }}>{warningCount}</Text>
-            <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Warnings</Caption1>
-          </div>
-        </div>
-        {(() => {
-          const allManaged = envCount > 0 && managedCount === envCount
-          return (
-            <div
-              className={classes.summaryCard}
-              style={{
-                backgroundColor: allManaged ? tokens.colorBrandBackground2 : tokens.colorBrandBackground2,
-                border: `2px solid ${tokens.colorBrandStroke1}`,
-              }}
-            >
-              <ShieldCheckmarkRegular fontSize={24} style={{ color: tokens.colorBrandForeground1 }} />
-              <div>
-                <Text size={500} weight="semibold" style={{ display: 'block', color: tokens.colorBrandForeground1 }}>{managedCount}/{envCount}</Text>
-                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>Managed Environments</Caption1>
-              </div>
-            </div>
-          )
-        })()}
-      </div>
-
-      {/* Resource Insights */}
-      <CollapsibleSection
-        icon={<ShieldRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Resource Insights"
-        warnCount={criticalCount + insights.filter(i => i.severity === 'warning').length}
-      >
-        <div className={classes.sectionBody}>
-          {insights.map((insight, i) => {
-            const clickable = !!insight.drillDownKey
-            return (
-              <div
-                key={i}
-                className={clickable ? classes.insightRowClickable : classes.insightRow}
-                onClick={clickable ? () => setDrillDown(insight.drillDownKey!) : undefined}
-                role={clickable ? 'button' : undefined}
-                tabIndex={clickable ? 0 : undefined}
-                onKeyDown={clickable ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrillDown(insight.drillDownKey!) } }) : undefined}
-              >
-                <div className={classes.insightIcon}><SeverityIcon severity={insight.severity} /></div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text size={200} weight="semibold" style={{ display: 'block' }}>{insight.title}</Text>
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{insight.detail}</Caption1>
-                </div>
-                {clickable && <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, marginTop: '2px' }} />}
-              </div>
-            )
-          })}
-        </div>
-      </CollapsibleSection>
-
-      {/* DLP Policies */}
-      <CollapsibleSection
-        icon={<LockClosedRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="DLP Policies"
-        warnCount={dlpQuery.data?.length === 0 ? 1 : 0}
-        loading={dlpQuery.isLoading}
-      >
-        {dlpQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : dlpQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading policies…</Caption1>
-          </div>
-        ) : dlpQuery.data ? (
-          <DLPSection policies={dlpQuery.data} onPolicyClick={setSelectedPolicy} />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Tenant Settings */}
-      <CollapsibleSection
-        icon={<PersonRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Tenant Settings"
-        warnCount={settingsWarnings}
-        loading={settingsQuery.isLoading}
-      >
-        {settingsQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : settingsQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading settings…</Caption1>
-          </div>
-        ) : settingsQuery.data ? (
-          <TenantSettingsSection settings={settingsQuery.data} />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Capacity & Storage */}
-      <CollapsibleSection
-        icon={<DatabaseRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Capacity & Storage"
-        loading={capacityQuery.isLoading}
-      >
-        {capacityQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : capacityQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading capacity data…</Caption1>
-          </div>
-        ) : capacityQuery.data ? (
-          <CapacitySection capacityData={capacityQuery.data} />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Billing Policies */}
-      <CollapsibleSection
-        icon={<TagRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Billing Policies"
-        loading={billingQuery.isLoading}
-      >
-        {billingQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : billingQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading billing policies…</Caption1>
-          </div>
-        ) : billingQuery.data ? (
-          <BillingPoliciesSection policies={billingQuery.data} allEnvironments={allEnvironments} />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Cross Tenant Connections */}
-      <CollapsibleSection
-        icon={<GlobeRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Cross Tenant Connections"
-        loading={crossTenantQuery.isFetching}
-        onOpenChange={(open) => { if (open) setCrossTenantOpened(true) }}
-      >
-        {crossTenantQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : crossTenantQuery.isLoading || (!crossTenantQuery.data && crossTenantQuery.isFetching) ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Generating cross-tenant connection report…</Caption1>
-          </div>
-        ) : crossTenantQuery.data ? (
-          <CrossTenantSection
-            report={crossTenantQuery.data}
-            onRefresh={() => crossTenantQuery.refetch()}
-            isUpdating={crossTenantQuery.isFetching}
-          />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Recommendations (Advisor) */}
-      <CollapsibleSection
-        icon={<LightbulbRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Recommendations"
-        loading={advisorQuery.isLoading}
-        onOpenChange={(open) => { if (open) setAdvisorOpened(true) }}
-      >
-        {advisorQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : advisorQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading Advisor recommendations…</Caption1>
-          </div>
-        ) : advisorQuery.data ? (
-          <RecommendationsSection recommendations={advisorQuery.data} onScenarioClick={setSelectedScenario} />
-        ) : null}
-      </CollapsibleSection>
-
-      {/* Connections */}
-      <CollapsibleSection
-        icon={<PlugConnectedRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />}
-        title="Connections"
-        loading={connectionsQuery.isLoading}
-        onOpenChange={(open) => { if (open) setConnectionsOpened(true) }}
-      >
-        {connectionsQuery.isError ? (
-          <div className={classes.sectionBody}><PermissionNotice classes={classes} /></div>
-        ) : connectionsQuery.isLoading ? (
-          <div className={classes.sectionBody}>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Scanning environments for connections…</Caption1>
-          </div>
-        ) : connectionsQuery.data ? (
-          <ConnectionsSection result={connectionsQuery.data} />
-        ) : null}
-      </CollapsibleSection>
-
-    </div>
-  )
-}
